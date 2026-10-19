@@ -1,0 +1,296 @@
+{
+  "format": "chess3d-position",
+  "version": 1,
+  "seed": 342,
+  "style": "nocturne-ivory",
+  "pieces": [
+    {
+      "id": "ivory-a1",
+      "side": "ivory",
+      "kind": "rook",
+      "square": {
+        "file": 0,
+        "rank": 0
+      }
+    },
+    {
+      "id": "ivory-b1",
+      "side": "ivory",
+      "kind": "knight",
+      "square": {
+        "file": 1,
+        "rank": 0
+      }
+    },
+    {
+      "id": "ivory-c1",
+      "side": "ivory",
+      "kind": "bishop",
+      "square": {
+        "file": 2,
+        "rank": 0
+      }
+    },
+    {
+      "id": "ivory-d1",
+      "side": "ivory",
+      "kind": "queen",
+      "square": {
+        "file": 3,
+        "rank": 0
+      }
+    },
+    {
+      "id": "ivory-e1",
+      "side": "ivory",
+      "kind": "king",
+      "square": {
+        "file": 4,
+        "rank": 0
+      }
+    },
+    {
+      "id": "ivory-f1",
+      "side": "ivory",
+      "kind": "bishop",
+      "square": {
+        "file": 5,
+        "rank": 0
+      }
+    },
+    {
+      "id": "ivory-g1",
+      "side": "ivory",
+      "kind": "knight",
+      "square": {
+        "file": 6,
+        "rank": 0
+      }
+    },
+    {
+      "id": "ivory-h1",
+      "side": "ivory",
+      "kind": "rook",
+      "square": {
+        "file": 7,
+        "rank": 0
+      }
+    },
+    {
+      "id": "ivory-pa2",
+      "side": "ivory",
+      "kind": "pawn",
+      "square": {
+        "file": 0,
+        "rank": 1
+      }
+    },
+    {
+      "id": "ivory-pb2",
+      "side": "ivory",
+      "kind": "pawn",
+      "square": {
+        "file": 1,
+        "rank": 1
+      }
+    },
+    {
+      "id": "ivory-pc2",
+      "side": "ivory",
+      "kind": "pawn",
+      "square": {
+        "file": 2,
+        "rank": 1
+      }
+    },
+    {
+      "id": "ivory-pd2",
+      "side": "ivory",
+      "kind": "pawn",
+      "square": {
+        "file": 3,
+        "rank": 1
+      }
+    },
+    {
+      "id": "ivory-pe2",
+      "side": "ivory",
+      "kind": "pawn",
+      "square": {
+        "file": 4,
+        "rank": 1
+      }
+    },
+    {
+      "id": "ivory-pf2",
+      "side": "ivory",
+      "kind": "pawn",
+      "square": {
+        "file": 5,
+        "rank": 1
+      }
+    },
+    {
+      "id": "ivory-pg2",
+      "side": "ivory",
+      "kind": "pawn",
+      "square": {
+        "file": 6,
+        "rank": 1
+      }
+    },
+    {
+      "id": "ivory-ph2",
+      "side": "ivory",
+      "kind": "pawn",
+      "square": {
+        "file": 7,
+        "rank": 1
+      }
+    },
+    {
+      "id": "onyx-a8",
+      "side": "onyx",
+      "kind": "rook",
+      "square": {
+        "file": 0,
+        "rank": 7
+      }
+    },
+    {
+      "id": "onyx-b8",
+      "side": "onyx",
+      "kind": "knight",
+      "square": {
+        "file": 1,
+        "rank": 7
+      }
+    },
+    {
+      "id": "onyx-c8",
+      "side": "onyx",
+      "kind": "bishop",
+      "square": {
+        "file": 2,
+        "rank": 7
+      }
+    },
+    {
+      "id": "onyx-d8",
+      "side": "onyx",
+      "kind": "queen",
+      "square": {
+        "file": 3,
+        "rank": 7
+      }
+    },
+    {
+      "id": "onyx-e8",
+      "side": "onyx",
+      "kind": "king",
+      "square": {
+        "file": 4,
+        "rank": 7
+      }
+    },
+    {
+      "id": "onyx-f8",
+      "side": "onyx",
+      "kind": "bishop",
+      "square": {
+        "file": 5,
+        "rank": 7
+      }
+    },
+    {
+      "id": "onyx-g8",
+      "side": "onyx",
+      "kind": "knight",
+      "square": {
+        "file": 6,
+        "rank": 7
+      }
+    },
+    {
+      "id": "onyx-h8",
+      "side": "onyx",
+      "kind": "rook",
+      "square": {
+        "file": 7,
+        "rank": 7
+      }
+    },
+    {
+      "id": "onyx-pa7",
+      "side": "onyx",
+      "kind": "pawn",
+      "square": {
+        "file": 0,
+        "rank": 6
+      }
+    },
+    {
+      "id": "onyx-pb7",
+      "side": "onyx",
+      "kind": "pawn",
+      "square": {
+        "file": 1,
+        "rank": 6
+      }
+    },
+    {
+      "id": "onyx-pc7",
+      "side": "onyx",
+      "kind": "pawn",
+      "square": {
+        "file": 2,
+        "rank": 6
+      }
+    },
+    {
+      "id": "onyx-pd7",
+      "side": "onyx",
+      "kind": "pawn",
+      "square": {
+        "file": 3,
+        "rank": 6
+      }
+    },
+    {
+      "id": "onyx-pe7",
+      "side": "onyx",
+      "kind": "pawn",
+      "square": {
+        "file": 4,
+        "rank": 6
+      }
+    },
+    {
+      "id": "onyx-pf7",
+      "side": "onyx",
+      "kind": "pawn",
+      "square": {
+        "file": 5,
+        "rank": 6
+      }
+    },
+    {
+      "id": "onyx-pg7",
+      "side": "onyx",
+      "kind": "pawn",
+      "square": {
+        "file": 6,
+        "rank": 6
+      }
+    },
+    {
+      "id": "onyx-ph7",
+      "side": "onyx",
+      "kind": "pawn",
+      "square": {
+        "file": 7,
+        "rank": 6
+      }
+    }
+  ]
+}

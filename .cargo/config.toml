@@ -1,0 +1,7 @@
+[build]
+target-dir = "target"
+jobs = 2
+incremental = false
+
+[alias]
+xtask = "run --locked --package xtask --"

@@ -1,0 +1,70 @@
+name: Standalone chess validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      engine_revision:
+        description: 'real-disunity commit SHA or ref (empty uses engine-revision)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chess-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_TARGET_DIR: ${{ github.workspace }}/rd-chess/target
+      CHESS3D_REQUIRE_GPU: '1'
+      LP_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: rd-chess
+          persist-credentials: false
+      - name: Fetch independent engine
+        working-directory: rd-chess
+        env:
+          ENGINE_REVISION: ${{ inputs.engine_revision }}
+          ENGINE_READ_TOKEN: ${{ secrets.ENGINE_READ_TOKEN || github.token }}
+        run: python3 tools/bootstrap_engine.py
+      - name: Install CI rendering prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1 xvfb xauth xdotool python3-pil pkg-config libx11-dev libxkbcommon-dev libwayland-dev
+          python3 - <<'PY'
+          import glob
+          import os
+          from pathlib import Path
+          icds = glob.glob('/usr/share/vulkan/icd.d/lvp_icd*.json')
+          if len(icds) != 1:
+              raise SystemExit(f'Exactly one lavapipe ICD required, found {icds}')
+          runtime = Path(os.environ['RUNNER_TEMP']) / 'chess-runtime'
+          runtime.mkdir(mode=0o700)
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              stream.write(f'VK_DRIVER_FILES={icds[0]}\nXDG_RUNTIME_DIR={runtime}\n')
+          PY
+      - name: Install pinned Rust toolchain
+        working-directory: rd-chess
+        run: rustup toolchain install 1.97.0 --profile minimal --component clippy --component rustfmt
+      - name: All gates including mandatory GPU and real window
+        working-directory: rd-chess
+        run: cargo xtask ci --output artifacts/ci
+      - name: Preserve logs and generated rendering evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chess-validation-${{ github.run_id }}
+          path: rd-chess/artifacts/
+          if-no-files-found: warn
