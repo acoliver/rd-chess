@@ -42,7 +42,7 @@ jobs:
       - name: Install CI rendering prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1 xvfb xauth xdotool python3-pil pkg-config libx11-dev libxkbcommon-dev libwayland-dev
+          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1 xvfb xauth xdotool python3-pil pkg-config libx11-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev
           python3 - <<'PY'
           import glob
           import os
