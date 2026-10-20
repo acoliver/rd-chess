@@ -93,6 +93,20 @@ fn help_and_position_inspection_need_no_gpu() {
     let ready = cli().output().unwrap();
     assert!(ready.status.success());
     assert!(String::from_utf8_lossy(&ready.stdout).contains("32 pieces, seed 342"));
+    let directory = tempfile::tempdir().unwrap();
+    let save = directory.path().join("initial.json");
+    let result = cli().arg("--save").arg(&save).output().unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let saved = Position::load(&save).unwrap();
+    assert_eq!(saved.pieces.len(), 32);
+    assert_eq!(saved, Position::initial(342));
+    assert_eq!(
+        saved,
+        Position::load(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/positions/initial.json")
+        )
+        .unwrap()
+    );
 }
 
 #[test]
