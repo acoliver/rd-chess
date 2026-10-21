@@ -21,29 +21,33 @@ engine. Cargo compilation is bounded to two jobs and uses this repository's own
 From the rd-chess root:
 
 ```sh
-# Fetch acoliver/real-disunity into ../real-disunity.
-python3 tools/bootstrap_engine.py
-# For an immutable reproduction, specify the exact engine commit:
-python3 tools/bootstrap_engine.py --revision <40-character-engine-commit>
-
+# Cargo fetches the immutable engine Git revision automatically.
 cargo xtask build
 cargo run --locked -j2 -- --help
 cargo run --locked -j2 -- --save /tmp/chess-position.json
 cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
-The default engine revision is pinned to a full commit SHA in `engine-revision`.
-Override it deliberately with `--revision` or `ENGINE_REVISION`; a branch override
-is moving and does not provide the same reproducibility guarantee. The Python
-bootstrap works **before Cargo can resolve the path dependency**. It stages a new engine clone and publishes it only after a
+The `worldrunner` facade is a Git dependency pinned to the full commit
+`69d0f7e593b3190f94c484fbe0971de2ec3ca294` from
+`https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
+not a sibling checkout. `engine-revision` records the same SHA, and the default
+and viewer dependency graph gates verify every SDK package's exact Git origin,
+requested revision and resolved checksum, with one rendering implementation.
+When updating the engine, change the Cargo `rev`, `engine-revision` and lockfile
+together.
+
+For optional SDK inspection, `python3 tools/bootstrap_engine.py` fetches the pinned
+revision into `../real-disunity`. It stages a clone and publishes it only after a
 successful checkout and facade check. Existing sibling checkouts are read-only:
 dirty, wrong-revision or non-engine directories fail without reset or checkout.
-A clean existing matching revision can subsequently be checked with
-`cargo xtask bootstrap --revision <commit>`.
+`--revision` or `ENGINE_REVISION` selects an inspection checkout only; it does
+**not** override Cargo's immutable dependency. No sibling is required to build,
+run or validate the game. `cargo xtask bootstrap` performs the same optional check.
 
-HTTPS access to a private engine repository requires credentials; optional
-`ENGINE_READ_TOKEN` supplies read-only authentication without persisting it in
-Git config. CI uses the `ENGINE_READ_TOKEN` repository secret when supplied,
+HTTPS access to a private engine repository requires credentials. For the optional
+bootstrap, `ENGINE_READ_TOKEN` supplies read-only authentication without persisting
+it in Git config. Cargo uses its standard Git authentication for the pinned dependency. CI uses the `ENGINE_READ_TOKEN` repository secret when supplied,
 otherwise its own workflow token. A workflow token does not grant access to a
 separate private repository by itself.
 
@@ -136,7 +140,8 @@ wrapper bounds the whole window run to five minutes and cleans up its process gr
 The GitHub Actions workflow fetches the independent engine, provisions Mesa
 lavapipe and window-test prerequisites on the runner, and invokes `cargo xtask ci`.
 Both GPU and Xvfb acceptance are mandatory, with logs/PNGs uploaded even on failure.
-Manual runs accept an explicit `engine_revision`. Nothing in the local commands
+Manual runs accept an explicit `engine_revision` for the optional inspection
+checkout only; the compiled SDK remains the Cargo-pinned revision. Nothing in the local commands
 installs system packages, changes remote settings, commits or pushes.
 
 ## Limits

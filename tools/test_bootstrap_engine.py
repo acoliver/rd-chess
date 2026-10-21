@@ -48,6 +48,25 @@ class BootstrapTests(unittest.TestCase):
             self.assertEqual(sentinel.read_text(), "in progress")
             self.assertEqual(before, sorted(str(p.relative_to(destination)) for p in destination.rglob("*")))
 
+    def test_cargo_marker_is_reported_without_falsely_marking_sdk_source_dirty(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            subprocess.run(['git', 'init', '-q', str(root)], check=True)
+            (root / '.cargo-ok').write_bytes(b'')
+            receipt = repository_info(root, cargo_checkout=True)
+            self.assertTrue(receipt['dirty'])
+            self.assertFalse(receipt['source_dirty'])
+            self.assertEqual(receipt['cargo_generated_files'], ['.cargo-ok'])
+            self.assertEqual(receipt['status'], ['?? .cargo-ok'])
+
+    def test_cargo_provenance_never_hides_source_changes_or_nonempty_marker(self):
+        for name, data in (('source.rs', b'changed'), ('.cargo-ok', b'not a Cargo marker')):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                subprocess.run(['git', 'init', '-q', str(root)], check=True)
+                (root / name).write_bytes(data)
+                self.assertTrue(repository_info(root, cargo_checkout=True)['source_dirty'])
+
     def test_provenance_handles_unborn_head_without_fabricating_revision(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

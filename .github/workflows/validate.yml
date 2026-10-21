@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       engine_revision:
-        description: 'real-disunity commit SHA or ref (empty uses engine-revision)'
+        description: 'Optional inspection checkout SHA/ref; Cargo pin is unchanged'
         required: false
         default: ''
         type: string
