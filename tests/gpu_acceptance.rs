@@ -3,6 +3,68 @@ use chess3d::{Position, render_scene};
 use glam::Vec3;
 use worldrunner::scene::gpu;
 
+#[test]
+fn required_gpu_retained_renderer_survives_target_recreation_and_device_lifetimes() {
+    use gpu::offscreen::OffscreenTarget;
+    use gpu::shadows::{DirectionalShadowSettings, ShadowedScene};
+
+    let position = Position::initial(342);
+    let original = {
+        let context = required_context();
+        let scene = render_scene(&position).unwrap();
+        let settings = DirectionalShadowSettings {
+            focus_meters: Vec3::ZERO,
+            half_extent_meters: 8.0,
+            depth_half_extent_meters: 16.0,
+            resolution: 512,
+            depth_bias: 0.0008,
+            normal_bias_meters: 0.012,
+        };
+        let mut renderer = ShadowedScene::new(&context, &scene, settings).unwrap();
+        let mut original = None;
+        for (width, height) in [(257, 193), (321, 201), (257, 193)] {
+            let view = gpu::SceneView::new(
+                gpu::CameraPose {
+                    eye_millimeters: [8_200, -10_500, 10_000],
+                    target_millimeters: [0, 0, 400],
+                },
+                *scene.effects().camera(),
+                gpu::Viewport { width, height },
+            )
+            .unwrap();
+            let mut target = OffscreenTarget::new(context.device(), view.viewport()).unwrap();
+            let pixels = retained_capture(&context, &mut renderer, &view, &mut target);
+            let row_bytes = usize::try_from(width).unwrap() * 4;
+            assert_eq!(pixels.len(), row_bytes * usize::try_from(height).unwrap());
+            assert!(pixels.chunks_exact(4).all(|pixel| pixel[3] == 255));
+            assert!(pixels.chunks_exact(4).any(|pixel| pixel[0] > 150));
+            assert!(pixels.chunks_exact(4).any(|pixel| pixel[0] < 80));
+            assert_eq!(
+                pixels,
+                retained_capture(&context, &mut renderer, &view, &mut target),
+                "reused odd-width target must read back identical tightly packed rows"
+            );
+            if width == 257 {
+                if let Some(expected) = &original {
+                    assert_eq!(
+                        &pixels, expected,
+                        "restoring viewport must restore exact pixels"
+                    );
+                } else {
+                    original = Some(pixels);
+                }
+            }
+        }
+        original.unwrap()
+    };
+    let context = required_context();
+    assert_eq!(
+        original,
+        capture(&context, &position),
+        "new device and resources must not inherit previous renderer state"
+    );
+}
+
 fn capture(context: &gpu::device::GpuContext, position: &Position) -> Vec<u8> {
     let scene = render_scene(position).unwrap();
     let view = gpu::SceneView::new(
@@ -38,8 +100,7 @@ fn capture(context: &gpu::device::GpuContext, position: &Position) -> Vec<u8> {
     image.pixels
 }
 
-#[test]
-fn required_gpu_repeats_saved_initial_exactly_and_renders_live_position_and_seed() {
+fn required_context() -> gpu::device::GpuContext {
     let context = pollster::block_on(gpu::device::GpuContext::request_with_features(
         gpu::wgpu::Features::empty(),
     ))
@@ -50,6 +111,12 @@ fn required_gpu_repeats_saved_initial_exactly_and_renders_live_position_and_seed
         "Chess3D acceptance adapter: {:?}",
         context.adapter().get_info()
     );
+    context
+}
+
+#[test]
+fn required_gpu_repeats_saved_initial_exactly_and_renders_live_position_and_seed() {
+    let context = required_context();
     let initial = Position::initial(342);
     let pixels = capture(&context, &initial);
     assert_eq!(pixels, capture(&context, &initial), "same-device repeat");

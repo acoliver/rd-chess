@@ -69,7 +69,6 @@ fn all_initial_pieces_have_expected_side_kind_square_and_scene_placement() {
     let position = Position::initial(343);
     position.validate().unwrap();
     assert_eq!(position.pieces.len(), 32);
-    let scene = render_scene(&position).unwrap();
     for side in [Side::Ivory, Side::Onyx] {
         for (kind, count) in [
             (PieceKind::Pawn, 8),
@@ -97,26 +96,36 @@ fn all_initial_pieces_have_expected_side_kind_square_and_scene_placement() {
                     assert_eq!(piece.square.file, 3);
                     assert_eq!(piece.square.is_dark(), side == Side::Onyx);
                 }
-                let center = [
-                    i64::from(piece.square.file) * 1000 - 3500,
-                    i64::from(piece.square.rank) * 1000 - 3500,
-                    50,
-                ];
-                let objects: Vec<_> = scene
-                    .geometry()
-                    .objects()
-                    .iter()
-                    .filter(|o| o.transform().position_millimeters == center)
-                    .collect();
-                assert_eq!(objects.len(), if kind == PieceKind::Knight { 2 } else { 1 });
-                let body = objects[0];
-                assert_eq!(
-                    body.material().raw(),
-                    if side == Side::Ivory { 1 } else { 2 }
-                );
-                assert_eq!(body.mesh().raw(), mesh_id(kind));
             }
         }
+    }
+}
+
+#[test]
+fn initial_piece_scene_placement_matches_board_square_side_and_kind() {
+    let position = Position::initial(343);
+    let scene = render_scene(&position).unwrap();
+    for piece in &position.pieces {
+        let side = piece.side;
+        let kind = piece.kind;
+        let center = [
+            i64::from(piece.square.file) * 1000 - 3500,
+            i64::from(piece.square.rank) * 1000 - 3500,
+            50,
+        ];
+        let objects: Vec<_> = scene
+            .geometry()
+            .objects()
+            .iter()
+            .filter(|o| o.transform().position_millimeters == center)
+            .collect();
+        assert_eq!(objects.len(), if kind == PieceKind::Knight { 2 } else { 1 });
+        let body = objects[0];
+        assert_eq!(
+            body.material().raw(),
+            if side == Side::Ivory { 1 } else { 2 }
+        );
+        assert_eq!(body.mesh().raw(), mesh_id(kind));
     }
 }
 

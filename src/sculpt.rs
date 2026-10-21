@@ -65,6 +65,13 @@ fn sample_radius(p: &[(f32, f32)], i: usize, t: f32) -> (f32, f32, f32) {
         (z, radius, derivative)
     }
 }
+fn lathe_normal(row: usize, radius: f32, slope: f32, angle: f32) -> Vec3 {
+    if radius < 0.001 {
+        Vec3::new(0., 0., if row == 0 { -1. } else { 1. })
+    } else {
+        Vec3::new(angle.cos(), angle.sin(), -slope).normalize()
+    }
+}
 fn lathe(p: &[(f32, f32)]) -> Mesh {
     let mut rows = Vec::new();
     for i in 0..p.len() - 1 {
@@ -78,11 +85,7 @@ fn lathe(p: &[(f32, f32)]) -> Mesh {
     for (row, &(z, radius, slope)) in rows.iter().enumerate() {
         for s in 0..=sides {
             let a = TAU * s as f32 / sides as f32;
-            let n = if radius < 0.001 {
-                Vec3::new(0., 0., if row == 0 { -1. } else { 1. })
-            } else {
-                Vec3::new(a.cos(), a.sin(), -slope).normalize()
-            };
+            let n = lathe_normal(row, radius, slope, a);
             m.append(
                 [radius * a.cos(), radius * a.sin(), z],
                 n.to_array(),

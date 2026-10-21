@@ -51,7 +51,7 @@ pollster.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-worldrunner = { path = "../real-disunity/crates/worldrunner", default-features = false, features = ["scene"] }
+worldrunner = { git = "https://github.com/acoliver/real-disunity.git", rev = "0c14471700425aed4012b806f5c48620b02429f3", default-features = false, features = ["scene"] }
 
 [dev-dependencies]
 tempfile.workspace = true

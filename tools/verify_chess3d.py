@@ -21,6 +21,7 @@ import sys
 import time
 
 from chess3d_image import compare, decode_png, image_stats, validate_image
+from verify_rendering_boundary import verify
 
 ROOT = Path(__file__).resolve().parents[1]
 VIEWS = {"hero": (1400, 1050), "overhead": (1200, 1200), "lineup": (1400, 700)}
@@ -33,7 +34,7 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def repository_info(path):
+def repository_info(path, *, cargo_checkout=False):
     """Record uncommitted migrations truthfully, including an unborn game HEAD."""
     def git(*args):
         return subprocess.run(["git", "-C", str(path), *args], capture_output=True,
@@ -42,8 +43,20 @@ def repository_info(path):
     revision = git("rev-parse", "--verify", "HEAD")
     status = git("status", "--porcelain")
     require(status.returncode == 0, f"cannot inspect checkout: {path}: {status.stderr}")
-    return {"path": str(path), "revision": revision.stdout.strip() if revision.returncode == 0 else None,
-            "dirty": bool(status.stdout), "status": status.stdout.splitlines()}
+    receipt = {"path": str(path), "revision": revision.stdout.strip() if revision.returncode == 0 else None,
+               "dirty": bool(status.stdout), "status": status.stdout.splitlines()}
+    if cargo_checkout:
+        top = git("rev-parse", "--show-toplevel")
+        require(top.returncode == 0, "cannot locate Cargo SDK checkout root")
+        marker = Path(top.stdout.strip()) / ".cargo-ok"
+        # Cargo creates this empty untracked marker after a successful Git checkout.
+        generated = [".cargo-ok"] if ("?? .cargo-ok" in receipt["status"] and
+                                       marker.is_file() and not marker.is_symlink() and
+                                       marker.stat().st_size == 0) else []
+        receipt["cargo_generated_files"] = generated
+        receipt["source_dirty"] = any(line != "?? .cargo-ok" or not generated
+                                      for line in receipt["status"])
+    return receipt
 
 
 class Acceptance:
@@ -228,7 +241,13 @@ class Acceptance:
     def run(self):
         cargo = ["cargo", "+1.97.0"]
         self.report["game_checkout"] = repository_info(ROOT)
-        self.report["engine_checkout"] = repository_info(ROOT.parent / "real-disunity")
+        self.report["rendering_boundary"] = verify(require_canonical=True)
+        facade = Path(self.report["rendering_boundary"]["graphs"][0]["sdk_manifest"])
+        self.report["engine_checkout"] = repository_info(facade.parent, cargo_checkout=True)
+        require(self.report["engine_checkout"]["revision"] ==
+                self.report["rendering_boundary"]["graphs"][0]["sdk_revision"],
+                "actual Cargo SDK checkout HEAD does not match immutable source")
+        require(not self.report["engine_checkout"]["source_dirty"], "actual Cargo SDK checkout is dirty")
         self.report["rustc"] = self.command("rustc", ["rustc", "+1.97.0", "--version"]).strip()
         self.command("game-tests", [*cargo, "test", "--locked", "-j2", "-p", "chess3d", "--", "--test-threads=2", "--nocapture"])
         self.command("build", [*cargo, "build", "--locked", "-j2", "-p", "chess3d", "--bin", "chess3d", "--example", "acceptance_context"])
