@@ -27,9 +27,9 @@ fn build_render_scene(
 ) -> Result<worldrunner::scene::plan::RenderScene, SceneBuildError> {
     use worldrunner::scene::plan::{
         MaterialHandle, MeshHandle, RenderScene, SceneAlphaMode, SceneAmbient, SceneAntiAlias,
-        SceneCamera, SceneColor, SceneColorGrading, SceneEffects, SceneEffectsParts, SceneGeometry,
-        SceneMaterial, SceneMaterialParts, SceneObject, SceneParts, SceneResources, SceneRotation,
-        SceneShadowCascades, SceneSky, SceneSsao, SceneSun, TextureHandle,
+        SceneCamera, SceneColor, SceneColorGrading, SceneDirection, SceneEffects,
+        SceneEffectsParts, SceneGeometry, SceneMaterial, SceneMaterialParts, SceneObject,
+        SceneParts, SceneResources, SceneShadowCascades, SceneSky, SceneSun, TextureHandle,
     };
     position.validate()?;
     let mut meshes = Vec::new();
@@ -155,12 +155,7 @@ fn build_render_scene(
             },
         },
         sun: SceneSun {
-            direction: SceneRotation {
-                x: -400_000,
-                y: -300_000,
-                z: 866_025,
-                w: 0,
-            },
+            direction: SceneDirection::new([-400_000, -300_000, 866_025])?,
             irradiance_micro: 1_800_000,
         },
         ambient: SceneAmbient {
@@ -168,11 +163,7 @@ fn build_render_scene(
             ground_irradiance_micro: 300_000,
         },
         shadows: SceneShadowCascades::new(vec![48_000], 0).expect("valid single shadow extent"),
-        ssao: SceneSsao {
-            radius_millimeters: 500,
-            intensity_micro: 250_000,
-            horizon_angle_millidegrees: 45_000,
-        },
+        ssao: None,
         camera,
         grading: SceneColorGrading {
             exposure_micro: 1_000_000,
@@ -186,7 +177,7 @@ fn build_render_scene(
         resources: SceneResources::new(textures.to_vec(), materials)?,
         geometry: SceneGeometry::new(meshes, objects)?,
         terrain: None,
-        effects,
+        effects: Some(effects),
     })?)
 }
 fn identity_transform(position_millimeters: [i64; 3]) -> worldrunner::scene::plan::SceneTransform {

@@ -2829,7 +2829,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 [[package]]
 name = "worldrunner"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "glam",
  "worldrunner-asset-id",
@@ -2842,7 +2842,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-asset-id"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "blake3",
  "serde",
@@ -2852,7 +2852,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-core-types"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "serde",
  "uuid",
@@ -2861,7 +2861,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-import-schema"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "serde",
  "serde_json",
@@ -2872,7 +2872,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-material"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "blake3",
  "postcard",
@@ -2884,7 +2884,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-mesh"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "postcard",
  "serde",
@@ -2895,7 +2895,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-package"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "blake3",
  "postcard",
@@ -2908,7 +2908,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-render-gpu"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "pollster",
  "thiserror 2.0.21",
@@ -2918,7 +2918,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-render-lighting"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "glam",
 ]
@@ -2926,7 +2926,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-render-plan"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "serde",
  "serde_json",
@@ -2945,18 +2945,20 @@ dependencies = [
 [[package]]
 name = "worldrunner-render-post"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "thiserror 2.0.21",
  "wgpu",
+ "worldrunner-render-gpu",
 ]
 
 [[package]]
 name = "worldrunner-render-scene"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "glam",
+ "pollster",
  "thiserror 2.0.21",
  "wgpu",
  "worldrunner-render-gpu",
@@ -2969,7 +2971,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-render-shadow"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "glam",
  "thiserror 2.0.21",
@@ -2979,7 +2981,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-scene-viewer"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "glam",
  "pollster",
@@ -2995,7 +2997,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-texture"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "serde",
  "thiserror 2.0.21",
@@ -3004,7 +3006,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-world-model"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "serde",
  "sha2",
@@ -3014,7 +3016,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-world-runtime"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "serde",
  "serde_json",
@@ -3027,7 +3029,7 @@ dependencies = [
 [[package]]
 name = "worldrunner-world-schema"
 version = "0.1.0"
-source = "git+https://github.com/acoliver/real-disunity.git?rev=69d0f7e593b3190f94c484fbe0971de2ec3ca294#69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=1ead975c7cf3efe672aad3e4f7a8050233843ad6#1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 dependencies = [
  "blake3",
  "serde",

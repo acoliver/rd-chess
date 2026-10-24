@@ -92,7 +92,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     if let Some(path) = capture {
         let presentation = prepare_view(&position, &view)?;
         let viewport = gpu::Viewport { width, height };
-        let camera = *presentation.scene.effects().camera();
+        let camera = *presentation
+            .scene
+            .effects()
+            .expect("chess supplies studio lighting")
+            .camera();
         let camera_view = gpu::SceneView::new(presentation.pose, camera, viewport)?;
         let context = pollster::block_on(gpu::device::GpuContext::request_with_features(
             gpu::wgpu::Features::empty(),
@@ -163,13 +167,21 @@ fn open_window(
     width: u32,
     height: u32,
 ) -> Result<(), worldrunner::scene::viewer::ViewerError> {
-    use worldrunner::scene::viewer::{OrbitLimits, ViewerOptions, run};
+    use worldrunner::scene::viewer::{FrameProfile, OrbitLimits, ViewerOptions, run};
+    let camera = *presentation
+        .scene
+        .effects()
+        .expect("chess supplies studio lighting")
+        .camera();
     run(
         presentation.scene,
         ViewerOptions {
             title: "Chess3D — Nocturne / Ivory".into(),
             size: [width, height],
             pose: presentation.pose,
+            camera,
+            frame_profile: FrameProfile::Legacy,
+            frames_in_flight: 2,
             orbit: OrbitLimits {
                 min_distance_millimeters: 2_000.0,
                 max_distance_millimeters: 40_000.0,

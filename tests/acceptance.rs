@@ -3,13 +3,44 @@ use glam::Vec3;
 use worldrunner::scene::gpu::{SceneView, Viewport};
 
 #[test]
+fn legacy_scene_keeps_explicit_lighting_without_hdr_effect_requests() {
+    let position = Position::initial(342);
+    for build in [render_scene, chess3d::piece_lineup_scene] {
+        let scene = build(&position).unwrap();
+        let effects = scene
+            .effects()
+            .expect("chess always supplies studio lighting");
+        assert!(effects.ssao().is_none());
+        assert!(effects.hdr_post().is_none());
+        assert!(effects.ssr().is_none());
+        assert!(effects.water().is_none());
+        assert_eq!(effects.shadows().extents_millimeters(), &[48_000]);
+        assert!(effects.shadows().split_distances_millimeters().is_none());
+        assert_eq!(effects.shadows().blend_band_micro(), 0);
+        assert_eq!(
+            effects.sun().direction.components_micro(),
+            [-400_000, -300_000, 866_025]
+        );
+        assert_eq!(effects.grading().exposure_micro, 1_000_000);
+        assert!(effects.post().is_empty());
+        assert_eq!(
+            *effects.anti_alias(),
+            worldrunner::scene::plan::SceneAntiAlias::Disabled
+        );
+    }
+}
+
+#[test]
 fn board_and_lineup_lighting_reach_the_governed_frame_consumer() {
     let position = Position::initial(343);
     for build in [render_scene, chess3d::piece_lineup_scene] {
         let scene = build(&position).expect("authored chess lighting must be supported");
         let view = SceneView::new(
             chess3d::CameraPreset::Hero.pose(),
-            *scene.effects().camera(),
+            *scene
+                .effects()
+                .expect("chess supplies studio lighting")
+                .camera(),
             Viewport {
                 width: 257,
                 height: 193,
@@ -136,7 +167,10 @@ fn every_tile_center_uv_parity_and_overhead_projection_agree() {
     let scene = render_scene(&Position::initial(343)).unwrap();
     let view = SceneView::new(
         chess3d::CameraPreset::Overhead.pose(),
-        *scene.effects().camera(),
+        *scene
+            .effects()
+            .expect("chess supplies studio lighting")
+            .camera(),
         Viewport {
             width: 1200,
             height: 1200,

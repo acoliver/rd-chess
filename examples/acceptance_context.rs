@@ -41,7 +41,10 @@ fn overhead_centers() -> Result<Vec<serde_json::Value>, Box<dyn std::error::Erro
     let scene = render_scene(&Position::initial(342))?;
     let view = gpu::SceneView::new(
         chess3d::CameraPreset::Overhead.pose(),
-        *scene.effects().camera(),
+        *scene
+            .effects()
+            .expect("chess supplies studio lighting")
+            .camera(),
         gpu::Viewport {
             width: 1200,
             height: 1200,

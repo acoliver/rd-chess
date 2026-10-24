@@ -28,7 +28,10 @@ fn required_gpu_retained_renderer_survives_target_recreation_and_device_lifetime
                     eye_millimeters: [8_200, -10_500, 10_000],
                     target_millimeters: [0, 0, 400],
                 },
-                *scene.effects().camera(),
+                *scene
+                    .effects()
+                    .expect("chess supplies studio lighting")
+                    .camera(),
                 gpu::Viewport { width, height },
             )
             .unwrap();
@@ -72,7 +75,10 @@ fn capture(context: &gpu::device::GpuContext, position: &Position) -> Vec<u8> {
             eye_millimeters: [8_200, -10_500, 10_000],
             target_millimeters: [0, 0, 400],
         },
-        *scene.effects().camera(),
+        *scene
+            .effects()
+            .expect("chess supplies studio lighting")
+            .camera(),
         gpu::Viewport {
             width: 257,
             height: 193,
@@ -147,8 +153,8 @@ fn effects_with_sun_and_cascades(
     use worldrunner::scene::plan::{SceneEffects, SceneEffectsParts, SceneShadowCascades};
     let mut sun = *source.sun();
     if reverse {
-        sun.direction.x = -sun.direction.x;
-        sun.direction.y = -sun.direction.y;
+        let [x, y, z] = sun.direction.components_micro();
+        sun.direction = worldrunner::scene::plan::SceneDirection::new([-x, -y, z]).unwrap();
     }
     SceneEffects::new(SceneEffectsParts {
         water: source.water().copied(),
@@ -156,7 +162,7 @@ fn effects_with_sun_and_cascades(
         sun,
         ambient: *source.ambient(),
         shadows: SceneShadowCascades::new(extents, 0).unwrap(),
-        ssao: *source.ssao(),
+        ssao: source.ssao().copied(),
         camera: *source.camera(),
         grading: *source.grading(),
         post: source.post().to_vec(),
@@ -177,7 +183,10 @@ fn piece_shadow_follows_light(context: &gpu::device::GpuContext) {
     let scene = render_scene(&position).unwrap();
     let view = gpu::SceneView::new(
         CameraPreset::Overhead.pose(),
-        *scene.effects().camera(),
+        *scene
+            .effects()
+            .expect("chess supplies studio lighting")
+            .camera(),
         gpu::Viewport {
             width: 513,
             height: 513,
@@ -225,15 +234,16 @@ fn assert_light_updates(
     let mut renderer = ShadowedScene::new(context, scene, settings).unwrap();
     let mut target = OffscreenTarget::new(context.device(), view.viewport()).unwrap();
     for reverse in [false, true] {
-        let effects = effects_with_sun_and_cascades(scene.effects(), reverse, vec![48_000]);
+        let effects =
+            effects_with_sun_and_cascades(scene.effects().unwrap(), reverse, vec![48_000]);
         renderer.set_effects(&effects).unwrap();
         renderer.set_settings(context, settings).unwrap();
         let shadowed = retained_capture(context, &mut renderer, view, &mut target);
         assert!(matches!(
             renderer.set_effects(&effects_with_sun_and_cascades(
-                scene.effects(),
+                scene.effects().unwrap(),
                 !reverse,
-                vec![24_000, 48_000],
+                vec![12_000, 24_000, 36_000, 48_000, 60_000],
             )),
             Err(ShadowError::UnsupportedCascades)
         ));
@@ -274,7 +284,12 @@ fn retained_capture(
     target: &mut gpu::offscreen::OffscreenTarget,
 ) -> Vec<u8> {
     renderer
-        .render(context, view, target.color_view(), target.depth_view())
+        .render(
+            context,
+            view,
+            &target.color_attachment(),
+            &target.depth_attachment(),
+        )
         .unwrap();
     target.read_rgba8(context).unwrap().pixels
 }
