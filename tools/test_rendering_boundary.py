@@ -5,7 +5,7 @@ import unittest
 
 from verify_rendering_boundary import check_graph, check_sources
 
-REVISION = "69d0f7e593b3190f94c484fbe0971de2ec3ca294"
+REVISION = "1ead975c7cf3efe672aad3e4f7a8050233843ad6"
 SOURCE = f"git+https://github.com/acoliver/real-disunity.git?rev={REVISION}#{REVISION}"
 
 
