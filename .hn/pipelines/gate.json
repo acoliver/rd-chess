@@ -1,0 +1,14 @@
+{
+  "version": "hn.pipeline/0",
+  "steps": [
+    {
+      "name": "All gates including GPU and real window (cargo xtask ci)",
+      "command": "rdx-gate",
+      "args": [
+        "rd-chess",
+        "ci"
+      ],
+      "timeoutSeconds": 3600
+    }
+  ]
+}
