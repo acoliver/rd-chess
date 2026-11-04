@@ -120,6 +120,7 @@ struct Snapshot {
     core: transition::BoardUndo,
     halfmove: u32,
     fullmove: u32,
+    chess_move: LegalMove,
 }
 
 /// A validated playable state. Editor documents are output only, never authority.
@@ -187,6 +188,27 @@ impl ChessState {
         self.core.legal_moves()
     }
 
+    /// Initial position and committed moves, including reversible repetition history.
+    pub fn record(&self) -> (String, Vec<String>) {
+        let initial_fen = self.undo.first().map_or_else(
+            || self.to_fen(),
+            |snapshot| {
+                Self {
+                    core: snapshot.core,
+                    halfmove: snapshot.halfmove,
+                    fullmove: snapshot.fullmove,
+                    repetition: vec![snapshot.core.zobrist()],
+                    undo: Vec::new(),
+                }
+                .to_fen()
+            },
+        );
+        (
+            initial_fen,
+            self.undo.iter().map(|s| s.chess_move.to_uci()).collect(),
+        )
+    }
+
     /// Apply a legal move transactionally, retaining exact state for `undo`.
     /// Automatic outcomes are reported by `status`; callers end play on them.
     pub fn play(&mut self, chess_move: LegalMove) -> Result<(), MoveError> {
@@ -217,6 +239,7 @@ impl ChessState {
             core: saved,
             halfmove: self.halfmove,
             fullmove: self.fullmove,
+            chess_move,
         });
         self.core.make(chess_move);
         self.halfmove = halfmove;

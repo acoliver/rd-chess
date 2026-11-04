@@ -14,6 +14,7 @@ impl GameUi {
         self.setup_page()?;
         self.command_page(Screen::InGameMenu, "Game menu", menus::PAUSE)?;
         self.command_page(Screen::GameOver, "Game over", menus::OVER)?;
+        self.storage_pages()?;
         Ok(())
     }
     fn command_page(
@@ -33,7 +34,7 @@ impl GameUi {
         self.list_rows(list, entries, [560., 44.])?;
         Ok(())
     }
-    fn list_rows(
+    pub(super) fn list_rows(
         &mut self,
         list: ObjectHandle,
         entries: &[(&str, MenuAction)],
@@ -47,6 +48,7 @@ impl GameUi {
             if action == MenuAction::Undo {
                 self.undo = Some(object);
             }
+            self.rows.push((object, action));
             actions.push(action);
         }
         self.bindings.insert(list, actions);
@@ -57,8 +59,7 @@ impl GameUi {
         self.pages.push((Screen::ComputerSetup, panel));
         self.native
             .text(panel, "Play the computer", [580., 40.], [0., 230.])?;
-        self.native
-            .text(panel, "Your side (default White)", [580., 28.], [0., 190.])?;
+        self.setup_summary = Some(self.native.text(panel, "", [580., 28.], [0., 190.])?);
         let sides = self.native.rect(panel, [570., 40.], [0., 150.])?;
         self.native.stack(sides, UiAxis::Horizontal, 15);
         self.list_rows(
@@ -70,12 +71,8 @@ impl GameUi {
             ],
             [180., 40.],
         )?;
-        self.native.text(
-            panel,
-            "Levels (uncalibrated; default 1)",
-            [580., 32.],
-            [0., 108.],
-        )?;
+        self.native
+            .text(panel, "Levels (uncalibrated)", [580., 32.], [0., 108.])?;
         self.level_list(panel)?;
         self.native.text(
             panel,
