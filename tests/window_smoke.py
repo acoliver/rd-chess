@@ -194,6 +194,38 @@ def run_case(args, environment, name, view, load=None, interaction=None):
                 xdo("key", "--window", window, "u")
                 wait(lambda: matching(initial, 0), "U exact board undo")
                 records += [f"click and reply {sequence} matches capture", "U exact board undo"]
+            if interaction == "title":
+                inspect = subprocess.run([str(args.binary), "--puzzle", "00008"],
+                                         env=headless, check=True, capture_output=True,
+                                         text=True, timeout=60).stdout
+                line = next(line for line in inspect.splitlines()
+                            if line.startswith("Window clicks (960x720):"))
+                fx, fy, tx, ty = map(int, line.split(":", 1)[1].split())
+                # Coordinates come from the game's study pose and engine projection.
+                xdo("key", "--window", window, "Escape", "End", "Return")
+                xdo("key", "--window", window, "Home", "Down", "Down", "Down", "Return")
+                wait(lambda: difference(initial, screenshot()) > 2, "Puzzles band browser")
+                xdo("key", "--window", window, "Return")
+                ready_after = time.monotonic() + 0.5
+                wait(lambda: time.monotonic() >= ready_after and
+                     difference(initial, screenshot()) > 2, "puzzle setup delay")
+                before = screenshot()
+                xdo("mousemove", "--window", window, fx, fy)
+                xdo("click", 1)
+                wait(lambda: difference(before, screenshot()) > 0.01,
+                     "known puzzle solver selection")
+                xdo("mousemove", "--window", window, tx, ty)
+                xdo("click", 1)
+
+                def solver_moved():
+                    image = screenshot()
+                    rects = [(x - 5, y - 5, x + 5, y + 5) for x, y in [(fx, fy), (tx, ty)]]
+                    return image if all(difference(before.crop(rect), image.crop(rect)) > 3
+                                        for rect in rects) else None
+
+                solved_move = wait(solver_moved, "00008 e6-e7 accepted with scripted reply")
+                solved_move.save(output / f"{name}-puzzle-first-move.png")
+                records.append("Puzzles: 00008 first solver move by engine-projected clicks")
             if interaction == "camera":
                 def changed(reference_image):
                     image = screenshot()

@@ -22,24 +22,34 @@ impl GameUi {
         title: &str,
         entries: &[(&str, MenuAction)],
     ) -> Result<(), WorldError> {
-        let panel = self.native.panel([620., 360.])?;
-        self.pages.push((screen, panel));
-        self.native.text(panel, title, [580., 44.], [0., 148.])?;
-        let count = f32::from(u16::try_from(entries.len()).expect("small menu"));
-        let list = self
+        let panel = self
             .native
-            .rect(panel, [560., count * 52. - 8.], [0., -10.])?;
+            .panel([620., if screen == Screen::Title { 464. } else { 360. }])?;
+        self.pages.push((screen, panel));
+        self.native.text(
+            panel,
+            title,
+            [580., 44.],
+            [0., if screen == Screen::Title { 200. } else { 148. }],
+        )?;
+        let count = f32::from(u16::try_from(entries.len()).expect("small menu"));
+        let list = self.native.rect(
+            panel,
+            [560., count * 52. - 8.],
+            [0., if screen == Screen::Title { -62. } else { -10. }],
+        )?;
         self.native.stack(list, UiAxis::Vertical, 8);
         self.list_rows(list, entries, [560., 44.])?;
         Ok(())
     }
-    fn list_rows(
+    pub(super) fn list_rows(
         &mut self,
         list: ObjectHandle,
         entries: &[(&str, MenuAction)],
         size: [f32; 2],
     ) -> Result<(), WorldError> {
         let mut actions = Vec::new();
+        let mut rows = Vec::new();
         for (index, &(label, action)) in entries.iter().enumerate() {
             let object = self.native.text(list, label, size, [0., 0.])?;
             self.native
@@ -48,8 +58,10 @@ impl GameUi {
                 self.undo = Some(object);
             }
             actions.push(action);
+            rows.push(object);
         }
         self.bindings.insert(list, actions);
+        self.rows.insert(list, rows);
         Ok(())
     }
     fn setup_page(&mut self) -> Result<(), WorldError> {

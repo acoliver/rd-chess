@@ -19,9 +19,14 @@ pub struct TaskRunner {
 
 impl TaskRunner {
     pub fn new(task: Task) -> Result<Self> {
+        let state = board(&task.fen)?;
+        Self::with_board(task, state)
+    }
+
+    pub(super) fn with_board(task: Task, state: ChessState) -> Result<Self> {
         task.validate()?;
         Ok(Self {
-            board: board(&task.fen)?,
+            board: state,
             choices: task.solutions.clone(),
             task,
             status: TaskStatus::AwaitingMove,
@@ -121,6 +126,16 @@ impl LessonRunner {
         Ok(runner)
     }
 
+    pub fn step_index(&self) -> usize {
+        self.index
+    }
+
+    pub fn back(&mut self) -> Result<()> {
+        require(self.index > 0, "already at first step")?;
+        self.index -= 1;
+        self.start_step()
+    }
+
     pub fn step(&self) -> Option<&Step> {
         self.lesson.steps.get(self.index)
     }
@@ -143,11 +158,15 @@ impl LessonRunner {
             .as_mut()
             .ok_or_else(|| super::TeachingError::Invalid("step is not a board task".into()))?;
         task.submit(uci)?;
-        self.progress
+        let progress = self
+            .progress
             .lessons
             .entry(self.lesson.id.clone())
-            .or_default()
-            .attempts += 1;
+            .or_default();
+        progress.attempts += 1;
+        if task.status() == &TaskStatus::Completed {
+            progress.completed_steps.insert(self.index);
+        }
         Ok(())
     }
 
@@ -175,6 +194,12 @@ impl LessonRunner {
                 .is_none_or(|task| task.status == TaskStatus::Completed),
             "finish the task before advancing",
         )?;
+        self.progress
+            .lessons
+            .entry(self.lesson.id.clone())
+            .or_default()
+            .completed_steps
+            .insert(self.index);
         self.index += 1;
         if self.completed() {
             self.progress

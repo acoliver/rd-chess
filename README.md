@@ -536,7 +536,8 @@ The Xvfb window smoke was not run on macOS; its Python module passed syntax chec
 replies. `explain_move(&state, mv, budget)` and `explain_reply` return the same
 `Result<Explanation, MoveError>`. They revalidate the move, preserve the input
 state and are deterministic for a given position/history and budget. No model,
-network service, new dependency or UI integration is involved.
+network service or new dependency is involved. The game menu's Why? control reuses
+these learner sentences after a computer reply.
 
 ```rust
 use chess3d::rules::ChessState;
@@ -649,7 +650,7 @@ assigns a confident blunder label. Detailed limits remain available through
 legal evidence replay, material/mate premises, negative motifs, deterministic
 budgets and special moves. `tests/cli.rs` checks the CLI with graphics disabled.
 
-## Offline course and puzzles (CPU logic)
+## Offline course and puzzles
 
 `teaching::course` embeds a versioned first course with 12 original lessons and 19 board
 tasks, plus 300 CC0 Lichess puzzles. Both work without a viewer or network access.
@@ -668,8 +669,12 @@ the course. `--puzzle ID` prints the position after the opponent's setup move,
 then the solver's line. These inspection modes cannot write position files or
 launch a window. The runners handle wrong-answer feedback, retries, progressive
 hints, scripted replies and alternative mates through the existing rules core.
-A versioned progress payload restores completion, attempt, hint and rating-band
-totals; file storage and lesson/puzzle UI are not included in this CPU slice.
+The window's Lessons and Puzzles title choices open native browsers and playable
+board tasks, with hints, retries, scripted replies and completion marks. The
+game menu's Why? opens learner sentences after a computer reply. Progress stays
+in memory because this engine pin has no application store; the TODO names
+`feat/saved-games`. See the course documentation below for controls, storage
+limits and teaching-screen verification.
 
 See [the course format and runner contract](assets/lessons/README.md) and
 [the puzzle notice, CC0 licence statement and subset reproduction](assets/puzzles/README.md).

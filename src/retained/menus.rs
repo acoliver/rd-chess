@@ -5,6 +5,10 @@ use crate::{Side, rules::GameStatus};
 pub enum Screen {
     Title,
     ComputerSetup,
+    Lessons,
+    Puzzles,
+    Lesson,
+    Puzzle,
     #[default]
     Play,
     InGameMenu,
@@ -27,11 +31,23 @@ pub(super) enum MenuAction {
     Title,
     NewGame,
     ClaimDraw,
+    Lessons,
+    Puzzles,
+    Lesson(usize),
+    PuzzleBand(Option<&'static str>),
+    StudyNext,
+    StudyBack,
+    StudyHint,
+    StudyRetry,
+    StudyExit,
+    Why,
 }
 
 pub(super) const TITLE: &[(&str, MenuAction)] = &[
     ("Play a friend", MenuAction::Friend),
     ("Play the computer", MenuAction::Computer),
+    ("Lessons", MenuAction::Lessons),
+    ("Puzzles", MenuAction::Puzzles),
     ("Quit", MenuAction::Quit),
 ];
 pub(super) const PAUSE: &[(&str, MenuAction)] = &[
@@ -85,6 +101,7 @@ impl BoardDriver {
         Ok(())
     }
     pub fn show_title(&mut self) -> Result<(), String> {
+        self.leave_training();
         self.restart()?;
         self.computer = None;
         self.transition(Screen::Title)
@@ -140,7 +157,10 @@ impl BoardDriver {
             claim: self.claim_available(),
             undo: self.undo_plies().is_ok(),
         };
+        let study = self.study_ui_state();
         if let Some(ui) = &mut self.ui {
+            ui.synchronize_study(study, state.screen)
+                .map_err(|e| e.to_string())?;
             ui.synchronize(state, self.viewport)
                 .map_err(|e| e.to_string())?;
         }
@@ -171,8 +191,19 @@ impl BoardDriver {
             }
             MenuAction::Resign => self.resign()?,
             MenuAction::ClaimDraw => self.claim_draw()?,
+            action => self.training_action(action)?,
         }
         Ok(())
+    }
+    fn leave_training(&mut self) {
+        if let Some(training) = &mut self.training
+            && let Some(orbit) = training.leave()
+        {
+            let camera = self.camera.as_mut().expect("configured camera");
+            camera.orbit = orbit;
+            camera.dirty = true;
+        }
+        self.reset_camera();
     }
     fn start_computer_game(&mut self) -> Result<(), String> {
         self.restart()?;

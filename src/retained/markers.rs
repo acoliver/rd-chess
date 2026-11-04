@@ -29,6 +29,22 @@ impl Markers {
         );
         edits
     }
+    pub fn square_edits(&self, next: &BTreeSet<Square>) -> Vec<SceneObjectEdit> {
+        self.edits(next)
+            .into_iter()
+            .map(|edit| match edit {
+                SceneObjectEdit::Add { id, object } => SceneObjectEdit::Add {
+                    id,
+                    object: SceneObject::new(
+                        *object.transform(),
+                        MeshHandle::from_raw(12),
+                        MaterialHandle::from_raw(7),
+                    ),
+                },
+                other => other,
+            })
+            .collect()
+    }
     pub fn clear(&mut self) -> Vec<SceneObjectEdit> {
         let edits = self.edits(&BTreeSet::new());
         self.visible.clear();

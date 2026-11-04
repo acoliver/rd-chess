@@ -1,3 +1,33 @@
+#[test]
+fn why_control_shows_verified_sentences_after_a_computer_reply() {
+    let (mut driver, mut host) = setup(INITIAL_FEN, Side::Ivory);
+    driver.play_uci("e2e4").unwrap();
+    driver.advance_computer(&mut host);
+    wait(&mut driver);
+    let mut before = game(&driver).clone();
+    before.undo().unwrap();
+    let mv = before.parse_uci("b8c6").unwrap();
+    let expected =
+        crate::teaching::explain_reply(&before, mv, crate::teaching::Budget::default()).unwrap();
+    menu_key(&mut driver, "escape");
+    for input in [
+        RetainedInput::PointerMoved([400., 456.]),
+        button(true),
+        button(false),
+    ] {
+        driver.handle_input(&input, None, None).unwrap();
+    }
+    for sentence in expected.sentences {
+        assert!(
+            driver.panel_text().contains(&sentence),
+            "{}",
+            driver.panel_text()
+        );
+    }
+    driver.undo().unwrap();
+    assert!(driver.panel_text().is_empty());
+}
+
 use super::*;
 use crate::{CameraPreset, PieceKind, Square, retained::RetainedBoard, rules::INITIAL_FEN};
 use std::time::Duration;
@@ -15,6 +45,17 @@ fn a_computer_mate_delivered_with_the_menu_open_shows_game_over() {
     wait(&mut driver);
     assert_eq!(driver.screen(), crate::retained::Screen::GameOver);
     assert_eq!(driver.status_text(), "Checkmate: White wins");
+    for input in [
+        RetainedInput::PointerMoved([400., 456.]),
+        button(true),
+        button(false),
+    ] {
+        driver.handle_input(&input, None, None).unwrap();
+    }
+    assert!(
+        !driver.panel_text().is_empty(),
+        "the mating reply can also be explained"
+    );
 }
 
 fn menu_key(driver: &mut BoardDriver, key: &str) {

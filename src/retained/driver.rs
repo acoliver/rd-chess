@@ -21,6 +21,8 @@ pub type InputInbox = Rc<RefCell<VecDeque<RetainedInput>>>;
 #[derive(Default)]
 pub struct BoardDriver {
     pub(super) board: Option<super::RetainedBoard>,
+    pub(super) training: Option<super::training::Training>,
+    pub(super) squares: Markers,
     pub(super) menus: super::menus::Menus,
     pub(super) computer: Option<super::computer::Computer>,
     pub(super) pending: TransactionQueue,
@@ -61,6 +63,7 @@ impl BoardDriver {
         });
         self.viewport = options.size;
         if let Some(board) = &self.board {
+            self.training = Some(super::training::Training::bundled()?);
             self.ui = Some(GameUi::new().map_err(|e| e.to_string())?);
             self.markers.base = board
                 .identities()
@@ -69,6 +72,8 @@ impl BoardDriver {
                 .max()
                 .expect("game has kings")
                 + 1;
+            self.markers.base = self.markers.base.max(68);
+            self.squares.base = self.markers.base + 64;
         }
         self.refresh_game_over()?;
         self.sync_menu_ui()
@@ -139,6 +144,15 @@ impl BoardDriver {
         Ok(true)
     }
     fn publish_markers(&mut self, host: &mut RetainedHost) -> Result<bool, String> {
+        let squares = self.training_highlights();
+        let edits = self.squares.square_edits(&squares);
+        if !edits.is_empty() {
+            if admit(host, RetainedUpdate::Objects(edits))? {
+                self.squares.visible = squares;
+                self.presenting = true;
+            }
+            return Ok(false);
+        }
         let mut next = self.destinations();
         next.extend(self.selected());
         let edits = self.markers.edits(&next);
@@ -202,7 +216,7 @@ impl BoardDriver {
     }
 }
 impl RetainedDriver for BoardDriver {
-    fn update(&mut self, host: &mut RetainedHost, _: &RetainedTick) -> Result<(), String> {
+    fn update(&mut self, host: &mut RetainedHost, tick: &RetainedTick) -> Result<(), String> {
         if self.camera.is_none() {
             self.configure(host.options())?;
         }
@@ -216,6 +230,7 @@ impl RetainedDriver for BoardDriver {
             let hit = self.input_hit(&input, |point, include| host.pick(point, include));
             self.handle_input(&input, view.as_ref(), hit)?;
         }
+        self.advance_training(tick.elapsed)?;
         if self.exit {
             host.request_exit();
         } else {

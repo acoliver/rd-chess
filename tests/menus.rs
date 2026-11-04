@@ -55,8 +55,7 @@ fn click(driver: &mut BoardDriver, point: [f64; 2]) -> bool {
 }
 fn command(driver: &mut BoardDriver, index: usize) {
     let last = match driver.screen() {
-        Screen::Title => 2,
-        Screen::InGameMenu => 4,
+        Screen::Title | Screen::InGameMenu => 4,
         Screen::GameOver => 1,
         _ => panic!("command menu required"),
     };
@@ -236,7 +235,7 @@ fn setup_back_escape_quit_and_seeded_random_side() {
     }
     let mut driver = fixture(chess3d::rules::INITIAL_FEN);
     driver.show_title().unwrap();
-    command(&mut driver, 2);
+    command(&mut driver, 4);
     assert!(driver.exit_requested());
 }
 

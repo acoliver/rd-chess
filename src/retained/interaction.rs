@@ -193,6 +193,7 @@ impl BoardDriver {
                 pressed,
             } => {
                 let click_allowed = !self.computer_turn()
+                    && !self.training_blocked()
                     && !self.presenting
                     && self.pending.borrow().is_empty()
                     && hit.is_none_or(|picked| picked.generation == self.generation);
@@ -277,6 +278,9 @@ impl BoardDriver {
     }
 
     pub(super) fn commit_move(&mut self, chess_move: LegalMove) -> Result<(), String> {
+        if self.training_screen() {
+            return self.submit_training_move(chess_move);
+        }
         let edits = self
             .board
             .as_mut()
@@ -287,6 +291,7 @@ impl BoardDriver {
     }
 
     pub(super) fn enqueue_move(&mut self, mut edits: Vec<SceneObjectEdit>) -> Result<(), String> {
+        self.clear_explanation();
         if let Some(computer) = &mut self.computer {
             computer.changed();
         }
@@ -336,7 +341,16 @@ impl BoardDriver {
                 let screen = match self.screen() {
                     super::Screen::Play => super::Screen::InGameMenu,
                     super::Screen::InGameMenu => super::Screen::Play,
-                    super::Screen::ComputerSetup => super::Screen::Title,
+                    super::Screen::ComputerSetup
+                    | super::Screen::Lessons
+                    | super::Screen::Puzzles => {
+                        self.show_title()?;
+                        return Ok(true);
+                    }
+                    super::Screen::Lesson | super::Screen::Puzzle => {
+                        self.training_action(super::menus::MenuAction::StudyExit)?;
+                        return Ok(true);
+                    }
                     screen => screen,
                 };
                 self.transition(screen)?;

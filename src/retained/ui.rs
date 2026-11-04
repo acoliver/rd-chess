@@ -1,4 +1,6 @@
 mod pages;
+mod study;
+pub(super) use study::StudyState;
 mod widgets;
 use super::menus::{self, MenuAction, Screen};
 use glam::Vec2;
@@ -22,6 +24,9 @@ pub(super) struct UiState {
 }
 pub(super) struct GameUi {
     native: NativeUi,
+    study: Option<study::StudyWidgets>,
+    study_state: Option<(Option<StudyState>, Screen)>,
+    rows: BTreeMap<ObjectHandle, Vec<ObjectHandle>>,
     status: ComponentHandle,
     dialog: ObjectHandle,
     claim: ObjectHandle,
@@ -41,6 +46,9 @@ impl GameUi {
         let dialog = promotion_dialog(&mut native)?;
         let mut ui = Self {
             native,
+            study: None,
+            study_state: None,
+            rows: BTreeMap::new(),
             status,
             dialog,
             claim,
@@ -53,6 +61,7 @@ impl GameUi {
             dirty: true,
         };
         ui.build_pages()?;
+        ui.build_study()?;
         Ok(ui)
     }
     pub fn synchronize(&mut self, state: UiState, viewport: [u32; 2]) -> Result<(), WorldError> {
@@ -137,7 +146,7 @@ impl GameUi {
         match action {
             UiAction::Activated { object } if object == self.claim => Some(MenuAction::ClaimDraw),
             UiAction::Selected { list, index } => Some(self.bindings[&list][index]),
-            _ => None,
+            action => self.study_action(action),
         }
     }
     pub fn overlay(

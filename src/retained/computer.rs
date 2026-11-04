@@ -254,7 +254,12 @@ impl BoardDriver {
                 Some("Computer error: illegal search result".into());
             return Ok(());
         }
-        self.commit_move(chess_move)
+        let before = board.game().clone();
+        self.commit_move(chess_move)?;
+        if let Some(training) = &mut self.training {
+            training.reply = Some((before, chess_move));
+        }
+        self.sync_menu_ui()
     }
     pub(super) fn undo_plies(&self) -> Result<usize, String> {
         let board = self

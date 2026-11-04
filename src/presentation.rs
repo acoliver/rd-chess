@@ -40,6 +40,14 @@ impl CameraPreset {
     }
 }
 
+pub(crate) fn scene_camera() -> worldrunner::scene::plan::SceneCamera {
+    worldrunner::scene::plan::SceneCamera {
+        vertical_fov_millidegrees: 43_000,
+        near_plane_millimeters: 100,
+        far_plane_millimeters: 100_000,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::CameraPreset;
