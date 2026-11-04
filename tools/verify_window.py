@@ -17,6 +17,15 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+SMOKE_TIMEOUT_SECONDS = 1200
+
+
+def log_tail(path):
+    if not path.is_file():
+        return ""
+    with path.open(errors="replace") as stream:
+        tail = "".join(deque(stream, maxlen=20))
+    return f"\n{path} (last 20 lines):\n{tail}"
 
 
 def prerequisites(target):
@@ -55,13 +64,16 @@ def run(args):
                "--xdotool", tools["xdotool"], "--output", str(output)]
     process = subprocess.Popen(command, cwd=ROOT, env=environment, start_new_session=True)
     try:
-        status = process.wait(timeout=300)
+        try:
+            status = process.wait(timeout=SMOKE_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired as error:
+            diagnostic = f"real-window harness timed out after {SMOKE_TIMEOUT_SECONDS}s"
+            diagnostic += log_tail(output / "progress.log")
+            diagnostic += log_tail(xvfb_log)
+            raise ValueError(diagnostic) from error
         if status:
             diagnostic = f"real-window harness failed with exit {status}"
-            if xvfb_log.is_file():
-                with xvfb_log.open(errors="replace") as stream:
-                    tail = "".join(deque(stream, maxlen=20))
-                diagnostic += f"\n{xvfb_log} (last 20 lines):\n{tail}"
+            diagnostic += log_tail(xvfb_log)
             raise ValueError(diagnostic)
     finally:
         try:
