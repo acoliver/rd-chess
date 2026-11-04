@@ -32,6 +32,8 @@ pub struct BoardDriver {
     pub(super) camera: Option<CameraControls>,
     pub(super) view: Option<SceneView>,
     pub(super) viewport: [u32; 2],
+    pub(super) generation: u64,
+    presented: Option<u64>,
     pub(super) presenting: bool,
     pub(super) unfocused: bool,
     pub(super) exit: bool,
@@ -175,27 +177,7 @@ impl BoardDriver {
         }
         Ok(())
     }
-}
-impl RetainedDriver for BoardDriver {
-    fn update(&mut self, host: &mut RetainedHost, _: &RetainedTick) -> Result<(), String> {
-        if self.camera.is_none() {
-            self.configure(host.options())?;
-        }
-        self.viewport = host.size();
-        self.view = host.view().map_err(|e| e.to_string())?;
-        self.presenting = host
-            .statistics()
-            .is_some_and(|s| s.generation != host.accepted_generation());
-        let inputs = std::mem::take(&mut *self.inputs.borrow_mut());
-        let view = self.view;
-        for input in inputs {
-            self.handle_input(&input, view.as_ref())?;
-        }
-        if self.exit {
-            host.request_exit();
-        } else {
-            self.advance_computer(host);
-        }
+    fn publish(&mut self, host: &mut RetainedHost) -> Result<(), String> {
         if !self.publish_objects(host)? {
             return Ok(());
         }
@@ -210,6 +192,32 @@ impl RetainedDriver for BoardDriver {
         }
         self.publish_camera(host)
     }
+}
+impl RetainedDriver for BoardDriver {
+    fn update(&mut self, host: &mut RetainedHost, _: &RetainedTick) -> Result<(), String> {
+        if self.camera.is_none() {
+            self.configure(host.options())?;
+        }
+        self.viewport = host.size();
+        self.view = host.view().map_err(|e| e.to_string())?;
+        self.generation = host.accepted_generation();
+        self.presenting = self.presented != Some(self.generation);
+        let inputs = std::mem::take(&mut *self.inputs.borrow_mut());
+        let view = self.view;
+        for input in inputs {
+            let hit = self.input_hit(&input, |point, include| host.pick(point, include));
+            self.handle_input(&input, view.as_ref(), hit)?;
+        }
+        if self.exit {
+            host.request_exit();
+        } else {
+            self.advance_computer(host);
+        }
+        let result = self.publish(host);
+        self.generation = host.accepted_generation();
+        result
+    }
+
     fn event(
         &mut self,
         host: &mut RetainedEventHost<'_>,
@@ -217,17 +225,35 @@ impl RetainedDriver for BoardDriver {
     ) -> Result<(), String> {
         match event {
             RetainedEvent::WorkReady => self.drain_computer()?,
-            RetainedEvent::Capture { id, outcome, .. } => {
+            RetainedEvent::Presented { .. } => {
+                let generation = host
+                    .statistics()
+                    .expect("presented frame statistics")
+                    .generation;
+                self.presented = Some(generation);
+                self.presenting = generation != self.generation;
+            }
+            RetainedEvent::Capture {
+                id,
+                generation,
+                outcome,
+                ..
+            } => {
+                if matches!(outcome, RetainedCaptureOutcome::Completed { .. }) {
+                    self.presented = Some(*generation);
+                    self.presenting = *generation != self.generation;
+                }
                 self.captures.borrow_mut().insert(*id, outcome.clone());
             }
             RetainedEvent::Input(input) => {
                 let view = self.view;
-                self.handle_input(input, view.as_ref())?;
+                let hit = self.input_hit(input, |point, include| host.pick(point, include));
+                self.handle_input(input, view.as_ref(), hit)?;
                 if self.exit {
                     host.request_exit();
                 }
             }
-            _ => {}
+            RetainedEvent::Shutdown => {}
         }
         Ok(())
     }

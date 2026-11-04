@@ -192,7 +192,7 @@ fn board_clicks_are_blocked_during_computer_turn_but_orbit_works() {
         button(true),
         button(false),
     ] {
-        driver.handle_input(&input, Some(&view)).unwrap();
+        driver.handle_input(&input, Some(&view), None).unwrap();
     }
     assert_eq!(driver.selected(), None);
     for input in [
@@ -200,7 +200,7 @@ fn board_clicks_are_blocked_during_computer_turn_but_orbit_works() {
         RetainedInput::PointerMoved([start[0] + 30., start[1] + 20.]),
         button(false),
     ] {
-        driver.handle_input(&input, Some(&view)).unwrap();
+        driver.handle_input(&input, Some(&view), None).unwrap();
     }
     assert_ne!(driver.camera_pose().unwrap(), CameraPreset::Overhead.pose());
     assert_eq!(game(&driver), &ChessState::initial());

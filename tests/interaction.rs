@@ -38,29 +38,26 @@ fn pixel(view: &SceneView, name: &str) -> [f64; 2] {
     let screen = view.resolved_view().world_to_screen(point).unwrap();
     [f64::from(screen.x), f64::from(screen.y)]
 }
-fn click_pixel(driver: &mut BoardDriver, view: &SceneView, pixel: [f64; 2]) -> bool {
-    driver
-        .handle_input(&RetainedInput::PointerMoved(pixel), Some(view))
-        .unwrap();
+fn pointer_button(driver: &mut BoardDriver, view: &SceneView, pressed: bool) -> bool {
     driver
         .handle_input(
             &RetainedInput::Button {
                 button: MouseButton::Left,
-                pressed: true,
+                pressed,
             },
             Some(view),
-        )
-        .unwrap();
-    driver
-        .handle_input(
-            &RetainedInput::Button {
-                button: MouseButton::Left,
-                pressed: false,
-            },
-            Some(view),
+            None,
         )
         .unwrap()
 }
+fn click_pixel(driver: &mut BoardDriver, view: &SceneView, pixel: [f64; 2]) -> bool {
+    driver
+        .handle_input(&RetainedInput::PointerMoved(pixel), Some(view), None)
+        .unwrap();
+    pointer_button(driver, view, true);
+    pointer_button(driver, view, false)
+}
+
 fn click(driver: &mut BoardDriver, view: &SceneView, name: &str) {
     click_pixel(driver, view, pixel(view, name));
 }
@@ -75,6 +72,7 @@ fn key(driver: &mut BoardDriver, view: &SceneView, name: &str) {
                 repeat: false,
             },
             Some(view),
+            None,
         )
         .unwrap();
 }
@@ -135,59 +133,28 @@ fn drag_orbits_without_moving_and_focus_loss_cancels_click() {
     let (mut driver, view) = fixture(chess3d::rules::INITIAL_FEN);
     let start = pixel(&view, "e2");
     driver
-        .handle_input(&RetainedInput::PointerMoved(start), Some(&view))
+        .handle_input(&RetainedInput::PointerMoved(start), Some(&view), None)
         .unwrap();
-    driver
-        .handle_input(
-            &RetainedInput::Button {
-                button: MouseButton::Left,
-                pressed: true,
-            },
-            Some(&view),
-        )
-        .unwrap();
+    pointer_button(&mut driver, &view, true);
     driver
         .handle_input(
             &RetainedInput::PointerMoved([start[0] + 30., start[1] + 20.]),
             Some(&view),
+            None,
         )
         .unwrap();
-    driver
-        .handle_input(
-            &RetainedInput::Button {
-                button: MouseButton::Left,
-                pressed: false,
-            },
-            Some(&view),
-        )
-        .unwrap();
+    pointer_button(&mut driver, &view, false);
     assert_ne!(driver.camera_pose().unwrap(), CameraPreset::Overhead.pose());
     assert!(driver.queue().borrow().is_empty());
     assert_eq!(driver.selected(), None);
     driver
-        .handle_input(&RetainedInput::PointerMoved(start), Some(&view))
+        .handle_input(&RetainedInput::PointerMoved(start), Some(&view), None)
         .unwrap();
+    pointer_button(&mut driver, &view, true);
     driver
-        .handle_input(
-            &RetainedInput::Button {
-                button: MouseButton::Left,
-                pressed: true,
-            },
-            Some(&view),
-        )
+        .handle_input(&RetainedInput::PointerCancelled, Some(&view), None)
         .unwrap();
-    driver
-        .handle_input(&RetainedInput::PointerCancelled, Some(&view))
-        .unwrap();
-    driver
-        .handle_input(
-            &RetainedInput::Button {
-                button: MouseButton::Left,
-                pressed: false,
-            },
-            Some(&view),
-        )
-        .unwrap();
+    pointer_button(&mut driver, &view, false);
     assert_eq!(driver.selected(), None);
 }
 

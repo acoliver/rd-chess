@@ -42,7 +42,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`4f920c5b4b30651d7bffb9a9a11774fd2400c447` from
+`36c13e5935b6220526e083a4bd789188892e2f4a` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -144,13 +144,24 @@ at the queue head; other errors end the run. Desktop viewing uses
 capture test pump drains driver changes before requesting the accepted generation.
 It never runs from an event-loop callback.
 
-Square picking uses the published engine camera's screen ray and the Z=0.05 m
-board plane, with physical top-left pixels. Board clicks wait for pending edits
-to be presented. Overhead is the readable play preset (`--view overhead`); hero
-view uses the same plane and does not yet pick piece silhouettes. Input wiring
-calls the engine's `OrbitCamera`, rather than implementing camera math in chess.
-Highlights share one resident ring mesh and reserved per-square object identities.
-A move removes its highlights in the same object batch as the pieces.
+Board clicks query the engine's last presented geometry at physical top-left
+pixels. The filter includes piece bodies, knight eyes, the board and visible
+target rings, excluding the studio floor and decorative frame/inlay. Body and eye
+hits resolve to that piece's current rules square, including tall silhouettes in
+hero view. Board and ring hits resolve from their world intersection. Only a
+geometry miss falls back to the camera ray's Z=0.05 m board-plane intersection,
+so off-board clicks still deselect. Overhead remains the readable play preset
+(`--view overhead`). Input wiring calls the engine's `OrbitCamera`, rather than
+implementing camera math in chess. Highlights share one resident ring mesh and
+reserved per-square object identities. A move removes its highlights in the same
+object batch as the pieces.
+
+Clicks are discarded, not queued, while a game transaction is pending or the
+accepted generation has not been presented. The driver records presentation
+notifications (completed captures for its windowless mode) and also requires a
+hit's generation to equal the accepted generation. A stale hit is a no-op, not a
+plane fallback. This prevents both piece targeting and off-board deselection
+against stale geometry. Orbit and zoom remain available during presentation.
 
 One native UI world owns status text and the promotion choices. `UiRouter` routes
 four choice controls under a modal root before board input; its consumed flag

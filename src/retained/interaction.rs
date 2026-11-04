@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use worldrunner::{
     scene::{
         gpu::SceneView,
-        viewer::{RetainedInput, SceneObjectEdit},
+        viewer::{RetainedInput, RetainedPickHit, SceneObjectEdit},
     },
     simulation::{InputAction, PointerButton, PointerEvent, PointerWheel},
     ui::UiKey,
@@ -98,11 +98,12 @@ impl BoardDriver {
         self.exit
     }
 
-    /// Routes synthetic and OS observations identically. The view is the published physical viewport.
+    /// Routes synthetic and OS observations identically, with a host hit from the presented frame.
     pub fn handle_input(
         &mut self,
         input: &RetainedInput,
         view: Option<&SceneView>,
+        hit: Option<RetainedPickHit>,
     ) -> Result<bool, String> {
         if let Some(view) = view {
             self.viewport = [view.viewport().width, view.viewport().height];
@@ -143,7 +144,7 @@ impl BoardDriver {
                 self.interaction.cancel_pointer();
                 return Ok(true);
             }
-            self.board_pointer(pointer, view)?;
+            self.board_pointer(pointer, view, hit)?;
         }
         Ok(false)
     }
@@ -168,6 +169,7 @@ impl BoardDriver {
         &mut self,
         pointer: PointerEvent,
         view: Option<&SceneView>,
+        hit: Option<RetainedPickHit>,
     ) -> Result<(), String> {
         match pointer {
             PointerEvent::Moved(point) => {
@@ -188,12 +190,14 @@ impl BoardDriver {
                 button: PointerButton::Left,
                 pressed,
             } => {
-                let click_allowed =
-                    !self.computer_turn() && !self.presenting && self.pending.borrow().is_empty();
+                let click_allowed = !self.computer_turn()
+                    && !self.presenting
+                    && self.pending.borrow().is_empty()
+                    && hit.is_none_or(|picked| picked.generation == self.generation);
                 if let Some(point) = self.interaction.button(pressed, click_allowed)
                     && let Some(view) = view
                 {
-                    self.click_square(pick_square(view, point))?;
+                    self.click_square(self.clicked_square(view, point, hit))?;
                 }
             }
             PointerEvent::Wheel(delta) => {
@@ -352,25 +356,4 @@ fn ui_key(key: &str) -> Option<UiKey> {
         "space" => Some(UiKey::Space),
         _ => None,
     }
-}
-fn pick_square(view: &SceneView, point: [f64; 2]) -> Option<Square> {
-    let viewport = view.viewport();
-    if point[0] < 0.
-        || point[1] < 0.
-        || point[0] >= f64::from(viewport.width)
-        || point[1] >= f64::from(viewport.height)
-    {
-        return None;
-    }
-    let ray = view
-        .resolved_view()
-        .screen_ray(glam::DVec2::from_array(point).as_vec2())
-        .ok()?;
-    let hit = ray
-        .intersect_plane(glam::Vec3::new(0., 0., 0.05), glam::Vec3::Z)
-        .ok()?;
-    if !(-4. ..4.).contains(&hit.x) || !(-4. ..4.).contains(&hit.y) {
-        return None;
-    }
-    Square::new((hit.x + 4.).floor() as u8, (hit.y + 4.).floor() as u8).ok()
 }

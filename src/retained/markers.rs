@@ -11,6 +11,9 @@ pub(super) struct Markers {
     pub visible: BTreeSet<Square>,
 }
 impl Markers {
+    pub fn contains(&self, id: ObjectId) -> bool {
+        self.visible.iter().any(|&square| self.id(square) == id)
+    }
     pub fn edits(&self, next: &BTreeSet<Square>) -> Vec<SceneObjectEdit> {
         let mut edits: Vec<_> = self
             .visible

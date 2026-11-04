@@ -155,6 +155,7 @@ mod driver;
 mod host;
 mod interaction;
 mod markers;
+mod picking;
 mod status;
 mod ui;
 pub use computer::ComputerGame;
