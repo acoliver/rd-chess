@@ -8,9 +8,10 @@ engine implementation or third-party art is vendored here.
 
 The scene/position editor accepts arbitrary board layouts in JSON. A separate
 CPU-only `rules` module now supplies validated playable chess states, legal moves,
-notation and outcomes. The CLI and optional window still inspect scene documents;
-they do not yet provide interactive play or an opponent. The window provides
-view controls only.
+notation and outcomes. The CPU-only `search` module adds analysis and eight
+uncalibrated opponent profiles. The CLI and optional window still inspect scene
+documents; they do not yet provide interactive play or invoke an opponent. The
+window provides view controls only.
 
 ## Independent checkout and build
 
@@ -144,6 +145,92 @@ The default suite includes initial-position perft through depth four and the
 Chess Programming Wiki's positions 2–5, with their verified FENs. It also covers
 special moves, draw claims/history, strict FEN errors, SAN/UCI round trips, exact
 undo and deterministic random legal sequences. No perft test is ignored.
+
+## Computer analysis and opponent policy
+
+`chess3d::search` is an original Rust implementation with no external chess-engine
+source or dependency. It uses the existing legal rules API without changing the
+move generator. Analysis uses iterative-deepening negamax alpha-beta, capture and
+promotion quiescence (all legal evasions when checked), TT/MVV-LVA/killer/history
+ordering and a caller-sized transposition table. Analysis retains an exact top-N
+root set, using its worst score as the alpha bound for later roots. Inferior
+bound-only moves are omitted. Reported candidates have comparable exact scores
+from the same completed iteration. Neutral analysis keeps one candidate by
+default; `Search::candidates(n)` requests more, at a higher node cost.
+
+```rust
+use chess3d::rules::ChessState;
+use chess3d::search::{Limits, Search, LADDER, choose_move};
+use std::sync::atomic::AtomicBool;
+
+let game = ChessState::initial();
+let mut search = Search::new(16_384); // fixed TT slots; zero disables caching
+let cancel = AtomicBool::new(false);
+let analysis = search.analyze(&game, Limits { nodes: 5_000, depth: Some(3) }, &cancel);
+assert!(game.legal_moves().contains(&analysis.pv[0]));
+let opponent_move = choose_move(&game, &LADDER[3], 42);
+assert!(game.legal_moves().contains(&opponent_move));
+```
+
+`Score::Centipawns` is relative to the side to move. `Score::Mate` carries an
+absolute winner and a ply distance; mate ordering and TT ply adjustment never
+convert it to an ordinary centipawn value. The TT validates a fingerprint of the
+reversible repetition-history multiset and halfmove counter in addition to the
+position hash. This avoids reusing bounds across different draw contexts. Hash
+collisions remain theoretically possible. Deeper entries replace shallower ones
+within a search age; the next search may replace entries from older ages.
+
+Every visited root, normal and quiescence node counts once. The node limit is
+exact, including on interruption. Cancellation is checked before each node, not
+inside move generation or evaluation. Only completed iterations are published;
+`analyze_progress` can publish them to a host callback. With no completed
+iteration, depth zero explicitly denotes an unsearched first-legal-move fallback
+and a static score. Completed candidate lists exclude that fallback. Checkmate
+precedes draw counters. Supported automatic draws and available threefold or
+fifty-move claims score zero; this initial analysis always takes an available
+claim rather than analyzing whether to decline it. Normal depth is capped at 64,
+and a 128-ply recursion limit aborts an iteration instead of evaluating a checked
+king as a quiet position. Rules-counter overflow also aborts the iteration.
+
+`evaluate` exposes independent material, placement, mobility, king-safety and
+pawn-structure terms in an `EvaluationBreakdown`, with middlegame/endgame values
+and a material phase. The piece-square tables are generated at compile time
+from original formulas documented in `src/search/evaluation.rs`. Mobility counts
+attack space, not fully legal moves; pawn/king mobility receives no bonus. Pawn
+structure includes doubled/isolated penalties and rank-dependent passed-pawn
+bonuses. King safety counts shield pawns and enemy attacks in the king ring.
+These features are heuristics, not proofs of a tactical explanation.
+
+Opponent policy is separate from neutral analysis. Pip, Rowan, Mira, Ellis, Nia,
+Tomas, Imani and Soren have data-only budgets, candidate widths, feature attention,
+bounded seeded perturbation and small style biases. No Elo ratings or adjacent
+strength ordering have been measured. A seed reproduces a choice for the same
+position, history and profile. Noise applies only to centipawn candidates; it
+cannot change mate ordering. No wall-clock timer schedules mistakes.
+
+Before selection, a finite one-reply scan excludes moves that leave a queen
+immediately capturable when a queen-safe alternative exists. Policy then selects
+within the top-N remaining search candidates, never uniformly over all legal
+moves. This conservative rule can reject sound queen sacrifices and does not
+prevent every other kind of blunder. If the profile budget completes no iteration,
+policy ranks a one-ply static fallback. Safety scanning and fallback preparation
+are bounded by the legal move lists, but are outside the analysis node count.
+`choose_move` requires at least one legal move and panics on mate/stalemate;
+a controller must handle terminal states and draw claims before requesting play.
+
+Run the CPU search regressions or the fixed-budget release throughput measurement:
+
+```sh
+CARGO_INCREMENTAL=0 nice -n 10 cargo test --locked -j4 -p chess3d --lib search -- --test-threads=4
+CARGO_INCREMENTAL=0 nice -n 10 cargo test --release --locked -j4 -p chess3d --lib \
+  search::tests::throughput -- --ignored --nocapture
+```
+
+The measurement searches 20,000 nodes each from the initial position and
+Kiwipete, using 65,536 TT slots. It prints nodes/second and completed depth; it
+is ignored in the default suite. Self-play and human calibration have not been
+performed. Worker hosting, request generations, elapsed-time caps and stale-result
+rejection await engine issue `c97b3d3354d8`; this change creates no thread or CLI.
 
 ## Validation
 

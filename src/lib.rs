@@ -268,6 +268,7 @@ mod geometry;
 mod presentation;
 pub mod rules;
 mod scene;
+pub mod search;
 mod textures;
 pub use geometry::{Mesh, board_mesh, piece_meshes};
 pub use presentation::CameraPreset;
