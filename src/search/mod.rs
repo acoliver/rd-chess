@@ -175,3 +175,6 @@ impl Search {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod regression;
