@@ -263,3 +263,59 @@ fn undo_restart_title_and_game_end_cancel_host_timers() {
         assert!(!driver.borrow().status_text().contains("error"));
     }
 }
+
+#[test]
+fn load_while_thinking_cancels_timers_and_rejects_the_old_request() {
+    let (mut probe, host) = probe();
+    let driver = probe.driver.clone();
+    let timers = probe.timers.clone();
+    let root = tempfile::tempdir().unwrap();
+    driver.borrow_mut().open_store(root.path().to_path_buf());
+    driver.borrow_mut().save_game(1).unwrap();
+    let saved = driver.borrow().saved_payload(1).unwrap();
+    let mut run = host.windowless(&mut probe).unwrap();
+    let stop = slow_reply(&mut driver.borrow_mut(), run.host_mut());
+    let old_generation = driver.borrow().computer.as_ref().unwrap().generation;
+    let old_move = game(&driver.borrow()).parse_uci("g8f6").unwrap();
+    run.advance_time(Duration::from_millis(300)).unwrap();
+    run.poll().unwrap();
+    assert!(driver.borrow().status_text().contains("thinking"));
+    driver.borrow_mut().save_game(2).unwrap();
+    let thinking_save = driver.borrow().saved_payload(2).unwrap();
+    assert_eq!(thinking_save, saved);
+    assert!(thinking_save.result.is_none());
+    assert!(
+        !serde_json::to_string(&thinking_save)
+            .unwrap()
+            .contains("thinking")
+    );
+    driver.borrow_mut().load_game(1).unwrap();
+    {
+        let driver = driver.borrow();
+        let computer = driver.computer.as_ref().unwrap();
+        assert_ne!(computer.generation, old_generation);
+        assert!(computer.pending.is_none());
+        assert!(computer.queue.is_none());
+        assert_eq!(driver.cancelled_timers.len(), 2);
+        assert_eq!(game(&driver), &saved.replay().unwrap());
+    }
+    driver
+        .borrow_mut()
+        .accept_reply(old_generation, Some(old_move))
+        .unwrap();
+    driver.borrow_mut().drain_computer().unwrap();
+    assert_eq!(game(&driver.borrow()), &saved.replay().unwrap());
+    menu_key(&mut driver.borrow_mut(), "escape");
+    run.frame().unwrap();
+    assert!(driver.borrow().cancelled_timers.is_empty());
+    run.advance_time(SEARCH_BUDGET).unwrap();
+    run.poll().unwrap();
+    assert_eq!(
+        *timers.borrow(),
+        1,
+        "loaded game must retire both old timers"
+    );
+    assert!(!stop.load(Ordering::Relaxed));
+    assert!(!driver.borrow().status_text().contains("thinking"));
+    assert!(!driver.borrow().status_text().contains("error"));
+}

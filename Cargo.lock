@@ -2839,7 +2839,12 @@ dependencies = [
  "worldrunner-render-plan",
  "worldrunner-render-post",
  "worldrunner-render-scene",
+ "worldrunner-save",
  "worldrunner-scene-viewer",
+ "worldrunner-world-generation",
+ "worldrunner-world-model",
+ "worldrunner-world-runtime",
+ "worldrunner-world-schema",
  "worldrunner-world-simulation",
 ]
 
@@ -2999,6 +3004,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "worldrunner-save"
+version = "0.1.0"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=c4bd5e7c3e73f217da380f94086e7b6755ff41f4#c4bd5e7c3e73f217da380f94086e7b6755ff41f4"
+dependencies = [
+ "atomic-write-file",
+ "blake3",
+ "postcard",
+ "thiserror 2.0.21",
+ "worldrunner-core-types",
+ "worldrunner-world-schema",
+]
+
+[[package]]
 name = "worldrunner-scene-viewer"
 version = "0.1.0"
 source = "git+https://github.com/acoliver/real-disunity.git?rev=c4bd5e7c3e73f217da380f94086e7b6755ff41f4#c4bd5e7c3e73f217da380f94086e7b6755ff41f4"
@@ -3025,6 +3043,21 @@ source = "git+https://github.com/acoliver/real-disunity.git?rev=c4bd5e7c3e73f217
 dependencies = [
  "serde",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "worldrunner-world-generation"
+version = "0.1.0"
+source = "git+https://github.com/acoliver/real-disunity.git?rev=c4bd5e7c3e73f217da380f94086e7b6755ff41f4#c4bd5e7c3e73f217da380f94086e7b6755ff41f4"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "uuid",
+ "worldrunner-asset-id",
+ "worldrunner-core-types",
+ "worldrunner-world-schema",
 ]
 
 [[package]]

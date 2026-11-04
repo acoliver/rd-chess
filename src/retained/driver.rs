@@ -24,6 +24,9 @@ pub struct BoardDriver {
     pub(super) menus: super::menus::Menus,
     pub(super) computer: Option<super::computer::Computer>,
     pub(super) cancelled_timers: Vec<TimerHandle>,
+    pub(super) storage: Option<super::persistence::Storage>,
+    pub(super) preferences: super::persistence::GameSettings,
+    pub(super) resources: Option<RetainedUpdate>,
     pub(super) pending: TransactionQueue,
     captures: CaptureInbox,
     inputs: InputInbox,
@@ -129,6 +132,13 @@ impl BoardDriver {
     }
 
     fn publish_objects(&mut self, host: &mut RetainedHost) -> Result<bool, String> {
+        if let Some(resources) = &self.resources {
+            if admit(host, resources.clone())? {
+                self.resources = None;
+                self.presenting = true;
+            }
+            return Ok(false);
+        }
         let mut pending = self.pending.borrow_mut();
         if let Some(edits) = pending.front() {
             if admit(host, RetainedUpdate::Objects(edits.clone()))? {
@@ -140,8 +150,14 @@ impl BoardDriver {
         Ok(true)
     }
     fn publish_markers(&mut self, host: &mut RetainedHost) -> Result<bool, String> {
-        let mut next = self.destinations();
-        next.extend(self.selected());
+        let mut next = if self.preferences.markers {
+            self.destinations()
+        } else {
+            std::collections::BTreeSet::new()
+        };
+        if self.preferences.markers {
+            next.extend(self.selected());
+        }
         let edits = self.markers.edits(&next);
         if !edits.is_empty() {
             if admit(host, RetainedUpdate::Objects(edits))? {
