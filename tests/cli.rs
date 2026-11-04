@@ -1,4 +1,39 @@
 #[test]
+fn teaching_cli_inspects_lessons_and_setup_positions_without_gpu() {
+    let result = cli()
+        .args(["--lesson", "rules.first-moves"])
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let text = String::from_utf8_lossy(&result.stdout);
+    assert!(text.contains("Pawns, knights and kings"));
+    assert!(text.contains("e2e4"));
+    let pack = chess3d::teaching::PuzzlePack::bundled().unwrap();
+    let puzzle = &pack.puzzles()[0];
+    let result = cli().args(["--puzzle", &puzzle.id]).output().unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let text = String::from_utf8_lossy(&result.stdout);
+    assert!(text.contains(&puzzle.after_setup().unwrap().to_fen()));
+    assert!(text.contains("Solution:"));
+    for args in [
+        vec!["--lesson", "unknown"],
+        vec!["--puzzle", "unknown"],
+        vec!["--lesson", "rules.first-moves", "--puzzle", &puzzle.id],
+    ] {
+        assert!(!cli().args(args).output().unwrap().status.success());
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("untouched.json");
+    let result = cli()
+        .args(["--lesson", "rules.first-moves", "--save"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert_failure(&result, "teaching inspection");
+    assert!(!path.exists());
+}
+
+#[test]
 fn computer_arguments_are_validated_without_launching_a_window() {
     for (args, message) in [
         (vec!["--play", "green"], "--play must be white or black"),

@@ -14,6 +14,8 @@ pub struct Options {
     pub moves: Option<String>,
     pub play: Option<chess3d::Side>,
     pub level: Option<u8>,
+    pub lesson: Option<String>,
+    pub puzzle: Option<String>,
 }
 
 impl Options {
@@ -30,6 +32,8 @@ impl Options {
             moves: None,
             play: None,
             level: None,
+            lesson: None,
+            puzzle: None,
         };
         let mut args = std::env::args_os().skip(1);
         while let Some(arg) = args.next() {
@@ -53,6 +57,8 @@ impl Options {
                 "--moves",
                 "--play",
                 "--level",
+                "--lesson",
+                "--puzzle",
             ]
             .contains(&flag.as_ref())
             {
@@ -78,6 +84,8 @@ impl Options {
             "--height" => self.height = text.parse()?,
             "--seed" => self.seed = Some(text.parse()?),
             "--moves" => self.moves = Some(text),
+            "--lesson" => self.lesson = Some(text),
+            "--puzzle" => self.puzzle = Some(text),
             "--play" => {
                 self.play = Some(match text.as_str() {
                     "white" => chess3d::Side::Ivory,
@@ -117,6 +125,7 @@ impl Options {
     }
 
     fn validate(&self) -> Result<()> {
+        self.validate_teaching()?;
         self.validate_computer()?;
         if self.window && self.capture.is_some() {
             return Err("--capture and --window cannot be combined; run them separately".into());
@@ -153,6 +162,28 @@ impl Options {
         }
         Ok(())
     }
+
+    fn validate_teaching(&self) -> Result<()> {
+        if self.lesson.is_none() && self.puzzle.is_none() {
+            return Ok(());
+        }
+        if self.lesson.is_some() && self.puzzle.is_some() {
+            return Err("choose --lesson or --puzzle, not both".into());
+        }
+        if self.window
+            || self.capture.is_some()
+            || self.load.is_some()
+            || self.save.is_some()
+            || self.moves.is_some()
+            || self.play.is_some()
+            || self.level.is_some()
+            || self.seed.is_some()
+            || self.view != "hero"
+        {
+            return Err("teaching inspection cannot combine with game/editor options".into());
+        }
+        Ok(())
+    }
 }
 
 fn print_help() {
@@ -160,6 +191,7 @@ fn print_help() {
         "chess3d [--load position.json] [--save position.json] [--moves \"e2e4 e7e5\"]\n\
         [--capture image.png | --window] [--view hero|overhead|lineup]\n\
         [--width px --height px] [--seed n] [--play white|black --level 1..8]\n\
+        [--lesson ID | --puzzle ID] (CPU-only teaching inspection)\n\
         Window and retained move capture require: cargo run -p chess3d --features viewer --\n\
         Play: left click select/move, U/Backspace undo, R restart, Escape cancel/menu (editor: exit).\n\
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\

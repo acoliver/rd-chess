@@ -8,11 +8,15 @@ use std::path::PathBuf;
 #[cfg(not(feature = "viewer"))]
 use worldrunner::scene::gpu;
 mod cli;
+mod teaching_cli;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let Some(options) = cli::Options::parse()? else {
         return Ok(());
     };
+    if teaching_cli::inspect(&options)? {
+        return Ok(());
+    }
     let position = position(&options)?;
     if let Some(path) = &options.save {
         position.save_atomic(path)?;
