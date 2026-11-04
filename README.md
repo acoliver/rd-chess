@@ -300,13 +300,17 @@ CARGO_INCREMENTAL=0 nice -n 10 cargo test --locked -j4 -p chess3d --lib rules --
 The default suite includes initial-position perft through depth four and the
 Chess Programming Wiki's positions 2–5, with their verified FENs. It also covers
 special moves, draw claims/history, strict FEN errors, SAN/UCI round trips, exact
-undo and deterministic random legal sequences. No perft test is ignored.
+undo and deterministic random legal sequences. Ignored release benchmarks add
+initial-position perft through depth six and Kiwipete through depth five.
+[Move-generation performance](docs/movegen-performance.md) records the baseline,
+techniques, reproduction commands and exact-behaviour regression coverage.
 
 ## Computer analysis and opponent policy
 
 `chess3d::search` is an original Rust implementation with no external chess-engine
-source or dependency. It uses the existing legal rules API without changing the
-move generator. Analysis uses iterative-deepening negamax alpha-beta, capture and
+source or dependency. It uses order-preserving legal generation and an internal
+generated-move make/unmake path; public `play` still revalidates moves.
+Analysis uses iterative-deepening negamax alpha-beta, capture and
 promotion quiescence (all legal evasions when checked), TT/MVV-LVA/killer/history
 ordering and a caller-sized transposition table. Analysis retains an exact top-N
 root set, using its worst score as the alpha bound for later roots. Inferior

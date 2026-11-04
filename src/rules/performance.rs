@@ -34,6 +34,21 @@ fn deep_perft() {
     }
 }
 
+#[test]
+#[ignore = "release extended perft correctness checks"]
+fn extended_perft() {
+    for (fen, depth, expected) in [
+        (INITIAL_FEN, 6, 119_060_324),
+        (tests::KIWIPETE, 5, 193_690_690),
+        (tests::POSITION_3, 6, 11_030_083),
+        (tests::POSITION_4, 4, 422_333),
+        (tests::POSITION_5, 4, 2_103_487),
+    ] {
+        let state = ChessState::from_fen(fen).unwrap();
+        assert_eq!(perft(&state.core, depth), expected, "{fen} depth {depth}");
+    }
+}
+
 fn measure(name: &str, mut action: impl FnMut()) {
     let start = Instant::now();
     for _ in 0..100_000 {
@@ -63,6 +78,12 @@ fn components() {
         });
         measure("play_undo", || {
             state.play(black_box(chess_move)).unwrap();
+            state.undo().unwrap();
+            black_box(&state);
+        });
+        measure("generated_play_undo", || {
+            state.play_generated(black_box(chess_move)).unwrap();
+            black_box(&state);
             state.undo().unwrap();
             black_box(&state);
         });

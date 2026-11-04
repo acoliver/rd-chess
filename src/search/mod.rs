@@ -28,7 +28,7 @@ mod tree;
 // A generated move failing legality is a search/rules bug, not cancellation.
 // Counter exhaustion is supported FEN input and cannot be advanced by the core.
 fn play_generated(state: &mut ChessState, chess_move: LegalMove) -> Option<()> {
-    match state.play(chess_move) {
+    match state.play_generated(chess_move) {
         Ok(()) => Some(()),
         Err(crate::rules::MoveError::CounterOverflow) => None,
         Err(error) => panic!("generated search move rejected: {error}"),

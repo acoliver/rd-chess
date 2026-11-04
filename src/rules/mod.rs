@@ -1,8 +1,8 @@
 //! Legal chess state, independent of the arbitrary scene/editor [`Position`].
 //!
-//! A 0x88 mailbox makes off-board rays explicit and keeps copy-make king-safety
-//! checks small enough to inspect. Only the compact board core is copied during
-//! generation; committed moves keep snapshots and Zobrist repetition history.
+//! A 0x88 mailbox makes off-board rays explicit. Pin and check masks filter
+//! ordinary moves; king moves and en passant use copy-make king-safety checks.
+//! Committed moves retain changed squares and incremental Zobrist history.
 //! Ivory is white and Onyx is black. Moves are always revalidated at application.
 //!
 //! FEN imports validate local legality and material budgets, not full retrograde
@@ -20,12 +20,17 @@ use crate::{Piece, PieceKind, Position, SAVE_VERSION, Side, Square};
 use board::{Core, Man, index, opposite, square};
 use thiserror::Error;
 
+mod attacks;
 mod board;
 mod fen;
 mod hash;
 mod movegen;
 mod notation;
+#[cfg(test)]
+mod optimization_tests;
 mod outcome;
+mod safety;
+mod transition;
 mod validation;
 
 pub use fen::FenError;
@@ -112,7 +117,7 @@ impl LegalMove {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Snapshot {
-    core: Core,
+    core: transition::BoardUndo,
     halfmove: u32,
     fullmove: u32,
 }
@@ -188,6 +193,13 @@ impl ChessState {
         if !self.legal_moves().contains(&chess_move) {
             return Err(MoveError::IllegalMove);
         }
+        self.play_generated(chess_move)
+    }
+
+    /// Only for moves freshly generated from this exact state. Public play
+    /// continues to revalidate stale/caller-supplied moves transactionally.
+    pub(crate) fn play_generated(&mut self, chess_move: LegalMove) -> Result<(), MoveError> {
+        debug_assert!(self.legal_moves().contains(&chess_move));
         let man = self.core.at(chess_move.from).expect("legal mover exists");
         let halfmove = if man.kind == PieceKind::Pawn || self.core.is_capture(chess_move) {
             0
@@ -200,21 +212,23 @@ impl ChessState {
             .fullmove
             .checked_add(u32::from(self.core.side == Side::Onyx))
             .ok_or(MoveError::CounterOverflow)?;
+        let saved = self.core.remember(chess_move);
         self.undo.push(Snapshot {
-            core: self.core,
+            core: saved,
             halfmove: self.halfmove,
             fullmove: self.fullmove,
         });
-        self.core = self.core.after(chess_move);
+        self.core.make(chess_move);
         self.halfmove = halfmove;
         self.fullmove = fullmove;
-        self.repetition.push(self.core.zobrist());
+        self.repetition
+            .push(self.core.hash_after(self.position_hash(), &saved));
         Ok(())
     }
 
     pub fn undo(&mut self) -> Result<(), MoveError> {
         let saved = self.undo.pop().ok_or(MoveError::NoHistory)?;
-        self.core = saved.core;
+        self.core.restore(saved.core);
         self.halfmove = saved.halfmove;
         self.fullmove = saved.fullmove;
         self.repetition.pop();
