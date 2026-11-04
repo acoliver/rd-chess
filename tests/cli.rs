@@ -1,4 +1,39 @@
 #[test]
+fn teaching_modes_are_mutually_exclusive_and_all_appear_in_help() {
+    let fen = "r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1";
+    for mode in ["--lesson", "--puzzle"] {
+        let id = if mode == "--lesson" {
+            "tactics.fork"
+        } else {
+            "00008"
+        };
+        for args in [
+            vec![mode, id, "--explain", fen, "b5c7"],
+            vec!["--explain", fen, "b5c7", mode, id],
+        ] {
+            assert_failure(
+                &cli().args(args).output().unwrap(),
+                "--explain cannot be combined",
+            );
+        }
+        assert_failure(
+            &cli()
+                .args([mode, id, "--explain-verbose"])
+                .output()
+                .unwrap(),
+            "--explain-verbose requires --explain",
+        );
+        assert_failure(&cli().arg(mode).output().unwrap(), "requires a value");
+    }
+    let help = cli().arg("--help").output().unwrap();
+    assert!(help.status.success());
+    let help = String::from_utf8_lossy(&help.stdout);
+    for flag in ["--lesson", "--puzzle", "--explain", "--explain-verbose"] {
+        assert!(help.contains(flag), "{help}");
+    }
+}
+
+#[test]
 fn explanation_diagnostics_require_the_verbose_flag() {
     let fen = "r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1";
     let plain = cli().args(["--explain", fen, "b5c7"]).output().unwrap();
@@ -100,6 +135,41 @@ fn explanations_are_cpu_only_and_validate_both_arguments() {
     ] {
         assert_failure(&cli().args(args).output().unwrap(), message);
     }
+}
+
+#[test]
+fn teaching_cli_inspects_lessons_and_setup_positions_without_gpu() {
+    let result = cli()
+        .args(["--lesson", "rules.first-moves"])
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let text = String::from_utf8_lossy(&result.stdout);
+    assert!(text.contains("Pawns, knights and kings"));
+    assert!(text.contains("e2e4"));
+    let pack = chess3d::teaching::PuzzlePack::bundled().unwrap();
+    let puzzle = &pack.puzzles()[0];
+    let result = cli().args(["--puzzle", &puzzle.id]).output().unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let text = String::from_utf8_lossy(&result.stdout);
+    assert!(text.contains(&puzzle.after_setup().unwrap().to_fen()));
+    assert!(text.contains("Solution:"));
+    for args in [
+        vec!["--lesson", "unknown"],
+        vec!["--puzzle", "unknown"],
+        vec!["--lesson", "rules.first-moves", "--puzzle", &puzzle.id],
+    ] {
+        assert!(!cli().args(args).output().unwrap().status.success());
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("untouched.json");
+    let result = cli()
+        .args(["--lesson", "rules.first-moves", "--save"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert_failure(&result, "teaching inspection");
+    assert!(!path.exists());
 }
 
 #[test]

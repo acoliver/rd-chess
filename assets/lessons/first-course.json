@@ -1,0 +1,697 @@
+{
+  "version": 1,
+  "lessons": [
+    {
+      "id": "rules.first-moves",
+      "title": "Pawns, knights and kings",
+      "requires": [],
+      "steps": [
+        {
+          "kind": "explain",
+          "text": "Files run from a to h; ranks run from 1 to 8. White starts on ranks 1 and 2. A pawn moves forward into an empty square and captures one square diagonally. On its first move it may advance two empty squares.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Move the e-pawn forward one or two squares.",
+          "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "e2e3",
+              "next": []
+            },
+            {
+              "uci": "e2e4",
+              "next": []
+            }
+          ],
+          "hints": ["Find e2, in front of the king.", "Choose e3 or e4."],
+          "feedback": {
+            "d2d4": "That is the d-pawn. Move the pawn on e2."
+          },
+          "annotations": {
+            "squares": ["e2", "e3", "e4"]
+          }
+        },
+        {
+          "kind": "explain",
+          "text": "A knight jumps: two squares in one direction, then one across. It may jump over other pieces. From g1 it can reach f3 before any pawn moves.",
+          "annotations": {
+            "squares": [],
+            "arrows": [
+              {
+                "from": "g1",
+                "to": "f3"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Jump the g1 knight to f3.",
+          "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "g1f3",
+              "next": []
+            }
+          ],
+          "hints": ["A knight can leave the back rank without moving a pawn.", "Move g1-f3."],
+          "feedback": {
+            "b1c3": "That develops the other knight. This task asks for the g1 knight."
+          },
+          "annotations": {
+            "squares": []
+          }
+        },
+        {
+          "kind": "explain",
+          "text": "The king moves one square, but never into an attack. Kings may not stand next to each other.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Move the king along the first rank to d1 or f1.",
+          "fen": "7k/8/8/8/8/8/P7/4K3 w - - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "e1d1",
+              "next": []
+            },
+            {
+              "uci": "e1f1",
+              "next": []
+            }
+          ],
+          "hints": ["Stay on rank 1.", "Move e1-d1 or e1-f1."],
+          "feedback": {},
+          "annotations": {
+            "squares": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "rules.sliding",
+      "title": "Rooks, bishops and queens",
+      "requires": ["rules.first-moves"],
+      "steps": [
+        {
+          "kind": "explain",
+          "text": "A rook travels along a file or rank. A bishop travels diagonally and stays on the same square colour. Neither can jump over a piece. A queen combines both kinds of movement.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Move the rook up the d-file to d7.",
+          "fen": "7k/8/8/8/3R4/8/8/K7 w - - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "d4d7",
+              "next": []
+            }
+          ],
+          "hints": ["Keep the rook on the d-file.", "Move d4-d7."],
+          "feedback": {},
+          "annotations": {
+            "squares": ["d4", "d7"]
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Move the bishop along the diagonal to g5.",
+          "fen": "7k/8/8/8/8/8/P7/K1B5 w - - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "c1g5",
+              "next": []
+            }
+          ],
+          "hints": ["Trace c1-d2-e3-f4-g5.", "Move c1-g5."],
+          "feedback": {},
+          "annotations": {
+            "squares": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Move the queen diagonally from d1 to h5.",
+          "fen": "7k/8/8/8/8/8/8/K2Q4 w - - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "d1h5",
+              "next": []
+            }
+          ],
+          "hints": ["The queen can use a bishop diagonal.", "Move d1-h5."],
+          "feedback": {},
+          "annotations": {
+            "squares": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "rules.check",
+      "title": "Get out of check",
+      "requires": ["rules.sliding"],
+      "steps": [
+        {
+          "kind": "explain",
+          "text": "Check means the king is attacked. You must remove that attack now: move the king, take the attacker or block its line. You cannot leave the king in check to attack something else.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "The rook checks along the e-file. Move the king to d1 or f1.",
+          "fen": "4r2k/8/8/8/8/8/8/R3K3 w - - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "e1d1",
+              "next": []
+            },
+            {
+              "uci": "e1f1",
+              "next": []
+            }
+          ],
+          "hints": ["Leave the e-file.", "Move e1-d1 or e1-f1."],
+          "feedback": {
+            "a1a8": "Moving your rook there leaves your king in check."
+          },
+          "annotations": {
+            "squares": []
+          }
+        },
+        {
+          "kind": "explain",
+          "text": "Checkmate means check with no legal escape. Stalemate means no legal move when the king is not in check; it is a draw. A checking move is not always mate. Look for every escape square.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "mates.queen",
+      "title": "Support the queen",
+      "requires": ["rules.check"],
+      "steps": [
+        {
+          "kind": "explain",
+          "text": "A queen can cut off several escape squares. Your king can protect her when she comes close. Keep the kings apart and check that the enemy king cannot capture the queen.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Deliver any mate in one.",
+          "fen": "7k/5K2/8/6Q1/8/8/8/8 w - - 0 1",
+          "side": "ivory",
+          "goal": "any_mate",
+          "solutions": [
+            {
+              "uci": "g5g7",
+              "next": []
+            }
+          ],
+          "hints": ["Which squares does your king already control?", "The king covers g8 and g7. Look for a queen check.", "Qg7 is mate; a check along the h-file can also mate."],
+          "feedback": {
+            "g5f4": "That move does not check the king. Look for a check that covers the escape squares."
+          },
+          "annotations": {
+            "squares": ["g7", "g8"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mates.ladder",
+      "title": "Walk the rooks up the board",
+      "requires": ["mates.queen"],
+      "steps": [
+        {
+          "kind": "explain",
+          "text": "Two rooks can take turns cutting off ranks. One blocks the king from coming back; the other gives check on the next rank. Keep the checking rook out of reach.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Practise this ladder: check on a7, then after ...Kh8 finish on b8.",
+          "fen": "8/7k/1R6/R7/8/8/8/4K3 w - - 0 1",
+          "side": "ivory",
+          "goal": "checkmate",
+          "solutions": [
+            {
+              "uci": "a5a7",
+              "next": [
+                {
+                  "uci": "h7h8",
+                  "next": [
+                    {
+                      "uci": "b6b8",
+                      "next": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "hints": ["The rook on b6 already controls rank 6.", "Ra7+ pushes the king onto rank 8.", "After ...Kh8, Rb8 is mate."],
+          "feedback": {
+            "b6b7": "Use the a-rook first, keeping the rooks on separate ranks."
+          },
+          "annotations": {
+            "squares": ["a7", "b8"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mates.back-rank",
+      "title": "Notice a trapped king",
+      "requires": ["mates.ladder"],
+      "steps": [
+        {
+          "kind": "explain",
+          "text": "Pawns in front of a castled king can block its escape. A rook on the back rank may then give mate. Check whether the defender can capture the rook or put a piece in its path.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Deliver any mate in one on the back rank.",
+          "fen": "6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1",
+          "side": "ivory",
+          "goal": "any_mate",
+          "solutions": [
+            {
+              "uci": "e1e8",
+              "next": []
+            }
+          ],
+          "hints": ["The black pawns fill f7, g7 and h7.", "The e-file is open.", "Move e1-e8."],
+          "feedback": {},
+          "annotations": {
+            "squares": ["f7", "g7", "h7"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "tactics.hanging",
+      "title": "Count attackers and defenders",
+      "requires": ["rules.check"],
+      "steps": [
+        {
+          "kind": "explain",
+          "text": "Before moving, look for pieces that can be taken without losing as much in return. A queen is usually worth more than a rook. Count legal recaptures, not just pieces that appear to point at a square.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Take the undefended queen.",
+          "fen": "7k/8/8/3q4/8/8/8/3RK3 w - - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "d1d5",
+              "next": []
+            }
+          ],
+          "hints": ["Follow the d-file.", "The rook can capture on d5."],
+          "feedback": {
+            "e1f1": "Your king is safe already. Look for the undefended queen."
+          },
+          "annotations": {
+            "squares": []
+          }
+        },
+        {
+          "kind": "explain",
+          "text": "A defended piece can still be worth taking. Here c4 and g2 both attack d5; the e6 pawn is its only defender. Giving up a pawn to win a rook is a good exchange.",
+          "annotations": {
+            "squares": ["c4", "g2", "e6", "d5"],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Capture the rook with the pawn. After the pawn recaptures, take it with the bishop.",
+          "fen": "7k/8/4p3/3r4/2P5/8/6B1/6K1 w - - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "c4d5",
+              "next": [
+                {
+                  "uci": "e6d5",
+                  "next": [
+                    {
+                      "uci": "g2d5",
+                      "next": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "hints": ["Start with the less valuable attacker.", "Play c4xd5; after ...exd5, Bg2xd5."],
+          "feedback": {},
+          "annotations": {
+            "squares": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "tactics.fork",
+      "title": "Attack two targets",
+      "requires": ["tactics.hanging"],
+      "steps": [
+        {
+          "kind": "explain",
+          "text": "A fork attacks two targets at once. A check is a forcing first target: the king must respond before another piece can be saved. Trace the knight jumps before committing.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Fork the king and queen with Nd6+. After ...Kd7, take the queen.",
+          "fen": "2q1k3/8/8/8/4N3/8/8/6K1 w - - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "e4d6",
+              "next": [
+                {
+                  "uci": "e8d7",
+                  "next": [
+                    {
+                      "uci": "d6c8",
+                      "next": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "hints": ["The knight can check from d6.", "From d6 it also attacks c8.", "Play Ne4-d6+, then Nd6xc8."],
+          "feedback": {
+            "e4f6": "That checks the king but does not attack the queen on c8."
+          },
+          "annotations": {
+            "squares": ["c8", "e8", "d6"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "tactics.pin",
+      "title": "Use a piece that cannot move",
+      "requires": ["tactics.fork"],
+      "steps": [
+        {
+          "kind": "explain",
+          "text": "A piece is absolutely pinned when moving it would expose its king to check. Here the rook on e1 pins the knight on e7. The king cannot capture an attacker on e7 because that square is protected by the rook.",
+          "annotations": {
+            "squares": [],
+            "arrows": [
+              {
+                "from": "e1",
+                "to": "e7"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Take the pinned knight with the bishop.",
+          "fen": "4k3/4n3/8/6B1/8/8/8/4R1K1 w - - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "g5e7",
+              "next": []
+            }
+          ],
+          "hints": ["Trace the bishop diagonal through f6.", "Play Bg5xe7."],
+          "feedback": {
+            "e1e7": "That also takes the knight safely. This exercise asks for the bishop capture, keeping the rook behind it."
+          },
+          "annotations": {
+            "squares": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "tactics.skewer",
+      "title": "Force the front piece away",
+      "requires": ["tactics.pin"],
+      "steps": [
+        {
+          "kind": "explain",
+          "text": "A skewer attacks a valuable piece with another target behind it. When the front piece moves, the rear piece becomes available. A check can force that first move.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Play Bb2+ to skewer the king and queen. After ...Kg6, capture on h8.",
+          "fen": "7q/8/5k2/8/8/8/8/1KB5 w - - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "c1b2",
+              "next": [
+                {
+                  "uci": "f6g6",
+                  "next": [
+                    {
+                      "uci": "b2h8",
+                      "next": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "hints": ["The b2-h8 diagonal passes through f6.", "Check from b2 first.", "After ...Kg6, Bb2xh8 wins the queen."],
+          "feedback": {},
+          "annotations": {
+            "squares": ["b2", "f6", "h8"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "openings.reasons",
+      "title": "Centre, development and king safety",
+      "requires": ["rules.check", "tactics.hanging"],
+      "steps": [
+        {
+          "kind": "explain",
+          "text": "Central pawns help control squares for your pieces. Develop knights and bishops so they can join the game. These tasks practise useful plans, not a claim that only one opening move is good.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Advance the e- or d-pawn two squares. After the reply, develop either knight towards the centre.",
+          "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "e2e4",
+              "next": [
+                {
+                  "uci": "e7e5",
+                  "next": [
+                    {
+                      "uci": "g1f3",
+                      "next": []
+                    },
+                    {
+                      "uci": "b1c3",
+                      "next": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "uci": "d2d4",
+              "next": [
+                {
+                  "uci": "d7d5",
+                  "next": [
+                    {
+                      "uci": "g1f3",
+                      "next": []
+                    },
+                    {
+                      "uci": "b1c3",
+                      "next": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "hints": ["Start with e4 or d4.", "After the reply, choose Nf3 or Nc3."],
+          "feedback": {
+            "d1h5": "Develop a knight first in this exercise. An early queen may lose time when attacked."
+          },
+          "annotations": {
+            "squares": []
+          }
+        },
+        {
+          "kind": "explain",
+          "text": "Castling moves the king two squares towards its rook and puts that rook next to it. The path must be clear. Neither piece may have moved, and the king cannot castle out of, through or into check.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Castle kingside in this developed position.",
+          "fen": "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "e1g1",
+              "next": []
+            }
+          ],
+          "hints": ["The king and h1 rook still have castling rights.", "Move e1-g1; the rook moves to f1 automatically."],
+          "feedback": {},
+          "annotations": {
+            "squares": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "practice.together",
+      "title": "Look before you move",
+      "requires": ["mates.back-rank", "tactics.skewer", "openings.reasons"],
+      "steps": [
+        {
+          "kind": "explain",
+          "text": "Use a short scan: is your king safe, what does the opponent threaten, and do you have a check or capture? Test the reply before choosing a move. These positions change the squares from earlier lessons.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Find the knight check that also attacks the queen. After ...Kf7, win the queen.",
+          "fen": "4q1k1/8/8/7N/8/8/8/1K6 w - - 0 1",
+          "side": "ivory",
+          "goal": "line",
+          "solutions": [
+            {
+              "uci": "h5f6",
+              "next": [
+                {
+                  "uci": "g8f7",
+                  "next": [
+                    {
+                      "uci": "f6e8",
+                      "next": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "hints": ["Look at f6.", "Nf6+ attacks g8 and e8.", "After ...Kf7, Nf6xe8 wins the queen."],
+          "feedback": {},
+          "annotations": {
+            "squares": []
+          }
+        },
+        {
+          "kind": "task",
+          "text": "Finish the course by delivering any mate in one.",
+          "fen": "7k/8/6K1/5Q2/8/8/8/8 w - - 0 1",
+          "side": "ivory",
+          "goal": "any_mate",
+          "solutions": [
+            {
+              "uci": "f5f8",
+              "next": []
+            }
+          ],
+          "hints": ["Your king covers g7 and h7.", "Check along rank 8.", "Qf8 is one mate. Other mating moves also count."],
+          "feedback": {},
+          "annotations": {
+            "squares": []
+          }
+        },
+        {
+          "kind": "explain",
+          "text": "You can now practise the mixed puzzle pack. Puzzle difficulty describes those exercises, not your playing strength. Return to a lesson whenever a pattern is hard to explain.",
+          "annotations": {
+            "squares": [],
+            "arrows": []
+          }
+        }
+      ]
+    }
+  ]
+}

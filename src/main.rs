@@ -8,6 +8,7 @@ use std::path::PathBuf;
 #[cfg(not(feature = "viewer"))]
 use worldrunner::scene::gpu;
 mod cli;
+mod teaching_cli;
 
 fn print_explanation(fen: &str, uci: &str, verbose: bool) -> Result<(), Box<dyn Error>> {
     use chess3d::teaching::{Budget, explain_move, san_line};
@@ -42,6 +43,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
     if let Some((fen, uci)) = &options.explain {
         return print_explanation(fen, uci, options.explain_verbose);
+    }
+    if teaching_cli::inspect(&options)? {
+        return Ok(());
     }
     let position = position(&options)?;
     if let Some(path) = &options.save {

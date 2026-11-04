@@ -532,7 +532,7 @@ The Xvfb window smoke was not run on macOS; its Python module passed syntax chec
 
 ## Verified move explanations
 
-`chess3d::teaching` supplies CPU-only explanations for human moves and computer
+`chess3d::teaching::explain` supplies CPU-only explanations for human moves and computer
 replies. `explain_move(&state, mv, budget)` and `explain_reply` return the same
 `Result<Explanation, MoveError>`. They revalidate the move, preserve the input
 state and are deterministic for a given position/history and budget. No model,
@@ -645,9 +645,38 @@ Terminal material lines and direct facts do not need that caveat. Incomplete
 analysis instead reports `The search could not settle this line.` It never
 assigns a confident blunder label. Detailed limits remain available through
 `limits.diagnostics()` and `--explain-verbose`. CPU regressions in
-`tests/teaching.rs` use original hand-built positions, exact typed facts/templates,
+`tests/teaching_explain.rs` use original hand-built positions, exact typed facts/templates,
 legal evidence replay, material/mate premises, negative motifs, deterministic
 budgets and special moves. `tests/cli.rs` checks the CLI with graphics disabled.
+
+## Offline course and puzzles (CPU logic)
+
+`teaching::course` embeds a versioned first course with 12 original lessons and 19 board
+tasks, plus 300 CC0 Lichess puzzles. Both work without a viewer or network access.
+The course covers piece movement, check, basic mates, hanging pieces and counting,
+forks, pins, skewers, opening principles and mixed practice. It validates all
+prerequisites, positions and solution branches before a runner can use them.
+
+```sh
+cargo run --locked -p chess3d -- --lesson rules.first-moves
+cargo run --locked -p chess3d -- --puzzle 00008
+cargo test --locked -p chess3d --lib --test teaching_course --test teaching_explain --test puzzles --test cli
+```
+
+`--lesson ID` prints the steps, FENs, hints and accepted lines after validating
+the course. `--puzzle ID` prints the position after the opponent's setup move,
+then the solver's line. These inspection modes cannot write position files or
+launch a window. The runners handle wrong-answer feedback, retries, progressive
+hints, scripted replies and alternative mates through the existing rules core.
+A versioned progress payload restores completion, attempt, hint and rating-band
+totals; file storage and lesson/puzzle UI are not included in this CPU slice.
+
+See [the course format and runner contract](assets/lessons/README.md) and
+[the puzzle notice, CC0 licence statement and subset reproduction](assets/puzzles/README.md).
+The puzzle subset is 54,576 bytes, with 50 selections per target theme and
+three rating bands. Lichess's CSV FEN is before the first move; tests explicitly
+apply that opponent setup move before the learner starts. Original course prose
+and game source retain the repository licence; CC0 applies to the puzzle data.
 
 ## Validation
 
