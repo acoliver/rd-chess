@@ -1,5 +1,16 @@
 use std::{error::Error, path::PathBuf};
 
+fn explanation_args(
+    args: &mut impl Iterator<Item = std::ffi::OsString>,
+) -> Result<(String, String)> {
+    let fen = args.next().ok_or("--explain requires FEN and UCI")?;
+    let uci = args.next().ok_or("--explain requires FEN and UCI")?;
+    Ok((
+        fen.into_string().map_err(|_| "FEN must be UTF-8")?,
+        uci.into_string().map_err(|_| "UCI must be UTF-8")?,
+    ))
+}
+
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 pub struct Options {
@@ -14,11 +25,13 @@ pub struct Options {
     pub moves: Option<String>,
     pub play: Option<chess3d::Side>,
     pub level: Option<u8>,
+    pub explain: Option<(String, String)>,
+    pub explain_verbose: bool,
 }
 
 impl Options {
-    pub fn parse() -> Result<Option<Self>> {
-        let mut options = Self {
+    fn initial() -> Self {
+        Self {
             load: None,
             save: None,
             capture: None,
@@ -30,13 +43,30 @@ impl Options {
             moves: None,
             play: None,
             level: None,
-        };
+            explain: None,
+            explain_verbose: false,
+        }
+    }
+
+    pub fn parse() -> Result<Option<Self>> {
+        let mut options = Self::initial();
         let mut args = std::env::args_os().skip(1);
         while let Some(arg) = args.next() {
             let flag = arg.to_string_lossy();
             if flag == "--help" {
                 print_help();
                 return Ok(None);
+            }
+            if flag == "--explain" {
+                options.explain = Some(explanation_args(&mut args)?);
+                continue;
+            }
+            if flag == "--explain-verbose" {
+                if options.explain_verbose {
+                    return Err("--explain-verbose may only be specified once".into());
+                }
+                options.explain_verbose = true;
+                continue;
             }
             if flag == "--window" {
                 options.window = true;
@@ -117,6 +147,16 @@ impl Options {
     }
 
     fn validate(&self) -> Result<()> {
+        if self.explain_verbose && self.explain.is_none() {
+            return Err("--explain-verbose requires --explain".into());
+        }
+        if self.explain.is_some()
+            && std::env::args_os().len() != 4 + usize::from(self.explain_verbose)
+        {
+            return Err(
+                "--explain cannot be combined with other arguments except --explain-verbose".into(),
+            );
+        }
         self.validate_computer()?;
         if self.window && self.capture.is_some() {
             return Err("--capture and --window cannot be combined; run them separately".into());
@@ -164,6 +204,8 @@ fn print_help() {
         Play: left click select/move, U/Backspace undo, R restart, Escape cancel/menu (editor: exit).\n\
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\
         --play chooses the human side against a computer; --seed also seeds its replies.\n\
+        --explain <fen> <uci> prints a CPU-only verified explanation.\n\
+        --explain-verbose adds developer diagnostics; no other options may accompany --explain.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\
         --save writes the current position before capture/window; camera orbit is not saved."
     );

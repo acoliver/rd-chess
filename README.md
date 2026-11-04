@@ -530,6 +530,125 @@ the full all-feature Metal run passed 160 with 2 ignored. The explicit release
 majority regression passed, with Level 8 winning all six games against Level 1.
 The Xvfb window smoke was not run on macOS; its Python module passed syntax checks.
 
+## Verified move explanations
+
+`chess3d::teaching` supplies CPU-only explanations for human moves and computer
+replies. `explain_move(&state, mv, budget)` and `explain_reply` return the same
+`Result<Explanation, MoveError>`. They revalidate the move, preserve the input
+state and are deterministic for a given position/history and budget. No model,
+network service, new dependency or UI integration is involved.
+
+```rust
+use chess3d::rules::ChessState;
+use chess3d::teaching::{Budget, explain_move, san_line};
+
+let state = ChessState::initial();
+let mv = state.parse_uci("g1f3")?;
+let explanation = explain_move(&state, mv, Budget { nodes: 100_000, depth: 3 })?;
+for fact in &explanation.facts {
+    println!("{}: {}", fact.kind.label(), san_line(&state, &fact.line));
+}
+# Ok::<(), chess3d::rules::MoveError>(())
+```
+
+For a manual check without a graphics adapter:
+
+```sh
+cargo run --locked -j4 -- --explain '7k/8/5KQ1/8/8/8/8/8 w - - 0 1' g6g7
+```
+
+`--explain <fen> <uci>` prints learner sentences, their SAN evidence and the
+principal line without preparing a scene or opening a window. The optional
+`--explain-verbose` flag adds developer diagnostics from `Explanation.limits`:
+node counts, depths, caps and exchange scope. No other options may accompany
+`--explain`. The evidence for every fact starts in the supplied position.
+Missed opportunities start with the alternative move; other facts start with
+the played move. `sentences` follows the selected `facts` in order, then appends
+any neutral sentence and at most one short caveat.
+
+Presentation precedence is mate > winning tactic (fork/pin/skewer/discovered) >
+hanging/exchange > threat > check > castling/promotion notes. This orders the
+facts without discarding independent information. Subsumption requires the same
+evidence line or a direct-move prefix: mate covers that line, a winning motif
+covers its material threat, and a king fork or discovered check covers the
+standalone check. Alternatives with a different first move remain independent.
+Captures and promotion notes describe distinct board changes and are retained
+unless mate covers them. Each retained fact keeps its original verification line.
+
+Material sentences name a piece only when the line gains exactly that captured
+piece without losing material or promoting. Other gains and losses use net pawn
+values rounded to at most one decimal, for example `wins about 2.2 pawns` for a
+knight captured at the cost of a pawn. Numeric material fields retain their
+original units for programs; learner sentences never use centipawns.
+
+Supported facts are captures with actual victim squares and material changes
+(including en passant and capture promotions), check/mate, hanging pieces,
+winning/losing/equal exchanges, forks, exploitable absolute/relative pins,
+skewers, discovered attacks/checks, promotions, castling, lost castling rights,
+mate-in-one/material threats and missed mating/material alternatives. Geometry
+only proposes motifs. Material motifs additionally require a legal continuation
+with a positive material change after the move, not just a positional score or
+an attack pattern. Castling-rights facts make no claim about improved king safety.
+
+One node allowance covers all phases. The explained position is admitted first;
+one quarter of the remaining allowance ranks all legal alternatives using the
+existing neutral search. Legal static-exchange trees and a separate material-only
+alpha-beta verifier use the remainder. Material accounting uses fixed values of
+100/320/335/500/950 centipawns for pawn/knight/bishop/rook/queen. Mate ordering
+remains separate from centipawns. Capture changes and exchange gains use the
+mover's perspective; hanging-piece gains use the named capturer's perspective.
+Verification searches all legal replies at normal depth and extends captures,
+promotions and check evasions. Requested
+normal depth includes the played move and is capped at six. Verification and
+exchange continuations are capped at that depth plus eight plies. Alternative
+ranking retains the existing search's separate 128-ply recursion cap. Every
+visited analysis/exchange/verification node counts against the shared allowance;
+legal move generation, validation, notation and geometric queries are not nodes.
+
+Exchange evaluation considers every actual legal attacker and recapturer on one
+square, updating x-rays, pins, promotion and king safety through `ChessState`.
+Either side can stop exchanging, except when every legal check evasion recaptures
+on that square. Off-square tactics are outside SEE, so a hanging-piece sentence
+reports its exchange scope rather than claiming a forced game result. The general
+verifier also considers off-square moves within its normal depth.
+
+These are bounded lines, not game-theoretic proofs. The verifier stops at draws
+and available draw claims like the existing search, but retains the actual
+material change there. Winning a rook can leave a drawn king-and-knight ending;
+a material fact does not imply a winning game. It omits material motifs whose follow-up
+cannot be demonstrated, even if the pattern exists. Only the moved piece is
+considered as a fork attacker. Defensive geometric maps can conservatively omit
+a fork when a defender is pinned. Threat detection requires a verified next-move
+continuation and omits promotion setups; it does not catalog threats that the
+opponent can fully neutralize. A missed opportunity must be the neutral search's
+best alternative and both played/alternative verification must finish. Deeper
+combinations, strategic explanations and complete motif enumeration are not
+promised.
+
+A score-only alternative requires comparable centipawn scores from a completed
+search iteration and an improvement of more than 100 centipawns (one pawn).
+At the default depth-three, 100,000-node shared budget, smaller placement-score
+differences are too sensitive to the search horizon to justify criticism. This
+is a conservative teaching margin, not a calibrated estimate of search error.
+Verified missed material or mate also permits a named alternative, without a
+centipawn threshold. Other mate-score differences alone do not trigger a claim.
+The sentence names the move: `The search prefers e3: this line scores better in
+the current search.` The CLI labels both continuations, for example `Line after
+e3: ...` and `Line after Nf3: ...`. `Explanation.line` always begins with the
+played move; `alternative_line` holds the named preference when present. Below
+the threshold, a resolved position without a tactical fact says `No tactical
+issue found within the analysis limits.` If no completed comparison exists,
+the score claim is omitted. A nonterminal material line or search preference
+adds a short horizon caveat, for example `Checked 3 moves ahead.` Here moves
+counts individual turns (plies), including the supplied move, not move pairs.
+Terminal material lines and direct facts do not need that caveat. Incomplete
+analysis instead reports `The search could not settle this line.` It never
+assigns a confident blunder label. Detailed limits remain available through
+`limits.diagnostics()` and `--explain-verbose`. CPU regressions in
+`tests/teaching.rs` use original hand-built positions, exact typed facts/templates,
+legal evidence replay, material/mate premises, negative motifs, deterministic
+budgets and special moves. `tests/cli.rs` checks the CLI with graphics disabled.
+
 ## Validation
 
 ```sh

@@ -9,10 +9,40 @@ use std::path::PathBuf;
 use worldrunner::scene::gpu;
 mod cli;
 
+fn print_explanation(fen: &str, uci: &str, verbose: bool) -> Result<(), Box<dyn Error>> {
+    use chess3d::teaching::{Budget, explain_move, san_line};
+    let state = ChessState::from_fen(fen).map_err(|error| format!("FEN: {error}"))?;
+    let mv = state
+        .parse_uci(uci)
+        .map_err(|error| format!("move notation: {error}"))?;
+    let explanation = explain_move(&state, mv, Budget::default())?;
+    for (index, sentence) in explanation.sentences.iter().enumerate() {
+        println!("{sentence}");
+        if let Some(fact) = explanation.facts.get(index) {
+            println!("  Evidence: {}", san_line(&state, &fact.line));
+        }
+    }
+    if let Some(line) = &explanation.alternative_line {
+        let san = state.to_san(line[0])?;
+        println!("Line after {san}: {}", san_line(&state, line));
+    }
+    let san = state.to_san(mv)?;
+    println!("Line after {san}: {}", san_line(&state, &explanation.line));
+    if verbose {
+        for diagnostic in explanation.limits.diagnostics() {
+            println!("{diagnostic}");
+        }
+    }
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let Some(options) = cli::Options::parse()? else {
         return Ok(());
     };
+    if let Some((fen, uci)) = &options.explain {
+        return print_explanation(fen, uci, options.explain_verbose);
+    }
     let position = position(&options)?;
     if let Some(path) = &options.save {
         position.save_atomic(path)?;

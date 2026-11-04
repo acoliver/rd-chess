@@ -1,4 +1,108 @@
 #[test]
+fn explanation_diagnostics_require_the_verbose_flag() {
+    let fen = "r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1";
+    let plain = cli().args(["--explain", fen, "b5c7"]).output().unwrap();
+    assert!(plain.status.success(), "{plain:?}");
+    let plain = String::from_utf8(plain.stdout).unwrap();
+    assert!(plain.contains("wins a rook in this line."), "{plain}");
+    assert!(plain.contains("Evidence: Nc7+ Kf8 Nxa8"), "{plain}");
+    assert!(!plain.contains("centipawn"), "{plain}");
+    for args in [
+        vec!["--explain", fen, "b5c7", "--explain-verbose"],
+        vec!["--explain-verbose", "--explain", fen, "b5c7"],
+    ] {
+        let verbose = cli().args(args).output().unwrap();
+        assert!(verbose.status.success(), "{verbose:?}");
+        let verbose = String::from_utf8(verbose.stdout).unwrap();
+        assert!(verbose.starts_with(&plain), "{verbose}");
+        assert!(verbose.contains("Analysis limits:"), "{verbose}");
+        assert!(
+            verbose.contains("957/100000 nodes; verified depth 3"),
+            "{verbose}"
+        );
+        assert!(
+            verbose.contains("Exchange facts cover legal captures"),
+            "{verbose}"
+        );
+    }
+    for (args, message) in [
+        (
+            vec!["--explain-verbose"],
+            "--explain-verbose requires --explain",
+        ),
+        (
+            vec![
+                "--explain",
+                fen,
+                "b5c7",
+                "--explain-verbose",
+                "--explain-verbose",
+            ],
+            "may only be specified once",
+        ),
+        (
+            vec!["--explain", fen, "b5c7", "--explain-verbose", "--window"],
+            "--explain cannot be combined",
+        ),
+    ] {
+        assert_failure(&cli().args(args).output().unwrap(), message);
+    }
+    let help = cli().arg("--help").output().unwrap();
+    assert!(String::from_utf8_lossy(&help.stdout).contains("--explain-verbose"));
+}
+
+#[test]
+fn quiet_move_comparisons_name_alternatives_and_keep_both_lines() {
+    let opening = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    let output = cli().args(["--explain", opening, "g1f3"]).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        text.contains("No tactical issue found within the analysis limits."),
+        "{text}"
+    );
+    assert!(text.contains("Line after Nf3: Nf3"), "{text}");
+    assert!(
+        !text.contains("search prefers") && !text.contains("scores better"),
+        "{text}"
+    );
+    let fen = "3r3k/8/8/8/8/8/8/3Q2NK w - - 0 1";
+    let output = cli().args(["--explain", fen, "g1f3"]).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        text.contains("The search prefers Qxd8+: this line scores better in the current search."),
+        "{text}"
+    );
+    assert!(text.contains("Line after Qxd8+: Qxd8+"), "{text}");
+    assert!(text.contains("Line after Nf3: Nf3"), "{text}");
+    assert!(!text.contains("\nLine:"), "{text}");
+}
+
+#[test]
+fn explanations_are_cpu_only_and_validate_both_arguments() {
+    let fen = "7k/8/5KQ1/8/8/8/8/8 w - - 0 1";
+    let output = cli().args(["--explain", fen, "g6g7"]).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(text.contains("Qg7# is checkmate."), "{text}");
+    assert!(text.contains("Line after Qg7#: Qg7#"), "{text}");
+    assert!(!text.contains("nodes") && !text.contains("depth"), "{text}");
+    assert!(!text.contains("Exchange facts cover"), "{text}");
+    for (args, message) in [
+        (vec!["--explain", fen], "--explain requires FEN and UCI"),
+        (vec!["--explain", "invalid", "g6g7"], "FEN"),
+        (vec!["--explain", fen, "g6g9"], "move notation"),
+        (
+            vec!["--explain", fen, "g6g7", "--window"],
+            "--explain cannot be combined",
+        ),
+    ] {
+        assert_failure(&cli().args(args).output().unwrap(), message);
+    }
+}
+
+#[test]
 fn computer_arguments_are_validated_without_launching_a_window() {
     for (args, message) in [
         (vec!["--play", "green"], "--play must be white or black"),
