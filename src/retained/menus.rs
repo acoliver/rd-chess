@@ -5,6 +5,8 @@ use crate::{Side, rules::GameStatus};
 pub enum Screen {
     Title,
     ComputerSetup,
+    Slots,
+    Settings,
     #[default]
     Play,
     InGameMenu,
@@ -27,6 +29,13 @@ pub(super) enum MenuAction {
     Title,
     NewGame,
     ClaimDraw,
+    Continue,
+    Slots,
+    Settings,
+    Save(u8),
+    Load(u8),
+    Markers(bool),
+    Overhead(bool),
 }
 
 pub(super) const TITLE: &[(&str, MenuAction)] = &[
@@ -51,6 +60,7 @@ pub(super) struct Menus {
     pub result: Option<String>,
     pub side: usize,
     pub level: u8,
+    pub parent: Screen,
 }
 
 impl Default for Menus {
@@ -60,6 +70,7 @@ impl Default for Menus {
             result: None,
             side: 0,
             level: 1,
+            parent: Screen::Title,
         }
     }
 }
@@ -77,7 +88,14 @@ impl BoardDriver {
             if let worldrunner::ui::UiAction::ChoiceSelected { index, .. } = action {
                 self.promote(index)?;
             } else if let Some(command) = self.ui.as_ref().and_then(|ui| ui.action(action))
-                && (activate || matches!(command, MenuAction::Side(_) | MenuAction::Level(_)))
+                && (activate
+                    || matches!(
+                        command,
+                        MenuAction::Side(_)
+                            | MenuAction::Level(_)
+                            | MenuAction::Markers(_)
+                            | MenuAction::Overhead(_)
+                    ))
             {
                 self.menu_action(command)?;
             }
@@ -85,7 +103,10 @@ impl BoardDriver {
         Ok(())
     }
     pub fn show_title(&mut self) -> Result<(), String> {
-        self.restart()?;
+        let storage = self.storage.take();
+        let reset = self.restart();
+        self.storage = storage;
+        reset?;
         self.computer = None;
         self.transition(Screen::Title)
     }
@@ -120,6 +141,7 @@ impl BoardDriver {
         }
         self.menus.result = Some(result);
         self.clear_selection()?;
+        self.autosave();
         self.transition(Screen::GameOver)
     }
     pub(super) fn refresh_game_over(&mut self) -> Result<(), String> {
@@ -139,6 +161,10 @@ impl BoardDriver {
             promotion: self.promotion_pending(),
             claim: self.claim_available(),
             undo: self.undo_plies().is_ok(),
+            continuation: self.can_continue().then_some(()),
+            settings: self.preferences,
+            labels: self.slot_labels(),
+            setup: (self.menus.side, self.menus.level),
         };
         if let Some(ui) = &mut self.ui {
             ui.synchronize(state, self.viewport)
@@ -149,15 +175,23 @@ impl BoardDriver {
     pub(super) fn menu_action(&mut self, action: MenuAction) -> Result<(), String> {
         match action {
             MenuAction::Friend => {
-                self.restart()?;
+                if let Some(computer) = &mut self.computer {
+                    computer.changed();
+                }
                 self.computer = None;
+                self.restart()?;
                 self.transition(Screen::Play)?;
             }
             MenuAction::Computer => self.transition(Screen::ComputerSetup)?,
             MenuAction::Quit => self.exit = true,
-            MenuAction::Side(index) => self.menus.side = index,
-            MenuAction::Level(level) => self.menus.level = level,
+            MenuAction::Side(index) if self.screen() != Screen::Settings => self.menus.side = index,
+            MenuAction::Level(level) if self.screen() != Screen::Settings => {
+                self.menus.level = level;
+            }
             MenuAction::Start => self.start_computer_game()?,
+            MenuAction::Back if self.screen() == Screen::Slots => {
+                self.transition(self.menus.parent)?;
+            }
             MenuAction::Back | MenuAction::Title => self.show_title()?,
             MenuAction::Resume => self.transition(Screen::Play)?,
             MenuAction::Undo => {
@@ -171,6 +205,7 @@ impl BoardDriver {
             }
             MenuAction::Resign => self.resign()?,
             MenuAction::ClaimDraw => self.claim_draw()?,
+            action => self.storage_menu_action(action)?,
         }
         Ok(())
     }
