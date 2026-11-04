@@ -9,8 +9,8 @@ use worldrunner::scene::{
     gpu::{CameraPose, SceneView, simulation::UiOverlay},
     viewer::{
         OrbitCamera, RetainedCaptureOutcome, RetainedDriver, RetainedEvent, RetainedEventHost,
-        RetainedHost, RetainedInput, RetainedTick, RetainedUpdate, SceneObjectEdit, ViewerError,
-        ViewerOptions,
+        RetainedHost, RetainedInput, RetainedTick, RetainedUpdate, SceneObjectEdit, TimerHandle,
+        ViewerError, ViewerOptions,
     },
 };
 
@@ -23,6 +23,7 @@ pub struct BoardDriver {
     pub(super) board: Option<super::RetainedBoard>,
     pub(super) menus: super::menus::Menus,
     pub(super) computer: Option<super::computer::Computer>,
+    pub(super) cancelled_timers: Vec<TimerHandle>,
     pub(super) pending: TransactionQueue,
     captures: CaptureInbox,
     inputs: InputInbox,
@@ -203,6 +204,9 @@ impl BoardDriver {
 }
 impl RetainedDriver for BoardDriver {
     fn update(&mut self, host: &mut RetainedHost, _: &RetainedTick) -> Result<(), String> {
+        self.flush_computer_timers(|handle| {
+            host.cancel_timer(handle);
+        });
         if self.camera.is_none() {
             self.configure(host.options())?;
         }
@@ -221,6 +225,9 @@ impl RetainedDriver for BoardDriver {
         } else {
             self.advance_computer(host);
         }
+        self.flush_computer_timers(|handle| {
+            host.cancel_timer(handle);
+        });
         let result = self.publish(host);
         self.generation = host.accepted_generation();
         result
@@ -261,8 +268,12 @@ impl RetainedDriver for BoardDriver {
                     host.request_exit();
                 }
             }
-            RetainedEvent::Shutdown => {}
+            RetainedEvent::Timer { handle } => self.computer_timer(handle),
+            RetainedEvent::Shutdown => self.computer_changed(),
         }
+        self.flush_computer_timers(|handle| {
+            host.cancel_timer(handle);
+        });
         Ok(())
     }
 }

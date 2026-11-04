@@ -287,9 +287,7 @@ impl BoardDriver {
     }
 
     pub(super) fn enqueue_move(&mut self, mut edits: Vec<SceneObjectEdit>) -> Result<(), String> {
-        if let Some(computer) = &mut self.computer {
-            computer.changed();
-        }
+        self.computer_changed();
         self.clear_selection()?;
         edits.extend(self.markers.clear());
         self.pending.borrow_mut().push_back(edits);

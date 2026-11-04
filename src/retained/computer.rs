@@ -9,9 +9,12 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 use worldrunner::scene::viewer::{RetainedHost, WorkQueue, WorkSubmitError, WorkTicket};
+
+mod timing;
+use timing::SearchTimers;
 
 const SEARCH_BUDGET: Duration = Duration::from_secs(10);
 
@@ -51,16 +54,16 @@ pub(super) struct Computer {
 struct Request {
     ticket: WorkTicket<Reply>,
     generation: u64,
-    deadline: Instant,
+    timers: SearchTimers,
     stop: Arc<AtomicBool>,
 }
 impl Request {
     #[cfg(test)]
-    fn new(ticket: WorkTicket<Reply>, generation: u64) -> Self {
+    fn new(ticket: WorkTicket<Reply>, generation: u64, host: &mut RetainedHost) -> Self {
         Self {
             ticket,
             generation,
-            deadline: Instant::now() + SEARCH_BUDGET,
+            timers: SearchTimers::new(host).unwrap(),
             stop: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -70,23 +73,31 @@ struct Reply {
     chess_move: Option<LegalMove>,
 }
 impl Computer {
-    pub(super) fn changed(&mut self) {
-        if let Some(request) = self.pending.take() {
+    fn changed(&mut self) -> Option<SearchTimers> {
+        let timers = self.pending.take().map(|request| {
             self.queue
                 .as_ref()
                 .expect("submitted queue")
                 .cancel(&request.ticket);
-        }
+            request.timers
+        });
         self.generation = self
             .generation
             .checked_add(1)
             .expect("game generation exhausted");
         self.message = None;
+        timers
     }
-    fn submit(&mut self, state: ChessState) {
+    fn submit(&mut self, state: ChessState, host: &mut RetainedHost) {
+        let timers = match SearchTimers::new(host) {
+            Ok(timers) => timers,
+            Err(error) => {
+                self.message = Some(format!("Computer error: {error}"));
+                return;
+            }
+        };
         let generation = self.generation;
         let config = self.config;
-        let deadline = Instant::now() + SEARCH_BUDGET;
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = stop.clone();
         let seed = move_seed(config.seed, state.repetition_history().len() - 1);
@@ -99,11 +110,7 @@ impl Computer {
                     &state,
                     &LADDER[usize::from(config.level - 1)],
                     seed,
-                    &|| {
-                        cancel.is_cancelled()
-                            || worker_stop.load(Ordering::Relaxed)
-                            || Instant::now() >= deadline
-                    },
+                    &|| cancel.is_cancelled() || worker_stop.load(Ordering::Relaxed),
                 );
                 Reply {
                     generation,
@@ -115,12 +122,18 @@ impl Computer {
                 self.pending = Some(Request {
                     ticket,
                     generation,
-                    deadline,
+                    timers,
                     stop,
                 });
             }
-            Err(WorkSubmitError::Full) => (),
-            Err(error) => self.message = Some(format!("Computer error: {error}")),
+            Err(error) => {
+                timers.cancel(|handle| {
+                    host.cancel_timer(handle);
+                });
+                if error != WorkSubmitError::Full {
+                    self.message = Some(format!("Computer error: {error}"));
+                }
+            }
         }
     }
 }
@@ -134,9 +147,7 @@ impl BoardDriver {
         if self.board.is_none() {
             return Err("editor scenes have no legal game".into());
         }
-        if let Some(computer) = &mut self.computer {
-            computer.changed();
-        }
+        self.computer_changed();
         self.clear_selection()?;
         self.computer = Some(Computer {
             config,
@@ -168,8 +179,17 @@ impl BoardDriver {
                 GameStatus::Ongoing { .. }
             ))
         .then(|| {
+            let thinking = if computer
+                .pending
+                .as_ref()
+                .is_some_and(|request| request.timers.visible)
+            {
+                " is thinking"
+            } else {
+                ""
+            };
             format!(
-                "Computer (Level {}, {}) is thinking",
+                "Computer (Level {}, {}){thinking}",
                 computer.config.level,
                 LADDER[usize::from(computer.config.level - 1)].name
             )
@@ -186,13 +206,7 @@ impl BoardDriver {
         }
         let state = self.board.as_ref().expect("computer board").game();
         let computer = self.computer.as_mut().expect("computer turn");
-        if let Some(request) = &computer.pending {
-            if Instant::now() >= request.deadline {
-                request.stop.store(true, Ordering::Relaxed);
-            }
-            return;
-        }
-        if computer.message.is_some() {
+        if computer.pending.is_some() || computer.message.is_some() {
             return;
         }
         if computer.queue.is_none() {
@@ -204,7 +218,7 @@ impl BoardDriver {
                 }
             }
         }
-        computer.submit(state.clone());
+        computer.submit(state.clone(), host);
     }
     pub(super) fn drain_computer(&mut self) -> Result<(), String> {
         loop {
@@ -223,8 +237,9 @@ impl BoardDriver {
             if completion.ticket != request.ticket || request.generation != computer.generation {
                 continue;
             }
+            let request = computer.pending.take().expect("matched request");
             let generation = request.generation;
-            computer.pending = None;
+            self.retire_search_timers(request.timers);
             match completion.result {
                 Ok(reply) => self.accept_reply(reply.generation, reply.chess_move)?,
                 Err(error) => {
