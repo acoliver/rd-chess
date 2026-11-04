@@ -90,6 +90,13 @@ fn present(options: &cli::Options, position: &Position) -> Result<(), Box<dyn Er
     } else {
         prepare_view(position, &options.view)?
     };
+    if let Some(human) = options.play {
+        driver.set_computer(chess3d::retained::ComputerGame::new(
+            human,
+            options.level.expect("validated level"),
+            position.seed,
+        )?)?;
+    }
     let host = RetainedHost::new(
         scene.clone(),
         viewer_options(&scene, preset, [options.width, options.height]),

@@ -5,7 +5,6 @@ use super::{Analysis, Candidate, Limits, Line, Score, Weights, evaluate};
 use crate::Side;
 use crate::rules::{ChessState, GameStatus, LegalMove};
 use std::cmp::Reverse;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Clone, Copy)]
 struct Window {
@@ -37,7 +36,7 @@ pub(super) struct Context<'a> {
     table: &'a mut Table,
     weights: Weights,
     limits: Limits,
-    cancel: &'a AtomicBool,
+    cancel: &'a dyn Fn() -> bool,
     ordering: MoveOrdering,
     pub nodes: u64,
 }
@@ -47,7 +46,7 @@ impl<'a> Context<'a> {
         table: &'a mut Table,
         weights: Weights,
         limits: Limits,
-        cancel: &'a AtomicBool,
+        cancel: &'a dyn Fn() -> bool,
     ) -> Self {
         Self {
             table,
@@ -60,7 +59,7 @@ impl<'a> Context<'a> {
     }
 
     fn visit(&mut self) -> Option<()> {
-        if self.nodes >= self.limits.nodes || self.cancel.load(Ordering::Relaxed) {
+        if self.nodes >= self.limits.nodes || (self.cancel)() {
             return None;
         }
         self.nodes += 1;
@@ -292,7 +291,7 @@ mod tests {
     fn quiescence(fen: &str) -> Line {
         let mut state = ChessState::from_fen(fen).unwrap();
         let mut table = Table::new(0);
-        let cancel = AtomicBool::new(false);
+        let cancel = || false;
         let mut context = Context::new(
             &mut table,
             Weights::BALANCED,

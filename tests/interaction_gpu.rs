@@ -209,3 +209,114 @@ fn required_gpu_promotion_dialog_consumes_click_and_shows_underpromotion() {
     assert_eq!(driver.selected(), None);
     assert!(!driver.promotion_pending());
 }
+
+#[test]
+fn required_gpu_computer_replies_to_synthetic_e2e4() {
+    let (mut driver, view, host) = setup(ChessState::initial());
+    driver
+        .set_computer(chess3d::retained::ComputerGame::new(Side::Ivory, 1, 42).unwrap())
+        .unwrap();
+    let knight = driver
+        .board()
+        .unwrap()
+        .position()
+        .pieces
+        .into_iter()
+        .find(|piece| piece.square == square("g8"))
+        .unwrap();
+    let id = driver.board().unwrap().identities()[&knight.id].body;
+    let initial_object = driver.board().unwrap().objects()[&id];
+    let inputs = driver.inputs();
+    let queue = driver.queue();
+    let inbox = driver.captures();
+    let mut driver = SyntheticWorkReady(driver);
+    let mut run = host
+        .windowless(&mut driver)
+        .expect("GPU required, never skip");
+    let initial = capture_frame(&mut run, &queue, &inbox).unwrap();
+    click(&inputs, project(&view, square("e2")));
+    capture_frame(&mut run, &queue, &inbox).unwrap();
+    click(&inputs, project(&view, square("e4")));
+    wait_for_reply(&mut run, id, initial_object);
+    let replied = capture_frame(&mut run, &queue, &inbox).unwrap();
+    save(&replied, "computer-level-1-reply");
+    let object = run
+        .host()
+        .objects()
+        .find(|(object_id, _)| *object_id == id)
+        .unwrap()
+        .1;
+    assert_eq!(object.transform().position_millimeters, [1500, 1500, 50]);
+    assert!(changed(&initial, &replied, [450, 60, 610, 280]) > 50);
+    run.shutdown().unwrap();
+    drop(run);
+    let mut expected = ChessState::initial();
+    for text in ["e2e4", "g8f6"] {
+        expected.play(expected.parse_uci(text).unwrap()).unwrap();
+    }
+    assert_eq!(driver.0.board().unwrap().game(), &expected);
+    assert_eq!(driver.0.status_text(), "White to move");
+    assert_eq!(replied.pixels, reference_reply().pixels);
+}
+
+fn reference_reply() -> RgbaImage {
+    let (mut driver, _, host) = setup(ChessState::initial());
+    for text in ["e2e4", "g8f6"] {
+        driver.play_uci(text).unwrap();
+    }
+    let queue = driver.queue();
+    let inbox = driver.captures();
+    let mut run = host.windowless(&mut driver).unwrap();
+    let result = capture_frame(&mut run, &queue, &inbox).unwrap();
+    run.shutdown().unwrap();
+    result
+}
+
+fn wait_for_reply(
+    run: &mut worldrunner::scene::viewer::WindowlessRetained<'_>,
+    id: worldrunner::scene::viewer::ObjectId,
+    initial_object: worldrunner::scene::plan::SceneObject,
+) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "computer did not publish its reply"
+        );
+        run.frame().unwrap();
+        run.poll().unwrap();
+        if run
+            .host()
+            .objects()
+            .any(|(object_id, object)| object_id == id && object != initial_object)
+        {
+            break;
+        }
+        std::thread::yield_now();
+    }
+}
+
+// This engine pin only dispatches WorkReady through its desktop loop. Inject
+// that observation in the windowless test, without polling in the game driver.
+struct SyntheticWorkReady(BoardDriver);
+impl worldrunner::scene::viewer::RetainedDriver for SyntheticWorkReady {
+    fn update(
+        &mut self,
+        host: &mut RetainedHost,
+        tick: &worldrunner::scene::viewer::RetainedTick,
+    ) -> Result<(), String> {
+        self.0.update(host, tick)
+    }
+    fn event(
+        &mut self,
+        host: &mut worldrunner::scene::viewer::RetainedEventHost<'_>,
+        event: &worldrunner::scene::viewer::RetainedEvent,
+    ) -> Result<(), String> {
+        use worldrunner::scene::viewer::RetainedEvent;
+        self.0.event(host, event)?;
+        if matches!(event, RetainedEvent::Presented { .. }) {
+            self.0.event(host, &RetainedEvent::WorkReady)?;
+        }
+        Ok(())
+    }
+}

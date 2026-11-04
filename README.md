@@ -9,10 +9,20 @@ engine implementation or third-party 3D art is vendored here.
 The scene/position editor accepts arbitrary board layouts in JSON. A separate
 CPU-only `rules` module now supplies validated playable chess states, legal moves,
 notation and outcomes. The CPU-only `search` module adds analysis and eight
-uncalibrated opponent profiles, not yet connected to play. The CLI can apply
+uncalibrated opponent profiles, available for computer play. The CLI can apply
 legal UCI sequences from the initial game and capture their retained result.
 Arbitrary scene documents remain editor inputs, separate from rules authority.
 A window without `--load` or `--view lineup` starts local two-player play.
+Add `--play white|black --level 1..8` to choose your side against a computer:
+
+```sh
+cargo run --locked -j4 --features viewer -- --window --view overhead \
+  --play white --level 1 --seed 42
+```
+
+`--play` requires a window and a level, and rejects editor/lineup/`--moves` inputs.
+The default remains local two-player; `--seed` controls both marble and the game.
+Choosing black lets the computer make the opening move.
 
 ## Independent checkout and build
 
@@ -32,7 +42,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`c1f2802891c0b89ff230ffed9f4d6c65482a72a9` from
+`4f920c5b4b30651d7bffb9a9a11774fd2400c447` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -100,7 +110,8 @@ seeded marble remain procedural source assets, not copied image textures.
   Click a target to move, the selected piece or outside the board to deselect,
   or another friendly piece to switch selection. An illegal board target does
   nothing. A press moving beyond six physical pixels orbits instead of clicking;
-  wheel zooms and Home restores the preset. U/Backspace undoes one ply; R restarts
+  wheel zooms and Home restores the preset. U/Backspace undoes one ply in local
+  play, or returns to the last human decision against a computer. R restarts
   the game and resets the camera. Escape cancels selection/promotion first, then
   exits. Loaded editor and lineup views retain R/Home reset and Escape exit.
   Resize and unmap/remap affect presentation only; camera changes never rewrite
@@ -303,8 +314,51 @@ CARGO_INCREMENTAL=0 nice -n 10 cargo test --release --locked -j4 -p chess3d --li
 The measurement searches 20,000 nodes each from the initial position and
 Kiwipete, using 65,536 TT slots. It prints nodes/second and completed depth; it
 is ignored in the default suite. Self-play and human calibration have not been
-performed. Worker hosting, request generations, elapsed-time caps and stale-result
-rejection await engine issue `c97b3d3354d8`; this change creates no thread or CLI.
+performed. `BoardDriver` now runs the policy on the engine's retained CPU queue
+with one worker and one pending slot. It submits immutable rules/history snapshots
+with a game generation, and derives each move seed from `(game seed, ply)` using
+the documented SplitMix-style integer mixing in `retained/computer.rs`. Completed
+results are drained on `WorkReady`, checked against both ticket and game generation,
+then revalidated and committed through the same single object transaction as human
+moves. A computer promotion uses its selected piece without opening a dialog.
+Board clicks cannot select or move pieces on the computer's turn; orbit and zoom
+remain available. Status names the level/profile while thinking and displays
+worker panic, closed-queue, illegal-result and timeout errors until undo/restart.
+
+Undo/restart invalidate the request generation and cancel the engine ticket,
+including a result already queued for delivery. Undo removes the human move plus
+its computer reply when present, or just the human move while search is pending.
+For a black human, the computer's opening is retained as the first decision point;
+there is no human move to undo before that point. Available repetition/fifty-move
+claims are taken by the computer and shown as a draw without requesting search.
+
+A fixed ten-second elapsed safety budget is separate from each profile's node
+budget. Retained updates signal cooperative cancellation at the deadline. The
+policy also checks that deadline on its worker at every node and between policy
+candidates, so paused presentation does not leave search running indefinitely.
+It returns the seeded policy choice from the last fully completed iteration; if
+none completed, status reports the timeout instead of inventing a move. Normal
+node-budget exhaustion still uses the existing finite static fallback. Exact seed
+reproduction applies when the elapsed emergency cap does not interrupt search.
+Cancellation cannot interrupt an individual rules/evaluation call.
+
+Engine limitation: this pin has work wakeups and retained ticks, but no scheduled
+host timer service. The cap uses monotonic deadlines in those existing callbacks;
+there is no game-created timer thread or executor. A literal scheduled host timer
+requires an engine API before the game can adopt it. The windowless host also
+never dispatches `WorkReady` from `frame`/`poll` at this pin, although desktop
+wakeups deliver it. The GPU test injects `WorkReady` observations from presented
+frames through a test-only driver, keeping production completion handling on the
+engine event boundary. The real queue, search and GPU transaction remain in use;
+this does not verify native windowless completion notification.
+
+CPU regressions use real engine queues on GPU-free retained hosts, injecting
+completion payloads only for failure/staleness cases. The required windowless GPU
+regression clicks e2-e4 versus Level 1 with game seed 42, verifies g8-f6's retained
+identity and transform, captures the reply, and compares exact pixels with an
+independent rules-driven reference. `tests/window_smoke.py` adds the same move and
+two-ply undo using its existing Xvfb click injection. Do not run a visible window
+on the macOS desktop.
 
 ## Validation
 

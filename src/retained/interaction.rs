@@ -87,6 +87,9 @@ impl BoardDriver {
             .collect()
     }
     pub fn status_text(&self) -> String {
+        if let Some(status) = self.computer_status() {
+            return status;
+        }
         self.board.as_ref().map_or_else(String::new, |board| {
             super::status::status_text(board.game())
         })
@@ -185,7 +188,8 @@ impl BoardDriver {
                 button: PointerButton::Left,
                 pressed,
             } => {
-                let click_allowed = !self.presenting && self.pending.borrow().is_empty();
+                let click_allowed =
+                    !self.computer_turn() && !self.presenting && self.pending.borrow().is_empty();
                 if let Some(point) = self.interaction.button(pressed, click_allowed)
                     && let Some(view) = view
                 {
@@ -266,7 +270,7 @@ impl BoardDriver {
         self.commit_move(chess_move)
     }
 
-    fn commit_move(&mut self, chess_move: LegalMove) -> Result<(), String> {
+    pub(super) fn commit_move(&mut self, chess_move: LegalMove) -> Result<(), String> {
         let edits = self
             .board
             .as_mut()
@@ -277,6 +281,9 @@ impl BoardDriver {
     }
 
     pub(super) fn enqueue_move(&mut self, mut edits: Vec<SceneObjectEdit>) -> Result<(), String> {
+        if let Some(computer) = &mut self.computer {
+            computer.changed();
+        }
         self.clear_selection()?;
         edits.extend(self.markers.clear());
         self.pending.borrow_mut().push_back(edits);
@@ -315,21 +322,12 @@ impl BoardDriver {
             "escape" => self.exit = true,
             "u" | "backspace" if self.board.is_some() => {
                 self.clear_selection()?;
-                if self
-                    .board
-                    .as_ref()
-                    .expect("game")
-                    .game()
-                    .repetition_history()
-                    .len()
-                    > 1
-                {
+                if self.undo_plies().is_ok() {
                     self.undo()?;
                 }
             }
             "r" if self.board.is_some() => {
-                let edits = self.board.as_mut().expect("game").restart();
-                self.enqueue_move(edits)?;
+                self.restart()?;
                 self.reset_camera();
             }
             "home" | "r" => self.reset_camera(),

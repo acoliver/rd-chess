@@ -106,7 +106,13 @@ impl RetainedBoard {
     }
 
     pub fn undo(&mut self) -> Result<Vec<SceneObjectEdit>, MoveError> {
-        self.game.undo()?;
+        self.undo_plies(1)
+    }
+
+    fn undo_plies(&mut self, count: usize) -> Result<Vec<SceneObjectEdit>, MoveError> {
+        for _ in 0..count {
+            self.game.undo()?;
+        }
         Ok(self.synchronize())
     }
 
@@ -143,6 +149,7 @@ impl RetainedBoard {
         edits
     }
 }
+mod computer;
 
 mod driver;
 mod host;
@@ -150,5 +157,6 @@ mod interaction;
 mod markers;
 mod status;
 mod ui;
+pub use computer::ComputerGame;
 pub use driver::{BoardDriver, CaptureInbox, InputInbox, TransactionQueue};
 pub use host::{capture_frame, viewer_options};

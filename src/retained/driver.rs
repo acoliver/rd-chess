@@ -21,6 +21,7 @@ pub type InputInbox = Rc<RefCell<VecDeque<RetainedInput>>>;
 #[derive(Default)]
 pub struct BoardDriver {
     pub(super) board: Option<super::RetainedBoard>,
+    pub(super) computer: Option<super::computer::Computer>,
     pub(super) pending: TransactionQueue,
     captures: CaptureInbox,
     inputs: InputInbox,
@@ -88,12 +89,21 @@ impl BoardDriver {
         self.enqueue_move(edits)
     }
     pub fn undo(&mut self) -> Result<(), String> {
+        let count = self.undo_plies()?;
+        let edits = self
+            .board
+            .as_mut()
+            .expect("playable board")
+            .undo_plies(count)
+            .map_err(|error| error.to_string())?;
+        self.enqueue_move(edits)
+    }
+    pub fn restart(&mut self) -> Result<(), String> {
         let edits = self
             .board
             .as_mut()
             .ok_or("editor scenes have no legal game")?
-            .undo()
-            .map_err(|error| error.to_string())?;
+            .restart();
         self.enqueue_move(edits)
     }
     pub fn queue(&self) -> TransactionQueue {
@@ -183,6 +193,8 @@ impl RetainedDriver for BoardDriver {
         }
         if self.exit {
             host.request_exit();
+        } else {
+            self.advance_computer(host);
         }
         if !self.publish_objects(host)? {
             return Ok(());
@@ -204,6 +216,7 @@ impl RetainedDriver for BoardDriver {
         event: &RetainedEvent,
     ) -> Result<(), String> {
         match event {
+            RetainedEvent::WorkReady => self.drain_computer()?,
             RetainedEvent::Capture { id, outcome, .. } => {
                 self.captures.borrow_mut().insert(*id, outcome.clone());
             }

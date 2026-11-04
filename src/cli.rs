@@ -12,6 +12,8 @@ pub struct Options {
     pub height: u32,
     pub seed: Option<u64>,
     pub moves: Option<String>,
+    pub play: Option<chess3d::Side>,
+    pub level: Option<u8>,
 }
 
 impl Options {
@@ -26,6 +28,8 @@ impl Options {
             height: 960,
             seed: None,
             moves: None,
+            play: None,
+            level: None,
         };
         let mut args = std::env::args_os().skip(1);
         while let Some(arg) = args.next() {
@@ -47,6 +51,8 @@ impl Options {
                 "--height",
                 "--seed",
                 "--moves",
+                "--play",
+                "--level",
             ]
             .contains(&flag.as_ref())
             {
@@ -55,24 +61,63 @@ impl Options {
             let value = args
                 .next()
                 .ok_or_else(|| format!("{flag} requires a value"))?;
-            let text = value.to_string_lossy().into_owned();
-            match flag.as_ref() {
-                "--load" => options.load = Some(PathBuf::from(value)),
-                "--save" => options.save = Some(PathBuf::from(value)),
-                "--capture" => options.capture = Some(PathBuf::from(value)),
-                "--view" => options.view = text,
-                "--width" => options.width = text.parse()?,
-                "--height" => options.height = text.parse()?,
-                "--seed" => options.seed = Some(text.parse()?),
-                "--moves" => options.moves = Some(text),
-                _ => unreachable!(),
-            }
+            options.set_value(&flag, value)?;
         }
         options.validate()?;
         Ok(Some(options))
     }
 
+    fn set_value(&mut self, flag: &str, value: std::ffi::OsString) -> Result<()> {
+        let text = value.to_string_lossy().into_owned();
+        match flag {
+            "--load" => self.load = Some(PathBuf::from(value)),
+            "--save" => self.save = Some(PathBuf::from(value)),
+            "--capture" => self.capture = Some(PathBuf::from(value)),
+            "--view" => self.view = text,
+            "--width" => self.width = text.parse()?,
+            "--height" => self.height = text.parse()?,
+            "--seed" => self.seed = Some(text.parse()?),
+            "--moves" => self.moves = Some(text),
+            "--play" => {
+                self.play = Some(match text.as_str() {
+                    "white" => chess3d::Side::Ivory,
+                    "black" => chess3d::Side::Onyx,
+                    _ => return Err("--play must be white or black".into()),
+                });
+            }
+            "--level" => {
+                let level = text.parse()?;
+                if !(1..=8).contains(&level) {
+                    return Err("--level must be 1..=8".into());
+                }
+                self.level = Some(level);
+            }
+            _ => unreachable!(),
+        }
+        Ok(())
+    }
+
+    fn validate_computer(&self) -> Result<()> {
+        match (self.play, self.level) {
+            (None, Some(_)) => return Err("--level requires --play".into()),
+            (Some(_), None) => return Err("--play requires --level".into()),
+            _ => (),
+        }
+        if self.play.is_some() {
+            if !self.window {
+                return Err("--play requires --window".into());
+            }
+            if self.load.is_some() || self.view == "lineup" || self.moves.is_some() {
+                return Err(
+                    "--play starts a new game; cannot use --load, --moves or lineup".into(),
+                );
+            }
+        }
+        Ok(())
+    }
+
     fn validate(&self) -> Result<()> {
+        self.validate_computer()?;
         if self.window && self.capture.is_some() {
             return Err("--capture and --window cannot be combined; run them separately".into());
         }
@@ -114,10 +159,11 @@ fn print_help() {
     println!(
         "chess3d [--load position.json] [--save position.json] [--moves \"e2e4 e7e5\"]\n\
         [--capture image.png | --window] [--view hero|overhead|lineup]\n\
-        [--width px --height px] [--seed n]\n\
+        [--width px --height px] [--seed n] [--play white|black --level 1..8]\n\
         Window and retained move capture require: cargo run -p chess3d --features viewer --\n\
         Play: left click select/move, U/Backspace undo, R restart, Escape cancel/exit.\n\
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\
+        --play chooses the human side against a computer; --seed also seeds its replies.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\
         --save writes the current position before capture/window; camera orbit is not saved."
     );

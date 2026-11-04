@@ -36,7 +36,7 @@ fn play_generated(state: &mut ChessState, chess_move: LegalMove) -> Option<()> {
 }
 
 pub use evaluation::{EvaluationBreakdown, Term, Weights, evaluate};
-pub use policy::choose_move;
+pub use policy::{choose_move, choose_move_cancellable};
 pub use profiles::{
     ELLIS, IMANI, LADDER, MIRA, NIA, OpponentProfile, PIP, ROWAN, SOREN, Style, TOMAS,
 };
@@ -119,14 +119,20 @@ impl Search {
         cancel: &AtomicBool,
         completed: impl FnMut(&Analysis),
     ) -> Analysis {
-        self.run(state, limits, cancel, completed, None)
+        self.run(
+            state,
+            limits,
+            &|| cancel.load(std::sync::atomic::Ordering::Relaxed),
+            completed,
+            None,
+        )
     }
 
     fn analyze_moves(
         &mut self,
         state: &ChessState,
         limits: Limits,
-        cancel: &AtomicBool,
+        cancel: &dyn Fn() -> bool,
         moves: &[LegalMove],
     ) -> Analysis {
         self.run(state, limits, cancel, |_| {}, Some(moves))
@@ -136,7 +142,7 @@ impl Search {
         &mut self,
         state: &ChessState,
         limits: Limits,
-        cancel: &AtomicBool,
+        cancel: &dyn Fn() -> bool,
         mut completed: impl FnMut(&Analysis),
         roots: Option<&[LegalMove]>,
     ) -> Analysis {

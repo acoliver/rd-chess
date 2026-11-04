@@ -73,12 +73,15 @@ def close_request(window):
         x11.XCloseDisplay(display)
 
 
-def run_case(args, environment, name, view, load=None, controls=False):
+def run_case(args, environment, name, view, load=None, interaction=None):
+    computer = interaction == "computer"
     output = args.output
     saved = output / f"{name}-position.json"
     reference = output / f"{name}-capture.png"
     width, height = (1200, 600) if view == "lineup" else (960, 720)
     common = ["--view", view, "--width", str(width), "--height", str(height)]
+    if computer:
+        common += ["--seed", "42"]
     if load:
         common += ["--load", str(load)]
     headless = dict(environment)
@@ -94,7 +97,8 @@ def run_case(args, environment, name, view, load=None, controls=False):
                               check=check, timeout=10).stdout.strip()
 
     with (output / f"{name}.log").open("w") as log:
-        process = subprocess.Popen([str(args.binary), *common, "--window", "--save", str(saved)],
+        opponent = ["--play", "white", "--level", "1"] if computer else []
+        process = subprocess.Popen([str(args.binary), *common, *opponent, "--window", "--save", str(saved)],
                                    env=environment, stdout=log, stderr=log)
         try:
             window = wait_for(lambda: xdo("search", "--pid", process.pid, "--name",
@@ -124,12 +128,13 @@ def run_case(args, environment, name, view, load=None, controls=False):
                 assert position == json.loads(load.read_text()), "loaded position changed"
             else:
                 assert len(position["pieces"]) == 32
-                assert position["seed"] == 342
+                assert position["seed"] == (42 if computer else 342)
             saved_bytes = saved.read_bytes()
             records = []
             if view == "overhead" and not load:
                 moved_reference = output / f"{name}-e2e4-capture.png"
-                subprocess.run([str(args.binary), *common, "--moves", "e2e4",
+                sequence = "e2e4 g8f6" if computer else "e2e4"
+                subprocess.run([str(args.binary), *common, "--moves", sequence,
                                 "--capture", str(moved_reference)], env=headless,
                                check=True, capture_output=True, timeout=60)
                 # Engine-projected board-plane centers at this fixed 960x720 preset.
@@ -140,12 +145,12 @@ def run_case(args, environment, name, view, load=None, controls=False):
                 xdo("mousemove", "--window", window, 515, 395)
                 xdo("click", 1)
                 moved = wait_for(lambda: matching(Image.open(moved_reference).convert("RGB")),
-                                 "click e2-e4 matching rules-driven capture")
+                                 f"click and reply {sequence} matching rules-driven capture")
                 moved.save(output / f"{name}-clicked-e2e4.png")
                 xdo("key", "--window", window, "u")
                 wait_for(lambda: matching(initial, 0), "U exact board undo")
-                records += ["click e2-e4 matches capture", "U exact board undo"]
-            if controls:
+                records += [f"click and reply {sequence} matches capture", "U exact board undo"]
+            if interaction == "camera":
                 def changed(reference_image):
                     image = screenshot()
                     return image if difference(reference_image, image) > 2 else None
@@ -214,8 +219,9 @@ def main():
     for key in ["WAYLAND_DISPLAY", "WAYLAND_SOCKET"]:
         environment.pop(key, None)
     fixture = Path(__file__).resolve().parent.parent / "assets/positions/study.json"
-    results = [run_case(args, environment, "hero", "hero", controls=True),
+    results = [run_case(args, environment, "hero", "hero", interaction="camera"),
                run_case(args, environment, "overhead", "overhead"),
+               run_case(args, environment, "computer-level-1", "overhead", interaction="computer"),
                run_case(args, environment, "study", "hero", load=fixture),
                run_case(args, environment, "lineup", "lineup")]
     encoded = json.dumps(results, indent=2) + "\n"

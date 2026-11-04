@@ -1,4 +1,25 @@
 #[test]
+fn computer_arguments_are_validated_without_launching_a_window() {
+    for (args, message) in [
+        (vec!["--play", "green"], "--play must be white or black"),
+        (vec!["--level", "0"], "--level must be 1..=8"),
+        (vec!["--level", "9"], "--level must be 1..=8"),
+        (vec!["--level", "1"], "--level requires --play"),
+        (vec!["--play", "white"], "--play requires --level"),
+        (
+            vec!["--play", "black", "--level", "1"],
+            "--play requires --window",
+        ),
+    ] {
+        assert_failure(&cli().args(args).output().unwrap(), message);
+    }
+    let output = cli().arg("--help").output().unwrap();
+    let help = String::from_utf8_lossy(&output.stdout);
+    assert!(help.contains("--play white|black"));
+    assert!(help.contains("--level 1..8"));
+}
+
+#[test]
 fn uci_sequence_saves_the_rules_result_and_illegal_input_writes_nothing() {
     let directory = tempfile::tempdir().unwrap();
     let save = directory.path().join("moves.json");

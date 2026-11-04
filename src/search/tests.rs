@@ -1,3 +1,28 @@
+#[test]
+fn cancellable_policy_preserves_completed_iteration_and_stops_preprocessing() {
+    use std::cell::Cell;
+    let state = ChessState::initial();
+    assert_eq!(choose_move_cancellable(&state, &PIP, 42, &|| true), None);
+    let mut profile = PIP;
+    profile.depth = 1;
+    profile.nodes = 1_000_000;
+    let polls = Cell::new(0);
+    let first = choose_move_cancellable(&state, &profile, 42, &|| {
+        polls.set(polls.get() + 1);
+        false
+    });
+    assert!(first.is_some());
+    let completed_polls = polls.get();
+    polls.set(0);
+    profile.depth = 2;
+    let interrupted = choose_move_cancellable(&state, &profile, 42, &|| {
+        polls.set(polls.get() + 1);
+        polls.get() > completed_polls
+    });
+    assert_eq!(interrupted, first);
+    assert!(polls.get() > completed_polls);
+}
+
 use super::*;
 use crate::rules::{ChessState, GameStatus, INITIAL_FEN};
 use crate::{PieceKind, Side};

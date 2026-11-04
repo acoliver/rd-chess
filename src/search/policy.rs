@@ -5,7 +5,6 @@ use super::{Candidate, Limits, OpponentProfile, Score, Search, Style, evaluate};
 use crate::rules::{ChessState, LegalMove};
 use crate::{PieceKind, Side};
 use std::cmp::Reverse;
-use std::sync::atomic::AtomicBool;
 
 /// Select from the profile's top-N safe search candidates, with deterministic
 /// bounded centipawn perturbation. Never samples uniformly over legal moves.
@@ -18,13 +17,30 @@ use std::sync::atomic::AtomicBool;
 /// If no iteration completes, rank a finite one-ply static fallback instead;
 /// that fallback and queen-safety preprocessing are not included in search nodes.
 pub fn choose_move(state: &ChessState, profile: &OpponentProfile, seed: u64) -> LegalMove {
+    choose_move_cancellable(state, profile, seed, &|| false)
+        .expect("uncancelled policy has a legal move")
+}
+
+/// Cooperatively polls before policy candidates and every search node. On
+/// cancellation returns the policy choice from the last completed iteration,
+/// or None if none completed. Node-budget exhaustion still uses static fallback.
+pub fn choose_move_cancellable(
+    state: &ChessState,
+    profile: &OpponentProfile,
+    seed: u64,
+    cancelled: &dyn Fn() -> bool,
+) -> Option<LegalMove> {
     let legal = state.legal_moves();
     assert!(!legal.is_empty(), "choose_move requires a legal move");
-    let safe: Vec<_> = legal
-        .iter()
-        .copied()
-        .filter(|&chess_move| queen_safe(state, chess_move))
-        .collect();
+    let mut safe = Vec::new();
+    for &chess_move in &legal {
+        if cancelled() {
+            return None;
+        }
+        if queen_safe(state, chess_move) {
+            safe.push(chess_move);
+        }
+    }
     let allowed = if safe.is_empty() { &legal } else { &safe };
     let analysis = Search::weighted(4096, profile.weights)
         .candidates(profile.candidates)
@@ -34,22 +50,27 @@ pub fn choose_move(state: &ChessState, profile: &OpponentProfile, seed: u64) -> 
                 nodes: profile.nodes,
                 depth: Some(profile.depth),
             },
-            &AtomicBool::new(false),
+            cancelled,
             allowed,
         );
     let mut candidates = analysis.candidates;
     if candidates.is_empty() {
-        candidates = fallback(state, &legal, profile);
+        if cancelled() {
+            return None;
+        }
+        candidates = fallback(state, &legal, profile, cancelled)?;
     }
     candidates.retain(|candidate| allowed.contains(&candidate.pv[0]));
     candidates.sort_by_key(|candidate| Reverse(candidate.score.value(state.side_to_move())));
     let mut random = seed;
-    candidates
-        .iter()
-        .take(profile.candidates.max(1))
-        .max_by_key(|candidate| policy_value(state, candidate, profile, &mut random))
-        .expect("at least one allowed candidate")
-        .pv[0]
+    Some(
+        candidates
+            .iter()
+            .take(profile.candidates.max(1))
+            .max_by_key(|candidate| policy_value(state, candidate, profile, &mut random))
+            .expect("at least one allowed candidate")
+            .pv[0],
+    )
 }
 
 fn queen_safe(state: &ChessState, chess_move: LegalMove) -> bool {
@@ -65,10 +86,18 @@ fn queen_safe(state: &ChessState, chess_move: LegalMove) -> bool {
         .any(|reply| next.piece_at(reply.to()) == Some((state.side_to_move(), PieceKind::Queen)))
 }
 
-fn fallback(state: &ChessState, legal: &[LegalMove], profile: &OpponentProfile) -> Vec<Candidate> {
+fn fallback(
+    state: &ChessState,
+    legal: &[LegalMove],
+    profile: &OpponentProfile,
+    cancelled: &dyn Fn() -> bool,
+) -> Option<Vec<Candidate>> {
     legal
         .iter()
         .map(|&chess_move| {
+            if cancelled() {
+                return None;
+            }
             let mut next = state.clone();
             let score = if super::play_generated(&mut next, chess_move).is_some() {
                 let value = evaluate(&next).total(profile.weights);
@@ -80,10 +109,10 @@ fn fallback(state: &ChessState, legal: &[LegalMove], profile: &OpponentProfile) 
             } else {
                 Score::Centipawns(0)
             };
-            Candidate {
+            Some(Candidate {
                 score,
                 pv: vec![chess_move],
-            }
+            })
         })
         .collect()
 }
