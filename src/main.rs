@@ -23,7 +23,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 println!("  Evidence: {}", san_line(&state, &fact.line));
             }
         }
-        println!("Line: {}", san_line(&state, &explanation.line));
+        if let Some(line) = &explanation.alternative_line {
+            let san = state.to_san(line[0])?;
+            println!("Line after {san}: {}", san_line(&state, line));
+        }
+        let san = state.to_san(mv)?;
+        println!("Line after {san}: {}", san_line(&state, &explanation.line));
         let limits = explanation.limits;
         println!(
             "Analysis limits: {}/{} nodes; verified depth {}, alternative depth {}; requested depth {} (cap 6), verification/SEE extension cap 8, alternative recursion cap 128; unresolved {}.",

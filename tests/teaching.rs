@@ -1,3 +1,22 @@
+#[path = "teaching/alternatives.rs"]
+mod alternatives;
+
+#[path = "teaching/forks.rs"]
+mod forks;
+
+#[test]
+fn sound_opening_knight_move_has_no_negative_claim() {
+    let state = ChessState::initial();
+    let mv = state.parse_uci("g1f3").unwrap();
+    let result = explain_move(&state, mv, budget()).unwrap();
+    assert!(result.facts.is_empty(), "{result:?}");
+    assert_eq!(
+        result.sentences,
+        ["No tactical issue found within the analysis limits."]
+    );
+    assert_eq!(result.line.first(), Some(&mv));
+}
+
 #[test]
 fn unresolved_forks_do_not_get_a_tactical_claim() {
     let state = ChessState::from_fen(tactical_cases()[0].0).unwrap();
@@ -40,7 +59,10 @@ fn equal_best_scores_do_not_claim_that_another_line_scores_better() {
     let state = ChessState::initial();
     let result = explain_move(&state, state.parse_uci("e2e3").unwrap(), budget()).unwrap();
     assert!(result.facts.is_empty(), "{result:?}");
-    assert_eq!(result.sentences, ["No verified tactical motif was found."]);
+    assert_eq!(
+        result.sentences,
+        ["No tactical issue found within the analysis limits."]
+    );
 }
 
 #[test]
@@ -62,7 +84,7 @@ fn discovered_attack_material_threat_and_missed_material_have_exact_facts() {
             attacker: square("e6"),
             targets: vec![square("c7"), square("g7")],
         },
-        "Ne6+ forks c7 and g7; the verified line wins material.",
+        "Ne6+: the knight forks the king on c7 and the queen on g7; the verified line wins the queen on g7.",
     );
     assert_fact(
         &fork,
@@ -300,7 +322,7 @@ fn tactical_cases() -> [(&'static str, &'static str, &'static str, &'static str)
             "8/2k3q1/8/2N5/8/8/P7/4K3 w - - 0 1",
             "c5e6",
             "fork",
-            "Ne6+ forks c7 and g7; the verified line wins material.",
+            "Ne6+: the knight forks the king on c7 and the queen on g7; the verified line wins the queen on g7.",
         ),
         (
             "4k3/4n3/8/8/1B6/8/8/R5K1 w - - 0 1",
@@ -396,7 +418,7 @@ fn quiet_positions_use_neutral_wording_without_a_fabricated_cause() {
     assert!(result.facts.is_empty(), "{result:?}");
     assert_eq!(
         result.sentences[0],
-        "This line scores better in the current search"
+        "No tactical issue found within the analysis limits."
     );
     assert!(!result.line.is_empty());
     assert!(result.limits.nodes <= budget().nodes);

@@ -158,8 +158,11 @@ pub struct Explanation {
     pub facts: Vec<Fact>,
     /// Fact templates in the same order, followed by any neutral/limit warning.
     pub sentences: Vec<String>,
-    /// Best alternative when no motif applies, otherwise the played continuation.
+    /// Continuation beginning with the explained move, from the original state.
     pub line: Vec<LegalMove>,
+    /// Named search preference, present only for a significant score improvement
+    /// or a verified missed tactic. Also starts in the original state.
+    pub alternative_line: Option<Vec<LegalMove>>,
     pub limits: AnalysisLimits,
 }
 

@@ -106,9 +106,11 @@ impl Tree<'_> {
         let value = match state.status() {
             GameStatus::Checkmate { winner } if winner == self.side => Value::Win(Reverse(ply)),
             GameStatus::Checkmate { .. } => Value::Loss(ply),
-            GameStatus::Draw(_) => Value::Material(0),
+            // A drawn outcome does not undo captures. This verifier measures
+            // material changes, unlike the game-outcome search used for ranking.
+            GameStatus::Draw(_) => Value::Material(material(state, self.side) - self.baseline),
             GameStatus::Ongoing { claims, .. } if claims.fifty_move || claims.threefold => {
-                Value::Material(0)
+                Value::Material(material(state, self.side) - self.baseline)
             }
             GameStatus::Ongoing { .. } => return None,
         };

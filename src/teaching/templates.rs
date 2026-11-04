@@ -1,4 +1,4 @@
-use super::board::{colour, name, piece};
+use super::board::{captured_in, colour, name, piece};
 use super::{Fact, FactKind};
 use crate::rules::{ChessState, LegalMove};
 
@@ -47,14 +47,7 @@ pub(super) fn sentence(state: &ChessState, played: LegalMove, fact: &Fact) -> St
 
 fn motif(state: &ChessState, san: &str, fact: &Fact) -> String {
     match &fact.kind {
-        FactKind::Fork { targets, .. } => format!(
-            "{san} forks {}; the verified line wins material.",
-            targets
-                .iter()
-                .map(|&sq| name(sq))
-                .collect::<Vec<_>>()
-                .join(" and ")
-        ),
+        FactKind::Fork { attacker, targets } => fork(state, san, fact, *attacker, targets),
         FactKind::Pin {
             front,
             rear,
@@ -105,6 +98,37 @@ fn motif(state: &ChessState, san: &str, fact: &Fact) -> String {
         ),
         _ => unreachable!("direct fact handled by sentence"),
     }
+}
+
+fn fork(
+    state: &ChessState,
+    san: &str,
+    fact: &Fact,
+    attacker: crate::Square,
+    targets: &[crate::Square],
+) -> String {
+    let mut after = state.clone();
+    after.play(fact.line[0]).expect("verified fork move");
+    let describe = |sq| {
+        let kind = after.piece_at(sq).expect("fork target").1;
+        format!("the {} on {}", piece(kind), name(sq))
+    };
+    let won = targets
+        .iter()
+        .copied()
+        .find(|&sq| captured_in(&after, &fact.line[1..], attacker, sq))
+        .expect("verified fork captures a target");
+    format!(
+        "{san}: the {} forks {}; the verified line wins {}.",
+        piece(after.piece_at(attacker).expect("fork attacker").1),
+        targets
+            .iter()
+            .copied()
+            .map(describe)
+            .collect::<Vec<_>>()
+            .join(" and "),
+        describe(won)
+    )
 }
 
 fn exchange(san: &str, gain: i32) -> String {

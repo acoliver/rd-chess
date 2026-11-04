@@ -476,8 +476,10 @@ on that square. Off-square tactics are outside SEE, so a hanging-piece sentence
 reports its exchange scope rather than claiming a forced game result. The general
 verifier also considers off-square moves within its normal depth.
 
-These are bounded lines, not game-theoretic proofs. The verifier takes available
-draw claims like the existing search. It omits material motifs whose follow-up
+These are bounded lines, not game-theoretic proofs. The verifier stops at draws
+and available draw claims like the existing search, but retains the actual
+material change there. Winning a rook can leave a drawn king-and-knight ending;
+a material fact does not imply a winning game. It omits material motifs whose follow-up
 cannot be demonstrated, even if the pattern exists. Only the moved piece is
 considered as a fork attacker. Defensive geometric maps can conservatively omit
 a fork when a defender is pinned. Threat detection requires a verified next-move
@@ -487,11 +489,22 @@ best alternative and both played/alternative verification must finish. Deeper
 combinations, strategic explanations and complete motif enumeration are not
 promised.
 
-When comparable completed search scores differ without a verified motif, the
-sentence is exactly `This line scores better in the current search`, accompanied
-by the line and limits. If no completed comparison exists, that claim is omitted.
-An incomplete verification reports `The tactic is unresolved within the analysis
-budget.` It never assigns a confident blunder label. CPU regressions in
+A score-only alternative requires comparable centipawn scores from a completed
+search iteration and an improvement of more than 100 centipawns (one pawn).
+At the default depth-three, 100,000-node shared budget, smaller placement-score
+differences are too sensitive to the search horizon to justify criticism. This
+is a conservative teaching margin, not a calibrated estimate of search error.
+Verified missed material or mate also permits a named alternative, without a
+centipawn threshold. Other mate-score differences alone do not trigger a claim.
+The sentence names the move: `The search prefers e3: this line scores better in
+the current search.` The CLI labels both continuations, for example `Line after
+e3: ...` and `Line after Nf3: ...`. `Explanation.line` always begins with the
+played move; `alternative_line` holds the named preference when present. Below
+the threshold, a resolved position without a tactical fact says `No tactical
+issue found within the analysis limits.` and includes those limits. If no
+completed comparison exists, the score claim is omitted. An incomplete
+verification reports `The tactic is unresolved within the analysis budget.`
+It never assigns a confident blunder label. CPU regressions in
 `tests/teaching.rs` use original hand-built positions, exact typed facts/templates,
 legal evidence replay, material/mate premises, negative motifs, deterministic
 budgets and special moves. `tests/cli.rs` checks the CLI with graphics disabled.

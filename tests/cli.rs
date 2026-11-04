@@ -1,11 +1,39 @@
 #[test]
+fn quiet_move_comparisons_name_alternatives_and_keep_both_lines() {
+    let opening = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    let output = cli().args(["--explain", opening, "g1f3"]).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        text.contains("No tactical issue found within the analysis limits."),
+        "{text}"
+    );
+    assert!(text.contains("Line after Nf3: Nf3"), "{text}");
+    assert!(
+        !text.contains("search prefers") && !text.contains("scores better"),
+        "{text}"
+    );
+    let fen = "3r3k/8/8/8/8/8/8/3Q2NK w - - 0 1";
+    let output = cli().args(["--explain", fen, "g1f3"]).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        text.contains("The search prefers Qxd8+: this line scores better in the current search."),
+        "{text}"
+    );
+    assert!(text.contains("Line after Qxd8+: Qxd8+"), "{text}");
+    assert!(text.contains("Line after Nf3: Nf3"), "{text}");
+    assert!(!text.contains("\nLine:"), "{text}");
+}
+
+#[test]
 fn explanations_are_cpu_only_and_validate_both_arguments() {
     let fen = "7k/8/5KQ1/8/8/8/8/8 w - - 0 1";
     let output = cli().args(["--explain", fen, "g6g7"]).output().unwrap();
     assert!(output.status.success(), "{output:?}");
     let text = String::from_utf8_lossy(&output.stdout);
     assert!(text.contains("Qg7# is checkmate."), "{text}");
-    assert!(text.contains("Line: Qg7#"), "{text}");
+    assert!(text.contains("Line after Qg7#: Qg7#"), "{text}");
     assert!(text.contains("nodes") && text.contains("depth"), "{text}");
     for (args, message) in [
         (vec!["--explain", fen], "--explain requires FEN and UCI"),

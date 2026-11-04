@@ -4,8 +4,13 @@ use super::{
     AnalysisLimits, Budget, Explanation, Fact, FactKind, add, direct, exchange, motifs, templates,
 };
 use crate::rules::{ChessState, GameStatus, LegalMove};
-use crate::search::{Analysis, Limits, Search};
+use crate::search::{Analysis, Limits, Score, Search};
 use std::sync::atomic::AtomicBool;
+
+// At the default depth-three budget, small placement differences are search
+// noise, not grounds for criticism. Require more than a pawn for score-only
+// preferences; verified missed tactics do not depend on this heuristic margin.
+const ALTERNATIVE_THRESHOLD_CP: i32 = 100;
 
 pub(super) fn explain(
     state: &ChessState,
@@ -39,19 +44,15 @@ pub(super) fn explain(
     {
         missed(best, &proof, played.as_ref(), &mut facts);
     }
-    let better = scores_better(&analysis, mv);
-    let line = if facts.is_empty() && better {
-        analysis.pv.clone()
-    } else {
-        played
-            .as_ref()
-            .map_or_else(|| vec![mv], |proof| proof.line.clone())
-    };
+    let alternative_line = preference(&analysis, mv, &facts);
+    let line = played
+        .as_ref()
+        .map_or_else(|| vec![mv], |proof| proof.line.clone());
     finish(
         state,
         mv,
         facts,
-        line,
+        (line, alternative_line),
         AnalysisLimits {
             budget,
             nodes: meter.nodes,
@@ -63,7 +64,6 @@ pub(super) fn explain(
             alternative_depth: analysis.completed_depth,
             unresolved: meter.unresolved,
         },
-        better,
     )
 }
 
@@ -71,19 +71,22 @@ fn finish(
     state: &ChessState,
     mv: LegalMove,
     facts: Vec<Fact>,
-    line: Vec<LegalMove>,
+    lines: (Vec<LegalMove>, Option<Vec<LegalMove>>),
     limits: AnalysisLimits,
-    better: bool,
 ) -> Explanation {
+    let (line, alternative_line) = lines;
     let mut sentences: Vec<_> = facts
         .iter()
         .map(|fact| templates::sentence(state, mv, fact))
         .collect();
-    if facts.is_empty() && better {
-        sentences.push("This line scores better in the current search".into());
+    if let Some(alternative) = &alternative_line {
+        let san = state.to_san(alternative[0]).expect("search alternative");
+        sentences.push(format!(
+            "The search prefers {san}: this line scores better in the current search."
+        ));
     }
     if sentences.is_empty() && !limits.unresolved {
-        sentences.push("No verified tactical motif was found.".into());
+        sentences.push("No tactical issue found within the analysis limits.".into());
     }
     if limits.unresolved {
         sentences.push("The tactic is unresolved within the analysis budget.".into());
@@ -92,6 +95,7 @@ fn finish(
         facts,
         sentences,
         line,
+        alternative_line,
         limits,
     }
 }
@@ -191,6 +195,22 @@ fn existing_mate(
     Some(false)
 }
 
+fn preference(analysis: &Analysis, mv: LegalMove, facts: &[Fact]) -> Option<Vec<LegalMove>> {
+    let best = analysis.pv.first()?;
+    if analysis.completed_depth == 0 || *best == mv {
+        return None;
+    }
+    if let Some(fact) = facts.iter().find(|fact| {
+        matches!(
+            fact.kind,
+            FactKind::MissedMate { .. } | FactKind::MissedMaterial { .. }
+        )
+    }) {
+        return Some(fact.line.clone());
+    }
+    scores_better(analysis, mv).then(|| analysis.pv.clone())
+}
+
 fn scores_better(analysis: &Analysis, mv: LegalMove) -> bool {
     let Some(best) = analysis.candidates.first() else {
         return false;
@@ -199,5 +219,46 @@ fn scores_better(analysis: &Analysis, mv: LegalMove) -> bool {
         .candidates
         .iter()
         .find(|candidate| candidate.pv.first() == Some(&mv))
-        .is_some_and(|played| best.score != played.score)
+        .is_some_and(|played| match (best.score, played.score) {
+            (Score::Centipawns(best), Score::Centipawns(played)) => {
+                i64::from(best) - i64::from(played) > i64::from(ALTERNATIVE_THRESHOLD_CP)
+            }
+            _ => false,
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::search::Candidate;
+
+    #[test]
+    fn score_only_preferences_require_more_than_a_pawn() {
+        let state = ChessState::initial();
+        let mv = state.parse_uci("g1f3").unwrap();
+        let best = state.parse_uci("e2e3").unwrap();
+        for (difference, expected) in [(0, false), (99, false), (100, false), (101, true)] {
+            let mut analysis = Analysis {
+                completed_depth: 3,
+                nodes: 1,
+                score: Score::Centipawns(difference),
+                pv: vec![best],
+                candidates: vec![
+                    Candidate {
+                        score: Score::Centipawns(difference),
+                        pv: vec![best],
+                    },
+                    Candidate {
+                        score: Score::Centipawns(0),
+                        pv: vec![mv],
+                    },
+                ],
+            };
+            assert_eq!(preference(&analysis, mv, &[]).is_some(), expected);
+            analysis.candidates.pop();
+            assert!(preference(&analysis, mv, &[]).is_none());
+            analysis.completed_depth = 0;
+            assert!(preference(&analysis, mv, &[]).is_none());
+        }
+    }
 }
