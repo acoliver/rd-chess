@@ -1,4 +1,6 @@
 mod pages;
+#[cfg(test)]
+mod readability_tests;
 mod study;
 pub(super) use study::StudyState;
 mod widgets;

@@ -676,6 +676,14 @@ in memory because this engine pin has no application store; the TODO names
 `feat/saved-games`. See the course documentation below for controls, storage
 limits and teaching-screen verification.
 
+Native menu and study panels use a shared alpha of 1.0 so the board cannot show
+through the text background. Locked lessons retain their `[locked]` marker and
+use a lighter grey tint. Disabled Next reads `Next [off]`; enabled Next reads
+`Next` and uses the enabled control colours. The status line appears on board
+screens, not on the title, setup or lesson/puzzle browsers. Unit tests calculate
+WCAG contrast from the actual display-linear panel and control colours: locked
+entries and enabled controls require 4.5:1, disabled controls require 3:1.
+
 See [the course format and runner contract](assets/lessons/README.md) and
 [the puzzle notice, CC0 licence statement and subset reproduction](assets/puzzles/README.md).
 The puzzle subset is 54,576 bytes, with 50 selections per target theme and

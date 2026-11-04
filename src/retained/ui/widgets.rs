@@ -11,6 +11,10 @@ use worldrunner::{
     },
 };
 
+// Opaque panels keep board colours out of browser text and control contrast.
+pub(super) const PANEL_ALPHA: f32 = 1.;
+const PANEL_COLOR: [f32; 4] = [0.025, 0.035, 0.055, PANEL_ALPHA];
+
 pub(super) struct NativeUi {
     pub world: World,
     pub fonts: FontBook,
@@ -115,7 +119,7 @@ impl NativeUi {
                 selected: [0.35, 0.9, 1., 1.],
                 hovered: [0.7, 0.85, 1., 1.],
                 pressed: [1., 0.5, 0.1, 1.],
-                disabled: [0.35, 0.35, 0.35, 1.],
+                disabled: [0.55, 0.55, 0.55, 1.],
                 ..UiStyle::default()
             },
         );
@@ -135,7 +139,7 @@ impl NativeUi {
         .map(|(position, uv)| UiVertex {
             position,
             uv,
-            color: [0.025, 0.035, 0.055, 0.96],
+            color: PANEL_COLOR,
         });
         let geometry = UiGeometry::new(vertices.to_vec(), vec![0, 1, 2, 2, 3, 0])?;
         self.world.add_component(

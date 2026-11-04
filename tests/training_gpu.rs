@@ -70,6 +70,36 @@ fn focus_pixels(image: &RgbaImage) -> usize {
         .filter(|p| p[0] > 160 && p[0] > p[1] && u16::from(p[1]) > u16::from(p[2]) + 35)
         .count()
 }
+fn assert_uniform_panel(image: &RgbaImage) {
+    // Sample gaps between rows over the board, as well as above it.
+    let samples = [
+        [150, 120],
+        [150, 180],
+        [300, 180],
+        [500, 180],
+        [200, 270],
+        [400, 270],
+        [600, 270],
+        [200, 366],
+        [400, 366],
+        [600, 366],
+    ];
+    let pixel = |[x, y]: [u32; 2]| {
+        let offset = ((y * image.viewport.width + x) * 4) as usize;
+        &image.pixels[offset..offset + 4]
+    };
+    let reference = pixel(samples[0]);
+    for point in samples {
+        assert!(
+            pixel(point)
+                .iter()
+                .zip(reference)
+                .all(|(&actual, &expected)| actual.abs_diff(expected) <= 1),
+            "panel at {point:?}: {:?}, reference {reference:?}",
+            pixel(point)
+        );
+    }
+}
 
 #[test]
 fn required_gpu_lessons_list_and_task_show_authored_highlight_pixels() {
@@ -90,6 +120,7 @@ fn required_gpu_lessons_list_and_task_show_authored_highlight_pixels() {
     }
     let list = capture_frame(&mut run, &queue, &inbox).unwrap();
     save(&list, "lessons-list.png");
+    assert_uniform_panel(&list);
     assert!(
         focus_pixels(&list) > 60,
         "unlocked lesson has visible native focus"

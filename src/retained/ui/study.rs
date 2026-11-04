@@ -158,6 +158,14 @@ impl GameUi {
                     .expect("button")
                     .enabled = enabled;
             }
+            self.native.set_text(
+                self.native.text_handle(widgets.controls[1]),
+                if state.controls[1] {
+                    "Next"
+                } else {
+                    "Next [off]"
+                },
+            )?;
             let active = matches!(screen, Screen::Lesson | Screen::Puzzle);
             self.native.world.set_active(
                 widgets.panel,

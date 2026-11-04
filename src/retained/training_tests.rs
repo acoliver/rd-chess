@@ -1,4 +1,45 @@
 #[test]
+fn status_is_hidden_on_browsers_and_shown_on_board_screens() {
+    let mut driver = fixture();
+    for screen in [
+        Screen::Title,
+        Screen::ComputerSetup,
+        Screen::Lessons,
+        Screen::Puzzles,
+    ] {
+        driver.transition(screen).unwrap();
+        assert!(driver.status_text().is_empty(), "status on {screen:?}");
+    }
+    for screen in [
+        Screen::Play,
+        Screen::Lesson,
+        Screen::Puzzle,
+        Screen::InGameMenu,
+        Screen::GameOver,
+    ] {
+        driver.transition(screen).unwrap();
+        assert_eq!(
+            driver.status_text(),
+            "White to move",
+            "status on {screen:?}"
+        );
+    }
+}
+
+#[test]
+fn locked_lessons_keep_their_marker_and_cannot_be_opened() {
+    let mut driver = fixture();
+    let state = driver.study_ui_state().unwrap();
+    assert!(state.lessons[0].1);
+    assert!(state.lessons[0].0.starts_with("[open]"));
+    assert!(!state.lessons[1].1);
+    assert!(state.lessons[1].0.starts_with("[locked]"));
+    driver.transition(Screen::Lessons).unwrap();
+    driver.training_action(MenuAction::Lesson(1)).unwrap();
+    assert_eq!(driver.screen(), Screen::Lessons);
+}
+
+#[test]
 fn puzzle_setup_delay_blocks_solver_and_escape_restores_game_camera() {
     let mut driver = fixture();
     let camera = driver.camera_pose();
@@ -32,7 +73,7 @@ fn puzzle_setup_delay_blocks_solver_and_escape_restores_game_camera() {
 use super::*;
 use crate::{
     CameraPreset,
-    retained::{RetainedBoard, viewer_options},
+    retained::{RetainedBoard, Screen, viewer_options},
     rules::ChessState,
 };
 use worldrunner::scene::{

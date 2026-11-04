@@ -87,6 +87,15 @@ impl BoardDriver {
             .collect()
     }
     pub fn status_text(&self) -> String {
+        if matches!(
+            self.screen(),
+            super::Screen::Title
+                | super::Screen::ComputerSetup
+                | super::Screen::Lessons
+                | super::Screen::Puzzles
+        ) {
+            return String::new();
+        }
         if let Some(result) = &self.menus.result {
             return result.clone();
         }
