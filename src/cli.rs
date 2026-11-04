@@ -12,6 +12,8 @@ pub struct Options {
     pub height: u32,
     pub seed: Option<u64>,
     pub moves: Option<String>,
+    pub review_moves: Option<String>,
+    pub review_fen: Option<String>,
     pub play: Option<chess3d::Side>,
     pub level: Option<u8>,
 }
@@ -28,6 +30,8 @@ impl Options {
             height: 960,
             seed: None,
             moves: None,
+            review_moves: None,
+            review_fen: None,
             play: None,
             level: None,
         };
@@ -51,6 +55,8 @@ impl Options {
                 "--height",
                 "--seed",
                 "--moves",
+                "--review-moves",
+                "--review-fen",
                 "--play",
                 "--level",
             ]
@@ -78,6 +84,8 @@ impl Options {
             "--height" => self.height = text.parse()?,
             "--seed" => self.seed = Some(text.parse()?),
             "--moves" => self.moves = Some(text),
+            "--review-moves" => self.review_moves = Some(text),
+            "--review-fen" => self.review_fen = Some(text),
             "--play" => {
                 self.play = Some(match text.as_str() {
                     "white" => chess3d::Side::Ivory,
@@ -116,7 +124,30 @@ impl Options {
         Ok(())
     }
 
+    fn validate_review(&self) -> Result<()> {
+        if self.review_fen.is_some() && self.review_moves.is_none() {
+            return Err("--review-fen requires --review-moves".into());
+        }
+        if self.review_moves.is_some()
+            && (self.moves.is_some()
+                || self.play.is_some()
+                || self.level.is_some()
+                || self.window
+                || self.capture.is_some()
+                || self.load.is_some()
+                || self.save.is_some()
+                || self.seed.is_some()
+                || self.view != "hero")
+        {
+            return Err(
+                "--review-moves cannot be combined with play, editor or rendering options".into(),
+            );
+        }
+        Ok(())
+    }
+
     fn validate(&self) -> Result<()> {
+        self.validate_review()?;
         self.validate_computer()?;
         if self.window && self.capture.is_some() {
             return Err("--capture and --window cannot be combined; run them separately".into());
@@ -165,6 +196,8 @@ fn print_help() {
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\
         --play chooses the human side against a computer; --seed also seeds its replies.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\
+        --review-moves \"e2e4 e7e5\" [--review-fen \"FEN\"] prints CPU-only neutral review.\n\
+        Review moments use the initial side to move; PGN --review is not available yet.\n\
         --save writes the current position before capture/window; camera orbit is not saved."
     );
 }
