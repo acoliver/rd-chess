@@ -18,6 +18,26 @@ import time
 from PIL import Image, ImageChops, ImageGrab, ImageStat
 
 DISPLAY = os.environ["DISPLAY"]
+CASES = {
+    "hero": {"view": "hero", "interaction": "camera"},
+    "overhead": {"view": "overhead"},
+    "title-to-friend": {"view": "overhead", "interaction": "title"},
+    "computer-level-1": {"view": "overhead", "interaction": "computer"},
+    "study": {"view": "hero", "load": Path(__file__).resolve().parents[1] / "assets/positions/study.json"},
+    "lineup": {"view": "lineup"},
+}
+
+
+class CaseProgress:
+    def __init__(self, name):
+        self.name = name
+        self.started = time.monotonic()
+
+    def elapsed(self):
+        return time.monotonic() - self.started
+
+    def __call__(self, label):
+        print(f"[window case={self.name} elapsed={self.elapsed():.2f}s] {label}", flush=True)
 
 
 def wait_for(predicate, label):
@@ -75,11 +95,29 @@ def close_request(window):
 
 
 def run_case(args, environment, name, view, load=None, interaction=None):
-    with tempfile.TemporaryDirectory(prefix="chess3d-window-data-") as data_dir:
-        return run_isolated_case(args, environment, name, view, data_dir, load, interaction)
+    progress = CaseProgress(name)
+    progress("start")
+    outcome = "failed"
+    try:
+        with tempfile.TemporaryDirectory(prefix="chess3d-window-data-") as data_dir:
+            result = run_isolated_case(args, environment, name, view, data_dir, load, interaction,
+                                       progress)
+        result["elapsed_seconds"] = round(progress.elapsed(), 3)
+        outcome = "passed"
+        return result
+    finally:
+        progress(f"end {outcome}")
 
 
-def run_isolated_case(args, environment, name, view, data_dir, load, interaction):
+def run_isolated_case(args, environment, name, view, data_dir, load, interaction, progress):
+    def wait(predicate, label):
+        progress(f"wait: {label}")
+        return wait_for(predicate, label)
+
+    def wait_exit(process, timeout, label):
+        progress(f"wait: {label}")
+        return process.wait(timeout=timeout)
+
     computer = interaction == "computer"
     output = args.output
     saved = output / f"{name}-position.json"
@@ -94,6 +132,7 @@ def run_isolated_case(args, environment, name, view, data_dir, load, interaction
     headless = dict(environment)
     for key in ["DISPLAY", "WAYLAND_DISPLAY", "WAYLAND_SOCKET"]:
         headless.pop(key, None)
+    progress("launch: headless reference capture")
     subprocess.run([str(args.binary), *common, "--capture", str(reference)],
                    env=headless, check=True, capture_output=True, timeout=60)
     expected = Image.open(reference).convert("RGB")
@@ -107,11 +146,12 @@ def run_isolated_case(args, environment, name, view, data_dir, load, interaction
         opponent = ["--play", "white", "--level", "1"] if computer else []
         if not computer and not load and view != "lineup" and interaction != "title":
             opponent = ["--moves", ""]
+        progress("launch: chess window")
         process = subprocess.Popen([str(args.binary), *common, *opponent, "--window", "--save", str(saved)],
                                    env=environment, stdout=log, stderr=log)
         try:
-            window = wait_for(lambda: xdo("search", "--pid", process.pid, "--name",
-                                         "^Chess3D", check=False), "chess window")
+            window = wait(lambda: xdo("search", "--pid", process.pid, "--name",
+                                     "^Chess3D", check=False), "chess window")
             xdo("windowmove", window, 0, 0)
             xdo("windowfocus", window)
 
@@ -133,11 +173,11 @@ def run_isolated_case(args, environment, name, view, data_dir, load, interaction
                     return image if (difference(expected.crop(outside), image.crop(outside)) <= 0.1
                                      and difference(expected, image) > 2) else None
 
-                title = wait_for(title_ready, "title menu over retained board")
+                title = wait(title_ready, "title menu over retained board")
                 title.save(output / f"{name}-title.png")
                 xdo("key", "--window", window, "Return")
                 title_controls.append("title Enter starts Play a friend")
-            initial = wait_for(lambda: matching(expected), "window matching headless chess capture")
+            initial = wait(lambda: matching(expected), "window matching headless chess capture")
             initial.save(output / f"{name}-initial.png")
             colors = initial.getcolors(2_000_000)
             assert colors and len(colors) > 1000, "missing textured chess content"
@@ -155,35 +195,39 @@ def run_isolated_case(args, environment, name, view, data_dir, load, interaction
             if view == "overhead" and not load:
                 moved_reference = output / f"{name}-e2e4-capture.png"
                 sequence = "e2e4 g8f6" if computer else "e2e4"
+                progress(f"launch: headless {sequence} capture")
                 subprocess.run([str(args.binary), *common, "--moves", sequence,
                                 "--capture", str(moved_reference)], env=headless,
                                check=True, capture_output=True, timeout=60)
                 # Engine-projected board-plane centers at this fixed 960x720 preset.
                 xdo("mousemove", "--window", window, 516, 538)
                 xdo("click", 1)
-                wait_for(lambda: difference(initial, screenshot()) > 0.01,
-                         "e2 legal-target highlights")
+                wait(lambda: difference(initial, screenshot()) > 0.01,
+                     "e2 legal-target highlights")
                 xdo("mousemove", "--window", window, 515, 395)
                 xdo("click", 1)
-                moved = wait_for(lambda: matching(Image.open(moved_reference).convert("RGB")),
-                                 f"click and reply {sequence} matching rules-driven capture")
+                moved = wait(lambda: matching(Image.open(moved_reference).convert("RGB")),
+                             f"click and reply {sequence} matching rules-driven capture")
                 moved.save(output / f"{name}-clicked-e2e4.png")
                 if interaction == "title":
+                    progress("close: first chess window")
                     close_request(window)
-                    assert process.wait(timeout=15) == 0
+                    assert wait_exit(process, 15, "first chess window exit") == 0
+                    progress("launch: relaunch chess window with saved data")
                     process = subprocess.Popen([str(args.binary), *common, "--window"],
                                                env=environment, stdout=log, stderr=log)
-                    window = wait_for(lambda: xdo("search", "--pid", process.pid, "--name",
-                                                 "^Chess3D", check=False), "relaunch window")
+                    window = wait(lambda: xdo("search", "--pid", process.pid, "--name",
+                                             "^Chess3D", check=False), "relaunch window")
                     xdo("windowmove", window, 0, 0)
                     xdo("windowfocus", window)
-                    wait_for(title_ready, "relaunch title menu")
+                    wait(title_ready, "relaunch title menu")
+                    progress("input: click title Continue")
                     xdo("mousemove", "--window", window, width // 2 - 196, height // 2 + 140)
                     xdo("click", 1)
-                    wait_for(lambda: matching(moved, 0), "Continue exact pre-relaunch pixels")
+                    wait(lambda: matching(moved, 0), "Continue exact pre-relaunch pixels")
                     records.append("relaunch Continue restores exact board pixels")
                 xdo("key", "--window", window, "u")
-                wait_for(lambda: matching(initial, 0), "U exact board undo")
+                wait(lambda: matching(initial, 0), "U exact board undo")
                 records += [f"click and reply {sequence} matches capture", "U exact board undo"]
             if interaction == "camera":
                 def changed(reference_image):
@@ -194,55 +238,65 @@ def run_isolated_case(args, environment, name, view, data_dir, load, interaction
                 xdo("mousedown", 1)
                 xdo("mousemove", "--window", window, 510, 350)
                 xdo("mouseup", 1)
-                dragged = wait_for(lambda: changed(initial), "drag changing chess pixels")
+                dragged = wait(lambda: changed(initial), "drag changing chess pixels")
                 dragged.save(output / f"{name}-dragged.png")
                 xdo("key", "--window", window, "r")
-                wait_for(lambda: matching(initial, 0), "R exact reset")
+                wait(lambda: matching(initial, 0), "R exact reset")
                 xdo("click", 4)
-                zoomed = wait_for(lambda: changed(initial), "wheel changing chess pixels")
+                zoomed = wait(lambda: changed(initial), "wheel changing chess pixels")
                 zoomed.save(output / f"{name}-zoomed.png")
                 xdo("key", "--window", window, "Home")
-                wait_for(lambda: matching(initial, 0), "Home exact reset")
+                wait(lambda: matching(initial, 0), "Home exact reset")
 
                 resized_reference = output / f"{name}-resized-capture.png"
+                progress("launch: headless 800x600 capture")
                 subprocess.run([str(args.binary), "--capture", str(resized_reference),
                                 "--view", view, "--width", "800", "--height", "600",
                                 "--data-dir", data_dir],
                                env=headless, check=True, capture_output=True, timeout=60)
                 xdo("windowsize", window, 800, 600)
-                resized = wait_for(lambda: matching(Image.open(resized_reference).convert("RGB")),
-                                   "resize matching 800x600 headless capture")
+                resized = wait(lambda: matching(Image.open(resized_reference).convert("RGB")),
+                               "resize matching 800x600 headless capture")
                 resized.save(output / f"{name}-resized.png")
                 xdo("windowunmap", window)
-                wait_for(lambda: not ImageGrab.grab(xdisplay=DISPLAY).getbbox(), "unmap")
+                wait(lambda: not ImageGrab.grab(xdisplay=DISPLAY).getbbox(), "unmap")
                 xdo("windowmap", window)
-                wait_for(lambda: matching(resized), "restored chess rendering")
+                wait(lambda: matching(resized), "restored chess rendering")
                 records = ["drag changes chess pixels", "wheel changes chess pixels",
                            "R exact reset", "Home exact reset", "800x600 resize matches capture",
                            "unmap/map restoration"]
                 xdo("windowfocus", window)
                 xdo("key", "--window", window, "Escape")
-                wait_for(lambda: difference(resized, screenshot()) > 2, "Escape opens game menu")
+                wait(lambda: difference(resized, screenshot()) > 2, "Escape opens game menu")
                 xdo("key", "--window", window, "Escape")
-                wait_for(lambda: matching(resized, 0), "Escape resumes board")
+                wait(lambda: matching(resized, 0), "Escape resumes board")
+                progress("close: chess window")
                 close_request(window)
                 records += ["Escape opens menu and resumes", "WM_DELETE_WINDOW clean exit"]
             else:
+                progress("close: chess window")
                 close_request(window)
                 records.append("WM_DELETE_WINDOW clean exit")
-            assert process.wait(timeout=15) == 0
+            assert wait_exit(process, 15, "chess window exit") == 0
             assert saved.read_bytes() == saved_bytes, "camera controls changed position save"
             return {"case": name, "view": view, "saved_pieces": len(position["pieces"]),
                     "rendered_pieces": 6 if view == "lineup" else len(position["pieces"]),
                     "capture_window_mean_absolute_error": difference(expected, initial),
                     "colors": len(colors), "controls": records, "exit": 0}
         except Exception:
+            progress("capture: failure screenshot")
             ImageGrab.grab(xdisplay=DISPLAY).save(output / f"{name}-failure.png")
             raise
         finally:
             if process.poll() is None:
+                progress("cleanup: terminate chess window")
                 process.terminate()
-                process.wait(timeout=10)
+                try:
+                    wait_exit(process, 10, "terminated chess window exit")
+                except subprocess.TimeoutExpired:
+                    progress("cleanup: kill chess window")
+                    process.kill()
+                    wait_exit(process, 5, "killed chess window exit")
 
 
 def main():
@@ -250,6 +304,8 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--xdotool", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--case", dest="cases", action="append", choices=CASES,
+                        help="run only this case (repeatable; default: all cases)")
     args = parser.parse_args()
     args.binary = args.binary.resolve()
     args.xdotool = args.xdotool.resolve()
@@ -258,16 +314,10 @@ def main():
     environment = dict(os.environ, DISPLAY=DISPLAY, WINIT_X11_SCALE_FACTOR="1")
     for key in ["WAYLAND_DISPLAY", "WAYLAND_SOCKET"]:
         environment.pop(key, None)
-    fixture = Path(__file__).resolve().parent.parent / "assets/positions/study.json"
-    results = [run_case(args, environment, "hero", "hero", interaction="camera"),
-               run_case(args, environment, "overhead", "overhead"),
-               run_case(args, environment, "title-to-friend", "overhead", interaction="title"),
-               run_case(args, environment, "computer-level-1", "overhead", interaction="computer"),
-               run_case(args, environment, "study", "hero", load=fixture),
-               run_case(args, environment, "lineup", "lineup")]
+    results = [run_case(args, environment, name, **CASES[name]) for name in (args.cases or CASES)]
     encoded = json.dumps(results, indent=2) + "\n"
     (args.output / "results.json").write_text(encoded)
-    print(encoded, end="")
+    print(encoded, end="", flush=True)
 
 
 if __name__ == "__main__":
