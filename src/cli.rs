@@ -116,8 +116,9 @@ fn print_help() {
         [--capture image.png | --window] [--view hero|overhead|lineup]\n\
         [--width px --height px] [--seed n]\n\
         Window and retained move capture require: cargo run -p chess3d --features viewer --\n\
-        Controls: left-drag orbit, wheel zoom, R/Home reset, Escape/close exit.\n\
-        --moves applies legal UCI moves from the initial game; no mouse play yet.\n\
+        Play: left click select/move, U/Backspace undo, R restart, Escape cancel/exit.\n\
+        View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\
+        --moves applies legal UCI moves from the initial game; --load is editor-only.\n\
         --save writes the current position before capture/window; camera orbit is not saved."
     );
 }

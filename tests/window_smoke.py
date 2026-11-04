@@ -127,6 +127,24 @@ def run_case(args, environment, name, view, load=None, controls=False):
                 assert position["seed"] == 342
             saved_bytes = saved.read_bytes()
             records = []
+            if view == "overhead" and not load:
+                moved_reference = output / f"{name}-e2e4-capture.png"
+                subprocess.run([str(args.binary), *common, "--moves", "e2e4",
+                                "--capture", str(moved_reference)], env=headless,
+                               check=True, capture_output=True, timeout=60)
+                # Engine-projected board-plane centers at this fixed 960x720 preset.
+                xdo("mousemove", "--window", window, 516, 538)
+                xdo("click", 1)
+                wait_for(lambda: difference(initial, screenshot()) > 0.01,
+                         "e2 legal-target highlights")
+                xdo("mousemove", "--window", window, 515, 395)
+                xdo("click", 1)
+                moved = wait_for(lambda: matching(Image.open(moved_reference).convert("RGB")),
+                                 "click e2-e4 matching rules-driven capture")
+                moved.save(output / f"{name}-clicked-e2e4.png")
+                xdo("key", "--window", window, "u")
+                wait_for(lambda: matching(initial, 0), "U exact board undo")
+                records += ["click e2-e4 matches capture", "U exact board undo"]
             if controls:
                 def changed(reference_image):
                     image = screenshot()

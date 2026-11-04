@@ -70,9 +70,9 @@ fn present(options: &cli::Options, position: &Position) -> Result<(), Box<dyn Er
     use chess3d::retained::{BoardDriver, RetainedBoard, capture_frame, viewer_options};
     use worldrunner::scene::viewer::RetainedHost;
     let mut driver = BoardDriver::default();
-    let (scene, preset) = if let Some(moves) = &options.moves {
+    let (scene, preset) = if options.load.is_none() && options.view != "lineup" {
         driver = BoardDriver::with_board(RetainedBoard::new(ChessState::initial(), position.seed)?);
-        for uci in moves.split_whitespace() {
+        for uci in options.moves.as_deref().unwrap_or("").split_whitespace() {
             driver.play_uci(uci)?;
         }
         (

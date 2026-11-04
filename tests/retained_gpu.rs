@@ -33,7 +33,6 @@ fn required_gpu_capture_moves_capture_castle_and_exact_undo() {
     }
     let moved = capture_frame(&mut run, &queue, &inbox).unwrap();
     assert_ne!(initial.pixels, moved.pixels);
-    assert_cli_capture(&moved.pixels);
     assert_eq!(
         run.host().accepted_generation(),
         13,
@@ -92,4 +91,29 @@ fn assert_cli_capture(expected: &[u8]) {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid UCI move 'e2e5'"));
     assert_eq!(std::fs::read(path).unwrap(), original);
+}
+
+#[test]
+fn playable_driver_and_cli_have_exact_matching_status_and_board_pixels() {
+    let board = RetainedBoard::new(ChessState::initial(), 342).unwrap();
+    let options = viewer_options(board.scene(), CameraPreset::Hero, [257, 193]);
+    let host = RetainedHost::with_preparation_limit(board.scene().clone(), options, 1).unwrap();
+    let mut driver = BoardDriver::with_board(board);
+    for uci in SEQUENCE.split_whitespace() {
+        driver.play_uci(uci).unwrap();
+    }
+    let queue = driver.queue();
+    let inbox = driver.captures();
+    assert_eq!(queue.borrow().len(), 13, "one object batch per rules move");
+    let mut run = host
+        .windowless(&mut driver)
+        .expect("GPU required, never skips");
+    let moved = capture_frame(&mut run, &queue, &inbox).unwrap();
+    assert_eq!(
+        run.host().accepted_generation(),
+        14,
+        "thirteen object batches plus status UI"
+    );
+    assert_cli_capture(&moved.pixels);
+    run.shutdown().unwrap();
 }

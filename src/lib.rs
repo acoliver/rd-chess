@@ -265,6 +265,7 @@ pub enum SceneBuildError {
 }
 
 mod geometry;
+mod marker_mesh;
 mod presentation;
 #[cfg(feature = "viewer")]
 pub mod retained;

@@ -4,14 +4,14 @@ An original procedural marble chess scene and position editor, built on the
 **Real Disunity** engine. The root Rust package and executable are `chess3d`.
 All meshes, marble textures, board geometry, camera presets and position documents
 are game-owned. Rendering goes through the engine's `worldrunner` facade; no
-engine implementation or third-party art is vendored here.
+engine implementation or third-party 3D art is vendored here.
 
 The scene/position editor accepts arbitrary board layouts in JSON. A separate
 CPU-only `rules` module now supplies validated playable chess states, legal moves,
 notation and outcomes. The CLI can apply legal UCI sequences from the initial
 game and capture their retained result. Arbitrary scene documents remain editor
-inputs, separate from rules authority. The window provides view controls only;
-interactive play and an opponent are not implemented.
+inputs, separate from rules authority. A window without `--load` or `--view lineup`
+starts local two-player play. There is no computer opponent yet.
 
 ## Independent checkout and build
 
@@ -31,7 +31,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`e57c866a81e3a14a08b6997c8ae1b5def0c11e97` from
+`c1f2802891c0b89ff230ffed9f4d6c65482a72a9` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -95,9 +95,15 @@ seeded marble remain procedural source assets, not copied image textures.
   and the two files are not a single transaction.
 - Inspection/save/load need no GPU. Captures require a functioning graphics
   adapter; Mesa lavapipe is a supported software Vulkan device.
-- Left-drag orbits, wheel zooms, R/Home resets the exact preset, Escape exits.
+- Left click selects a side-to-move piece and highlights its legal targets.
+  Click a target to move, the selected piece or outside the board to deselect,
+  or another friendly piece to switch selection. An illegal board target does
+  nothing. A press moving beyond six physical pixels orbits instead of clicking;
+  wheel zooms and Home restores the preset. U/Backspace undoes one ply; R restarts
+  the game and resets the camera. Escape cancels selection/promotion first, then
+  exits. Loaded editor and lineup views retain R/Home reset and Escape exit.
   Resize and unmap/remap affect presentation only; camera changes never rewrite
-  the position. `--capture` and `--window` cannot be combined.
+  the saved position. `--capture` and `--window` cannot be combined.
 
 ## Retained board and game test controls
 
@@ -118,15 +124,32 @@ those resident mesh/material tables. Capture and castling each publish one
 Promotion replaces the body mesh/material reference and adds the reserved eye
 when needed. No mesh or texture generator is called during these edits.
 
-For `--moves`, the native `BoardDriver` owns the rules board and identity mapping
-throughout the session. Editor scenes have no rules game. The driver submits one
-queued transaction per update. A `ViewerError::BackPressure` leaves that
-transaction at the queue head for a later
-update; other errors end the run. Desktop viewing uses `RetainedHost::run` and
-captures use the same driver's `RetainedHost::windowless` session. The bounded
-windowless test pump waits for the requested accepted generation's capture event;
-it is not run from an event-loop callback. Orbit, zoom, reset and resize stay
-engine-owned, and left-drag still orbits. Mouse moves and picking belong to P4.
+The native `BoardDriver` owns the rules board and identity mapping throughout
+play and `--moves` captures. Editor scenes have no rules game. The driver submits
+one queued move transaction per update. A `ViewerError::BackPressure` leaves it
+at the queue head; other errors end the run. Desktop viewing uses
+`RetainedHost::run`; captures use the same driver's windowless session. The bounded
+capture test pump drains driver changes before requesting the accepted generation.
+It never runs from an event-loop callback.
+
+Square picking uses the published engine camera's screen ray and the Z=0.05 m
+board plane, with physical top-left pixels. Board clicks wait for pending edits
+to be presented. Overhead is the readable play preset (`--view overhead`); hero
+view uses the same plane and does not yet pick piece silhouettes. Input wiring
+calls the engine's `OrbitCamera`, rather than implementing camera math in chess.
+Highlights share one resident ring mesh and reserved per-square object identities.
+A move removes its highlights in the same object batch as the pieces.
+
+One native UI world owns status text and the promotion choices. `UiRouter` routes
+four choice controls under a modal root before board input; its consumed flag
+prevents a choice click from reaching the board. Escape cancels promotion without
+committing a move. Text is extracted through the engine and submitted with
+`RetainedUpdate::Ui` only when status, dialog visibility or viewport changes.
+The bundled unmodified Space Mono font is licensed under SIL OFL 1.1; its notice
+and license are in `assets/fonts/OFL.txt`. No game-owned text renderer is used.
+Status names check, mate, stalemate, automatic draw reasons and available
+threefold/fifty-move claims. Claim buttons, resignation and agreed draws belong
+to the later play menus; the board stops on rules-core terminal results.
 
 With the viewer feature, `tests/retained.rs` checks exact object edit sets,
 identity-preserving undo, resource-table storage reuse and admission pressure.
@@ -135,7 +158,14 @@ capture, captures the changed frame, undoes every move and requires exact initia
 pixel equality and restored object identities. Missing devices fail even when
 `CHESS3D_REQUIRE_GPU` is unset. On macOS run GPU tests with `WGPU_BACKEND=metal`
 through the shared rd-stranded AquaJob launcher, not a visible window.
-Real-window orbit/reset/resize verification remains pending for this pin update.
+`tests/interaction.rs` drives synthetic retained pointer/key observations through
+selection, illegal clicks, orbit cancellation, promotion, undo/restart and status.
+`tests/interaction_gpu.rs` plays synthetic clicks through the windowless driver,
+asserting status/dialog pixel regions and changed board pixels. It also checks
+that unchanged status is not resubmitted and a move uses one object batch plus
+one status update. The Xvfb smoke retains orbit/reset/resize and adds a click
+move compared to an exact rules-driven reference, followed by undo. That
+Linux real-window smoke is run by the gate, not on the macOS desktop.
 
 ## Legal chess rules
 

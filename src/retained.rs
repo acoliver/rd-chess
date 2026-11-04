@@ -1,4 +1,5 @@
 //! Game-owned identities and object-only transactions over resident chess assets.
+#![deny(clippy::too_many_lines, clippy::too_many_arguments)]
 use crate::{
     Position, SceneBuildError, render_scene,
     rules::{ChessState, MoveError},
@@ -18,6 +19,7 @@ pub struct PieceObjects {
 
 pub struct RetainedBoard {
     game: ChessState,
+    initial: ChessState,
     seed: u64,
     scene: RenderScene,
     identities: BTreeMap<String, PieceObjects>,
@@ -57,6 +59,7 @@ impl RetainedBoard {
             })
             .collect();
         Ok(Self {
+            initial: game.clone(),
             game,
             seed,
             scene,
@@ -83,6 +86,23 @@ impl RetainedBoard {
         let chess_move = self.game.parse_uci(uci)?;
         self.game.play(chess_move)?;
         Ok(self.synchronize())
+    }
+
+    pub fn game(&self) -> &ChessState {
+        &self.game
+    }
+
+    pub fn play(
+        &mut self,
+        chess_move: crate::rules::LegalMove,
+    ) -> Result<Vec<SceneObjectEdit>, MoveError> {
+        self.game.play(chess_move)?;
+        Ok(self.synchronize())
+    }
+
+    pub fn restart(&mut self) -> Vec<SceneObjectEdit> {
+        self.game = self.initial.clone();
+        self.synchronize()
     }
 
     pub fn undo(&mut self) -> Result<Vec<SceneObjectEdit>, MoveError> {
@@ -125,4 +145,10 @@ impl RetainedBoard {
 }
 
 mod driver;
-pub use driver::{BoardDriver, CaptureInbox, TransactionQueue, capture_frame, viewer_options};
+mod host;
+mod interaction;
+mod markers;
+mod status;
+mod ui;
+pub use driver::{BoardDriver, CaptureInbox, InputInbox, TransactionQueue};
+pub use host::{capture_frame, viewer_options};

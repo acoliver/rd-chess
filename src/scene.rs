@@ -41,6 +41,7 @@ fn build_render_scene(
     meshes.push(scene_mesh(&board_frame_mesh()));
     meshes.push(scene_mesh(&stretch_detail(knight_eye_mesh())));
     meshes.push(scene_mesh(&board_inlay_mesh()));
+    meshes.push(scene_mesh(&crate::marker_mesh::marker_mesh()));
     let textures = [
         texture(512, 512, board_albedo(position.seed, 512)),
         texture(
