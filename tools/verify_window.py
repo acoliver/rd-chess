@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Run the original real-window controls harness on isolated Xvfb :100.
+"""Run the original real-window controls harness on an isolated Xvfb display.
 
 Missing window/GPU prerequisites fail, never skip. Does not install packages or
-use the desktop display. Keep :100 exclusive for this bounded smoke test.
+use the desktop display. Pick a free server number starting at :100.
 """
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import importlib.util
 import os
 from pathlib import Path
@@ -41,19 +42,27 @@ def run(args):
     output = args.output.resolve()
     if output.exists() and any(output.iterdir()):
         raise ValueError("--output must be empty; previous window evidence is preserved")
+    output.mkdir(parents=True, exist_ok=True)
+    xvfb_log = output / "xvfb.log"
     environment = dict(os.environ, VK_DRIVER_FILES=str(icd), CHESS3D_REQUIRE_GPU="1", LP_NUM_THREADS="2")
     for key in ("DISPLAY", "WAYLAND_DISPLAY", "WAYLAND_SOCKET", "VK_ICD_FILENAMES",
                 "WGPU_ADAPTER_NAME", "WGPU_BACKEND", "MESA_VK_DEVICE_SELECT",
                 "MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE"):
         environment.pop(key, None)
-    command = [tools["xvfb-run"], "--server-num=100", "--server-args=-screen 0 1600x1200x24 -nolisten tcp",
+    command = [tools["xvfb-run"], "--auto-servernum", "--server-num=100", f"--error-file={xvfb_log}",
+               "--server-args=-screen 0 1600x1200x24 -nolisten tcp",
                sys.executable, str(ROOT / "tests/window_smoke.py"), "--binary", str(binary),
                "--xdotool", tools["xdotool"], "--output", str(output)]
     process = subprocess.Popen(command, cwd=ROOT, env=environment, start_new_session=True)
     try:
         status = process.wait(timeout=300)
         if status:
-            raise ValueError(f"real-window harness failed with exit {status}")
+            diagnostic = f"real-window harness failed with exit {status}"
+            if xvfb_log.is_file():
+                with xvfb_log.open(errors="replace") as stream:
+                    tail = "".join(deque(stream, maxlen=20))
+                diagnostic += f"\n{xvfb_log} (last 20 lines):\n{tail}"
+            raise ValueError(diagnostic)
     finally:
         try:
             os.killpg(process.pid, signal.SIGTERM)

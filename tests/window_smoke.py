@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Opt-in real Chess3D pixel/input smoke on an exclusive Xvfb :100 (never desktop).
+"""Opt-in real Chess3D pixel/input smoke on an isolated Xvfb display (never desktop).
 
 Requires Pillow, xdotool, libX11 and a chess3d binary built with --features viewer.
-The caller starts Xvfb :100 and chooses Vulkan ICD/library paths. Each window is
-selected by child PID. Capture references exercise the same real game scene.
+The caller starts Xvfb, sets DISPLAY and chooses Vulkan ICD/library paths. Each
+window is selected by child PID. Capture references exercise the same real game scene.
 """
 
 import argparse
@@ -16,7 +16,7 @@ import time
 
 from PIL import Image, ImageChops, ImageGrab, ImageStat
 
-DISPLAY = ":100"
+DISPLAY = os.environ["DISPLAY"]
 
 
 def wait_for(predicate, label):
