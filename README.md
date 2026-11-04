@@ -146,6 +146,22 @@ at the queue head; other errors end the run. Desktop viewing uses
 capture test pump drains driver changes before requesting the accepted generation.
 It never runs from an event-loop callback.
 
+The capture pump and windowless computer-reply wait use `retained::ProgressPump`.
+Accepted-generation changes, preparation-count changes, submitted ordinary frames,
+and capture acceptance/completion reset its 180-second stall clock. Calling `frame`
+without submitting or polling pending work does not count as progress. The stall
+window allows a single pipeline compile on a heavily loaded software-GPU host:
+gate result `071fb52630bf` exceeded the former 60-second capture limit while the
+same suites grew from 25-36 seconds passing to 81-127 seconds under load.
+A separate 1,200-second total bound catches endless progress, allowing over 30
+times the passing suite duration. Neither bound restarts between preparation
+and capture. Failures report the awaited operation, unchanged progress values,
+and stall/total elapsed time. Checks run between engine calls; they cannot
+interrupt synchronous engine work. CPU-only computer test waits share the same
+watchdog, observing whether a result remains pending. Production computer search
+budgets are unchanged. Fake-clock unit tests cover slow progress, stalls, each
+progress signal, and the independent hard bound without sleeping or a GPU.
+
 Board clicks query the engine's last presented geometry at physical top-left
 pixels. The filter includes piece bodies, knight eyes, the board and visible
 target rings, excluding the studio floor and decorative frame/inlay. Body and eye

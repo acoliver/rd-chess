@@ -7,7 +7,9 @@ window is selected by child PID. Capture references exercise the same real game 
 """
 
 import argparse
+from collections import deque
 import ctypes as c
+from functools import partial
 import json
 import os
 from pathlib import Path
@@ -17,16 +19,42 @@ import time
 from PIL import Image, ImageChops, ImageGrab, ImageStat
 
 DISPLAY = os.environ["DISPLAY"]
+STALL_TIMEOUT_SECONDS = 180
 
 
-def wait_for(predicate, label):
-    deadline = time.monotonic() + 30
+def wait_for(predicate, label, *, process, case, output, started):
+    def progress(state):
+        line = (f"window progress: case={case} step={label} state={state} "
+                f"elapsed={time.monotonic() - started:.2f}s")
+        print(line, flush=True)
+        with (output / "progress.log").open("a") as stream:
+            stream.write(line + "\n")
+
+    def check_running():
+        status = process.poll()
+        if status is not None:
+            log_path = output / f"{case}.log"
+            with log_path.open(errors="replace") as stream:
+                tail = "".join(deque(stream, maxlen=20))
+            raise AssertionError(
+                f"Chess process exited with code {status} waiting for {label} "
+                f"(case {case})\n{log_path} (last 20 lines):\n{tail}")
+
+    deadline = time.monotonic() + STALL_TIMEOUT_SECONDS
+    progress("waiting")
     while time.monotonic() < deadline:
-        result = predicate()
+        check_running()
+        try:
+            result = predicate()
+        finally:
+            check_running()
         if result:
+            progress("ready")
             return result
         time.sleep(0.05)
-    raise AssertionError(f"Timed out waiting for {label}")
+    check_running()
+    raise AssertionError(
+        f"Timed out waiting for {label} (case {case}) after {STALL_TIMEOUT_SECONDS}s without progress")
 
 
 def difference(left, right):
@@ -74,6 +102,7 @@ def close_request(window):
 
 
 def run_case(args, environment, name, view, load=None, interaction=None):
+    started = time.monotonic()
     computer = interaction == "computer"
     output = args.output
     saved = output / f"{name}-position.json"
@@ -102,9 +131,10 @@ def run_case(args, environment, name, view, load=None, interaction=None):
             opponent = ["--moves", ""]
         process = subprocess.Popen([str(args.binary), *common, *opponent, "--window", "--save", str(saved)],
                                    env=environment, stdout=log, stderr=log)
+        wait = partial(wait_for, process=process, case=name, output=output, started=started)
         try:
-            window = wait_for(lambda: xdo("search", "--pid", process.pid, "--name",
-                                         "^Chess3D", check=False), "chess window")
+            window = wait(lambda: xdo("search", "--pid", process.pid, "--name",
+                                      "^Chess3D", check=False), "chess window")
             xdo("windowmove", window, 0, 0)
             xdo("windowfocus", window)
 
@@ -126,11 +156,11 @@ def run_case(args, environment, name, view, load=None, interaction=None):
                     return image if (difference(expected.crop(outside), image.crop(outside)) <= 0.1
                                      and difference(expected, image) > 2) else None
 
-                title = wait_for(title_ready, "title menu over retained board")
+                title = wait(title_ready, "title menu over retained board")
                 title.save(output / f"{name}-title.png")
                 xdo("key", "--window", window, "Return")
                 title_controls.append("title Enter starts Play a friend")
-            initial = wait_for(lambda: matching(expected), "window matching headless chess capture")
+            initial = wait(lambda: matching(expected), "window matching headless chess capture")
             initial.save(output / f"{name}-initial.png")
             colors = initial.getcolors(2_000_000)
             assert colors and len(colors) > 1000, "missing textured chess content"
@@ -154,15 +184,15 @@ def run_case(args, environment, name, view, load=None, interaction=None):
                 # Engine-projected board-plane centers at this fixed 960x720 preset.
                 xdo("mousemove", "--window", window, 516, 538)
                 xdo("click", 1)
-                wait_for(lambda: difference(initial, screenshot()) > 0.01,
-                         "e2 legal-target highlights")
+                wait(lambda: difference(initial, screenshot()) > 0.01,
+                     "e2 legal-target highlights")
                 xdo("mousemove", "--window", window, 515, 395)
                 xdo("click", 1)
-                moved = wait_for(lambda: matching(Image.open(moved_reference).convert("RGB")),
-                                 f"click and reply {sequence} matching rules-driven capture")
+                moved = wait(lambda: matching(Image.open(moved_reference).convert("RGB")),
+                             f"click and reply {sequence} matching rules-driven capture")
                 moved.save(output / f"{name}-clicked-e2e4.png")
                 xdo("key", "--window", window, "u")
-                wait_for(lambda: matching(initial, 0), "U exact board undo")
+                wait(lambda: matching(initial, 0), "U exact board undo")
                 records += [f"click and reply {sequence} matches capture", "U exact board undo"]
             if interaction == "camera":
                 def changed(reference_image):
@@ -173,36 +203,36 @@ def run_case(args, environment, name, view, load=None, interaction=None):
                 xdo("mousedown", 1)
                 xdo("mousemove", "--window", window, 510, 350)
                 xdo("mouseup", 1)
-                dragged = wait_for(lambda: changed(initial), "drag changing chess pixels")
+                dragged = wait(lambda: changed(initial), "drag changing chess pixels")
                 dragged.save(output / f"{name}-dragged.png")
                 xdo("key", "--window", window, "r")
-                wait_for(lambda: matching(initial, 0), "R exact reset")
+                wait(lambda: matching(initial, 0), "R exact reset")
                 xdo("click", 4)
-                zoomed = wait_for(lambda: changed(initial), "wheel changing chess pixels")
+                zoomed = wait(lambda: changed(initial), "wheel changing chess pixels")
                 zoomed.save(output / f"{name}-zoomed.png")
                 xdo("key", "--window", window, "Home")
-                wait_for(lambda: matching(initial, 0), "Home exact reset")
+                wait(lambda: matching(initial, 0), "Home exact reset")
 
                 resized_reference = output / f"{name}-resized-capture.png"
                 subprocess.run([str(args.binary), "--capture", str(resized_reference),
                                 "--view", view, "--width", "800", "--height", "600"],
                                env=headless, check=True, capture_output=True, timeout=60)
                 xdo("windowsize", window, 800, 600)
-                resized = wait_for(lambda: matching(Image.open(resized_reference).convert("RGB")),
-                                   "resize matching 800x600 headless capture")
+                resized = wait(lambda: matching(Image.open(resized_reference).convert("RGB")),
+                               "resize matching 800x600 headless capture")
                 resized.save(output / f"{name}-resized.png")
                 xdo("windowunmap", window)
-                wait_for(lambda: not ImageGrab.grab(xdisplay=DISPLAY).getbbox(), "unmap")
+                wait(lambda: not ImageGrab.grab(xdisplay=DISPLAY).getbbox(), "unmap")
                 xdo("windowmap", window)
-                wait_for(lambda: matching(resized), "restored chess rendering")
+                wait(lambda: matching(resized), "restored chess rendering")
                 records = ["drag changes chess pixels", "wheel changes chess pixels",
                            "R exact reset", "Home exact reset", "800x600 resize matches capture",
                            "unmap/map restoration"]
                 xdo("windowfocus", window)
                 xdo("key", "--window", window, "Escape")
-                wait_for(lambda: difference(resized, screenshot()) > 2, "Escape opens game menu")
+                wait(lambda: difference(resized, screenshot()) > 2, "Escape opens game menu")
                 xdo("key", "--window", window, "Escape")
-                wait_for(lambda: matching(resized, 0), "Escape resumes board")
+                wait(lambda: matching(resized, 0), "Escape resumes board")
                 close_request(window)
                 records += ["Escape opens menu and resumes", "WM_DELETE_WINDOW clean exit"]
             else:
