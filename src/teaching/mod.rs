@@ -13,7 +13,9 @@ use crate::{PieceKind, Side, Square};
 mod board;
 mod direct;
 mod exchange;
+mod material;
 mod motifs;
+mod presentation;
 mod review;
 mod templates;
 mod verify;
@@ -151,6 +153,20 @@ pub struct AnalysisLimits {
     pub verified_depth: u8,
     pub alternative_depth: u8,
     pub unresolved: bool,
+}
+
+impl AnalysisLimits {
+    /// Developer diagnostics, separate from learner-facing sentences.
+    pub fn diagnostics(self) -> [String; 2] {
+        [
+            format!(
+                "Analysis limits: {}/{} nodes; verified depth {}, alternative depth {}; requested depth {} (cap 6), verification/SEE extension cap 8, alternative recursion cap 128; unresolved {}.",
+                self.nodes, self.budget.nodes, self.verified_depth,
+                self.alternative_depth, self.budget.depth, self.unresolved
+            ),
+            "Exchange facts cover legal captures on one square, with either side allowed to stop. Finite search does not establish a game-theoretic result.".into(),
+        ]
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

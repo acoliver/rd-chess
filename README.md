@@ -438,12 +438,29 @@ For a manual check without a graphics adapter:
 cargo run --locked -j4 -- --explain '7k/8/5KQ1/8/8/8/8/8 w - - 0 1' g6g7
 ```
 
-`--explain <fen> <uci>` is exclusive with other options. It prints each sentence,
-its SAN evidence, the principal line and the analysis limits before returning,
-without preparing a scene or opening a window. The evidence for every fact starts
-in the supplied position. Missed opportunities start with the alternative move;
-other facts start with the played move. `sentences` follows `facts` in order,
-then appends any neutral sentence or analysis warning.
+`--explain <fen> <uci>` prints learner sentences, their SAN evidence and the
+principal line without preparing a scene or opening a window. The optional
+`--explain-verbose` flag adds developer diagnostics from `Explanation.limits`:
+node counts, depths, caps and exchange scope. No other options may accompany
+`--explain`. The evidence for every fact starts in the supplied position.
+Missed opportunities start with the alternative move; other facts start with
+the played move. `sentences` follows the selected `facts` in order, then appends
+any neutral sentence and at most one short caveat.
+
+Presentation precedence is mate > winning tactic (fork/pin/skewer/discovered) >
+hanging/exchange > threat > check > castling/promotion notes. This orders the
+facts without discarding independent information. Subsumption requires the same
+evidence line or a direct-move prefix: mate covers that line, a winning motif
+covers its material threat, and a king fork or discovered check covers the
+standalone check. Alternatives with a different first move remain independent.
+Captures and promotion notes describe distinct board changes and are retained
+unless mate covers them. Each retained fact keeps its original verification line.
+
+Material sentences name a piece only when the line gains exactly that captured
+piece without losing material or promoting. Other gains and losses use net pawn
+values rounded to at most one decimal, for example `wins about 2.2 pawns` for a
+knight captured at the cost of a pawn. Numeric material fields retain their
+original units for programs; learner sentences never use centipawns.
 
 Supported facts are captures with actual victim squares and material changes
 (including en passant and capture promotions), check/mate, hanging pieces,
@@ -501,10 +518,14 @@ the current search.` The CLI labels both continuations, for example `Line after
 e3: ...` and `Line after Nf3: ...`. `Explanation.line` always begins with the
 played move; `alternative_line` holds the named preference when present. Below
 the threshold, a resolved position without a tactical fact says `No tactical
-issue found within the analysis limits.` and includes those limits. If no
-completed comparison exists, the score claim is omitted. An incomplete
-verification reports `The tactic is unresolved within the analysis budget.`
-It never assigns a confident blunder label. CPU regressions in
+issue found within the analysis limits.` If no completed comparison exists,
+the score claim is omitted. A nonterminal material line or search preference
+adds a short horizon caveat, for example `Checked 3 moves ahead.` Here moves
+counts individual turns (plies), including the supplied move, not move pairs.
+Terminal material lines and direct facts do not need that caveat. Incomplete
+analysis instead reports `The search could not settle this line.` It never
+assigns a confident blunder label. Detailed limits remain available through
+`limits.diagnostics()` and `--explain-verbose`. CPU regressions in
 `tests/teaching.rs` use original hand-built positions, exact typed facts/templates,
 legal evidence replay, material/mate premises, negative motifs, deterministic
 budgets and special moves. `tests/cli.rs` checks the CLI with graphics disabled.

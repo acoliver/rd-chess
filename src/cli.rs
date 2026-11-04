@@ -26,11 +26,12 @@ pub struct Options {
     pub play: Option<chess3d::Side>,
     pub level: Option<u8>,
     pub explain: Option<(String, String)>,
+    pub explain_verbose: bool,
 }
 
 impl Options {
-    pub fn parse() -> Result<Option<Self>> {
-        let mut options = Self {
+    fn initial() -> Self {
+        Self {
             load: None,
             save: None,
             capture: None,
@@ -43,7 +44,12 @@ impl Options {
             play: None,
             level: None,
             explain: None,
-        };
+            explain_verbose: false,
+        }
+    }
+
+    pub fn parse() -> Result<Option<Self>> {
+        let mut options = Self::initial();
         let mut args = std::env::args_os().skip(1);
         while let Some(arg) = args.next() {
             let flag = arg.to_string_lossy();
@@ -53,6 +59,13 @@ impl Options {
             }
             if flag == "--explain" {
                 options.explain = Some(explanation_args(&mut args)?);
+                continue;
+            }
+            if flag == "--explain-verbose" {
+                if options.explain_verbose {
+                    return Err("--explain-verbose may only be specified once".into());
+                }
+                options.explain_verbose = true;
                 continue;
             }
             if flag == "--window" {
@@ -134,8 +147,15 @@ impl Options {
     }
 
     fn validate(&self) -> Result<()> {
-        if self.explain.is_some() && std::env::args_os().len() != 4 {
-            return Err("--explain cannot be combined with other arguments".into());
+        if self.explain_verbose && self.explain.is_none() {
+            return Err("--explain-verbose requires --explain".into());
+        }
+        if self.explain.is_some()
+            && std::env::args_os().len() != 4 + usize::from(self.explain_verbose)
+        {
+            return Err(
+                "--explain cannot be combined with other arguments except --explain-verbose".into(),
+            );
         }
         self.validate_computer()?;
         if self.window && self.capture.is_some() {
@@ -184,7 +204,8 @@ fn print_help() {
         Play: left click select/move, U/Backspace undo, R restart, Escape cancel/menu (editor: exit).\n\
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\
         --play chooses the human side against a computer; --seed also seeds its replies.\n\
-        --explain <fen> <uci> prints a CPU-only verified explanation (exclusive).\n\
+        --explain <fen> <uci> prints a CPU-only verified explanation.\n\
+        --explain-verbose adds developer diagnostics; no other options may accompany --explain.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\
         --save writes the current position before capture/window; camera orbit is not saved."
     );

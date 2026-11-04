@@ -75,6 +75,7 @@ fn finish(
     limits: AnalysisLimits,
 ) -> Explanation {
     let (line, alternative_line) = lines;
+    let facts = super::presentation::select(state, facts);
     let mut sentences: Vec<_> = facts
         .iter()
         .map(|fact| templates::sentence(state, mv, fact))
@@ -89,7 +90,9 @@ fn finish(
         sentences.push("No tactical issue found within the analysis limits.".into());
     }
     if limits.unresolved {
-        sentences.push("The tactic is unresolved within the analysis budget.".into());
+        sentences.push("The search could not settle this line.".into());
+    } else if horizon_matters(state, &facts, alternative_line.as_deref()) {
+        sentences.push(format!("Checked {} moves ahead.", limits.verified_depth));
     }
     Explanation {
         facts,
@@ -98,6 +101,28 @@ fn finish(
         alternative_line,
         limits,
     }
+}
+
+fn horizon_matters(state: &ChessState, facts: &[Fact], alternative: Option<&[LegalMove]>) -> bool {
+    let lines = facts.iter().filter_map(|fact| {
+        matches!(
+            fact.kind,
+            FactKind::Fork { .. }
+                | FactKind::Pin { .. }
+                | FactKind::Skewer { .. }
+                | FactKind::DiscoveredAttack { .. }
+                | FactKind::MaterialThreat { .. }
+                | FactKind::MissedMaterial { .. }
+        )
+        .then_some(fact.line.as_slice())
+    });
+    lines.chain(alternative).any(|line| {
+        let mut after = state.clone();
+        for &mv in line {
+            after.play(mv).expect("verified horizon line");
+        }
+        matches!(after.status(), GameStatus::Ongoing { .. })
+    })
 }
 
 fn alternative(state: &ChessState, meter: &mut Meter) -> Analysis {

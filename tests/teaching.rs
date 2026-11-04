@@ -4,6 +4,9 @@ mod alternatives;
 #[path = "teaching/forks.rs"]
 mod forks;
 
+#[path = "teaching/learner.rs"]
+mod learner;
+
 #[test]
 fn sound_opening_knight_move_has_no_negative_claim() {
     let state = ChessState::initial();
@@ -35,7 +38,7 @@ fn unresolved_forks_do_not_get_a_tactical_claim() {
             result
                 .sentences
                 .iter()
-                .any(|text| text == "The tactic is unresolved within the analysis budget.")
+                .any(|text| text == "The search could not settle this line.")
         );
         assert!(
             result
@@ -75,7 +78,7 @@ fn discovered_attack_material_threat_and_missed_material_have_exact_facts() {
             target: square("e7"),
             piece: PieceKind::Rook,
         },
-        "Bh5+ uncovers the rook on e1 against e7; the verified line wins material.",
+        "Bh5+ uncovers the rook on e1 against e7 and wins a queen in this line.",
     );
     let fork = explain(tactical_cases()[0].0, "c5e6");
     assert_fact(
@@ -84,12 +87,13 @@ fn discovered_attack_material_threat_and_missed_material_have_exact_facts() {
             attacker: square("e6"),
             targets: vec![square("c7"), square("g7")],
         },
-        "Ne6+: the knight forks the king on c7 and the queen on g7; the verified line wins the queen on g7.",
+        "Ne6+ forks the king on c7 and the queen on g7 and wins a queen in this line.",
     );
-    assert_fact(
-        &fork,
-        &FactKind::MaterialThreat { gain: 950 },
-        "Ne6+ threatens material next move; the verified line wins 950 centipawns.",
+    assert!(
+        !fork
+            .facts
+            .iter()
+            .any(|fact| matches!(fact.kind, FactKind::MaterialThreat { .. } | FactKind::Check))
     );
     let fen = "3r3k/8/8/8/8/8/8/3Q2K1 w - - 0 1";
     let missed = explain(fen, "d1d4");
@@ -100,7 +104,7 @@ fn discovered_attack_material_threat_and_missed_material_have_exact_facts() {
             alternative: state.parse_uci("d1d8").unwrap(),
             gain: 500,
         },
-        "Qd4+ misses Qxd8+; its verified line wins 500 centipawns.",
+        "Qd4+ misses Qxd8+; its line wins a rook.",
     );
 }
 
@@ -119,7 +123,7 @@ fn pinned_defenders_and_defended_targets_use_legal_exchange_sequences() {
     assert_fact(
         &result,
         &FactKind::Exchange { gain: 100 },
-        "exd5 wins 100 centipawns in the verified exchange.",
+        "exd5 wins a pawn in the exchange.",
     );
     let defended = explain("3r4/7k/8/8/8/2B5/8/3R2K1 w - - 0 1", "d1d4");
     assert!(!defended.facts.iter().any(
@@ -138,7 +142,7 @@ fn en_passant_and_capture_promotion_record_actual_victims_and_balance() {
             square: square("d5"),
             balance_change: 100,
         },
-        "exd6 captures the pawn on d5 with a pawn; material balance changes by +100 centipawns.",
+        "exd6 captures the pawn on d5 with a pawn.",
     );
     let promoted = explain("1r2k3/P7/8/8/8/8/8/4K3 w - - 0 1", "a7b8q");
     assert_fact(
@@ -149,7 +153,7 @@ fn en_passant_and_capture_promotion_record_actual_victims_and_balance() {
             square: square("b8"),
             balance_change: 1350,
         },
-        "axb8=Q+ captures the rook on b8 with a pawn; material balance changes by +1350 centipawns.",
+        "axb8=Q+ captures the rook on b8 with a pawn.",
     );
 }
 
@@ -176,14 +180,16 @@ fn square(name: &str) -> Square {
 
 fn explain(fen: &str, uci: &str) -> chess3d::teaching::Explanation {
     let state = ChessState::from_fen(fen).unwrap();
-    explain_move(
+    let result = explain_move(
         &state,
         state
             .parse_uci(uci)
             .unwrap_or_else(|error| panic!("{fen}: {uci}: {error}")),
         budget(),
     )
-    .unwrap()
+    .unwrap();
+    learner::assert_learner_sentences(&result);
+    result
 }
 
 fn budget() -> Budget {
@@ -219,7 +225,7 @@ fn direct_cases() -> [(&'static str, &'static str, FactKind, &'static str); 6] {
                 square: square("d5"),
                 balance_change: 100,
             },
-            "exd5 captures the pawn on d5 with a pawn; material balance changes by +100 centipawns.",
+            "exd5 captures the pawn on d5 with a pawn.",
         ),
         (
             "4k3/8/8/8/8/8/8/R5K1 w - - 0 1",
@@ -322,25 +328,25 @@ fn tactical_cases() -> [(&'static str, &'static str, &'static str, &'static str)
             "8/2k3q1/8/2N5/8/8/P7/4K3 w - - 0 1",
             "c5e6",
             "fork",
-            "Ne6+: the knight forks the king on c7 and the queen on g7; the verified line wins the queen on g7.",
+            "Ne6+ forks the king on c7 and the queen on g7 and wins a queen in this line.",
         ),
         (
             "4k3/4n3/8/8/1B6/8/8/R5K1 w - - 0 1",
             "a1e1",
             "absolute pin",
-            "Re1 pins e7 to the king on e8; the verified line wins material.",
+            "Re1 pins e7 to the king on e8 and wins a knight in this line.",
         ),
         (
             "4r2k/4n3/3P4/8/8/8/5PPP/R5K1 w - - 0 1",
             "a1e1",
             "relative pin",
-            "Re1 pins e7 to the rook on e8; the verified line wins material.",
+            "Re1 pins e7 to the rook on e8 and wins a knight in this line.",
         ),
         (
             "4r3/4k3/8/1B6/8/8/8/R5K1 w - - 0 1",
             "a1e1",
             "skewer",
-            "Re1+ skewers e7 and e8; the verified line wins material.",
+            "Re1+ skewers e7 and e8 and wins a rook in this line.",
         ),
         (
             "4k3/8/8/8/8/8/4B3/4R1K1 w - - 0 1",
@@ -352,25 +358,25 @@ fn tactical_cases() -> [(&'static str, &'static str, &'static str, &'static str)
             "3r3k/8/8/8/8/8/8/3Q2K1 w - - 0 1",
             "d1d4",
             "hanging piece",
-            "Qd4+ leaves the queen on d4 hanging: the verified exchange wins 950 centipawns for Black.",
+            "Qd4+ leaves the queen on d4 hanging: the exchange wins a queen for Black.",
         ),
         (
             "4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1",
             "e4d5",
             "exchange",
-            "exd5 wins 100 centipawns in the verified exchange.",
+            "exd5 wins a pawn in the exchange.",
         ),
         (
             "3r3k/8/8/3p4/4Q3/8/8/6K1 w - - 0 1",
             "e4d5",
             "exchange",
-            "Qxd5 loses 850 centipawns in the verified exchange.",
+            "Qxd5 loses about 8.5 pawns in the exchange.",
         ),
         (
             "7k/p7/5K2/8/8/3Q4/8/8 w - - 0 1",
             "d3g6",
             "mate threat",
-            "Qg6 creates a mate-in-one threat; the verified line ends in checkmate.",
+            "Qg6 creates a mate-in-one threat; this line ends in checkmate.",
         ),
     ]
 }
@@ -389,7 +395,7 @@ fn missed_mate_names_the_search_alternative_and_its_line() {
         result
             .sentences
             .iter()
-            .any(|text| text == "Qb1 misses Qg7#, which gives checkmate in the verified line.")
+            .any(|text| text == "Qb1 misses Qg7#, which gives checkmate in this line.")
     );
     replay_all(fen, &result);
 }
@@ -439,7 +445,7 @@ fn deterministic_shared_budget_and_reply_api() {
             first
                 .sentences
                 .iter()
-                .any(|text| text == "The tactic is unresolved within the analysis budget.")
+                .any(|text| text == "The search could not settle this line.")
         );
     }
 }

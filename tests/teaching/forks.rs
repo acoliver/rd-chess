@@ -10,7 +10,7 @@ fn checking_knight_fork_keeps_material_gain_when_capture_draws() {
             attacker: square("c7"),
             targets: vec![square("a8"), square("e8")],
         },
-        "Nc7+: the knight forks the rook on a8 and the king on e8; the verified line wins the rook on a8.",
+        "Nc7+ forks the king on e8 and the rook on a8 and wins a rook in this line.",
     );
     let fact = result
         .facts
