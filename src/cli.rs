@@ -4,10 +4,12 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 pub struct Options {
     pub load: Option<PathBuf>,
+    pub data_dir: Option<PathBuf>,
     pub save: Option<PathBuf>,
     pub capture: Option<PathBuf>,
     pub window: bool,
     pub view: String,
+    pub view_explicit: bool,
     pub width: u32,
     pub height: u32,
     pub seed: Option<u64>,
@@ -21,10 +23,12 @@ impl Options {
     pub fn parse() -> Result<Option<Self>> {
         let mut options = Self {
             load: None,
+            data_dir: None,
             save: None,
             capture: None,
             window: false,
             view: "hero".into(),
+            view_explicit: false,
             width: 1280,
             height: 960,
             seed: None,
@@ -48,6 +52,7 @@ impl Options {
             }
             if ![
                 "--load",
+                "--data-dir",
                 "--save",
                 "--capture",
                 "--view",
@@ -80,9 +85,13 @@ impl Options {
         match flag {
             "--load" => self.load = Some(PathBuf::from(value)),
             "--pgn-check" => self.pgn_check = Some(PathBuf::from(value)),
+            "--data-dir" => self.data_dir = Some(PathBuf::from(value)),
             "--save" => self.save = Some(PathBuf::from(value)),
             "--capture" => self.capture = Some(PathBuf::from(value)),
-            "--view" => self.view = text,
+            "--view" => {
+                self.view = text;
+                self.view_explicit = true;
+            }
             "--width" => self.width = text.parse()?,
             "--height" => self.height = text.parse()?,
             "--seed" => self.seed = Some(text.parse()?),
@@ -172,6 +181,7 @@ fn print_help() {
         Window and retained move capture require: cargo run -p chess3d --features viewer --\n\
         Play: left click select/move, U/Backspace undo, R restart, Escape cancel/menu (editor: exit).\n\
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\
+        --data-dir PATH overrides the application save/settings directory.\n\
         --play chooses the human side against a computer; --seed also seeds its replies.\n\
         --pgn-check file.pgn validates games and prints final FEN/result without a GPU.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\

@@ -1,4 +1,46 @@
 #[test]
+fn saved_game_directory_flag_is_preserved_and_excludes_pgn_mode() {
+    let directory = tempfile::tempdir().unwrap();
+    let data = directory.path().join("player-data");
+    let pgn = directory.path().join("game.pgn");
+    std::fs::write(&pgn, "1.e4 *").unwrap();
+    let output = cli().arg("--data-dir").arg(&data).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        !data.exists(),
+        "CPU inspection must not open the player store"
+    );
+    assert_failure(
+        &cli().arg("--data-dir").output().unwrap(),
+        "--data-dir requires a value",
+    );
+    for pgn_first in [true, false] {
+        let mut command = cli();
+        if pgn_first {
+            command
+                .arg("--pgn-check")
+                .arg(&pgn)
+                .arg("--data-dir")
+                .arg(&data);
+        } else {
+            command
+                .arg("--data-dir")
+                .arg(&data)
+                .arg("--pgn-check")
+                .arg(&pgn);
+        }
+        let output = command.output().unwrap();
+        assert_failure(&output, "--pgn-check cannot be combined");
+        assert!(output.stdout.is_empty());
+        assert!(!data.exists());
+    }
+    let output = cli().arg("--help").output().unwrap();
+    let help = String::from_utf8_lossy(&output.stdout);
+    assert!(help.contains("--data-dir PATH"));
+    assert!(help.contains("--pgn-check"));
+}
+
+#[test]
 fn pgn_check_bounds_files_and_never_prints_partial_success() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("input.pgn");

@@ -145,6 +145,7 @@ impl BoardDriver {
             pending: None,
             message: None,
         });
+        self.autosave();
         Ok(())
     }
     pub(super) fn computer_turn(&self) -> bool {
