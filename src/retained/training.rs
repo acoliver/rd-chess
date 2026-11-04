@@ -15,8 +15,6 @@ use std::{collections::BTreeSet, time::Duration};
 pub(super) struct Training {
     pub course: Course,
     pub puzzles: PuzzlePack,
-    // TODO: persist through ApplicationStore when feat/saved-games is integrated.
-    // This engine pin has no application store; never write game-owned files here.
     pub progress: Progress,
     session: Option<Session>,
     pub panel: String,
@@ -96,6 +94,25 @@ impl Training {
     }
 }
 impl BoardDriver {
+    pub fn progress_error(&self) -> Option<&super::persistence::ProgressError> {
+        self.storage
+            .as_ref()
+            .and_then(|storage| storage.progress_error.as_ref())
+    }
+    pub(super) fn persist_training_progress(&mut self) {
+        let Some(training) = &mut self.training else {
+            return;
+        };
+        training.save_progress();
+        if let Some(storage) = &mut self.storage
+            && training.progress != storage.progress
+        {
+            match storage.save_progress(&training.progress) {
+                Ok(()) => storage.progress_error = None,
+                Err(error) => storage.progress_error = Some(error),
+            }
+        }
+    }
     pub fn progress(&self) -> Option<&Progress> {
         self.training.as_ref().map(|training| &training.progress)
     }

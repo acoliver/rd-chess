@@ -100,6 +100,9 @@ impl BoardDriver {
         ) {
             return String::new();
         }
+        if let Some(error) = self.progress_error() {
+            return format!("Storage error: {error}");
+        }
         if let Some(result) = &self.menus.result {
             return result.clone();
         }

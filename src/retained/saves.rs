@@ -17,6 +17,9 @@ impl BoardDriver {
             Err(error) => storage.error = Some(error),
         }
         storage.refresh();
+        if let Some(training) = &mut self.training {
+            training.progress = storage.progress.clone();
+        }
         self.storage = Some(storage);
     }
     pub fn can_continue(&self) -> bool {

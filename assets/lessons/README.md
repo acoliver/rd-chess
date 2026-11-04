@@ -64,10 +64,10 @@ and puzzle rating-band
 submitted-move attempts/solve counts. Invalid and wrong answers count as attempts;
 opening or retrying a task does not. Repeated hint requests at the cap do not
 increase usage. Starting a runner with `with_progress` preserves earlier totals;
-it starts the chosen lesson/puzzle at its initial checkpoint. This payload does
-not yet save a half-finished task or choose a file location. Transactional file
-I/O remains later work. The window uses this payload in memory. Solve counts
-include repeated solves.
+it starts the chosen lesson/puzzle at its initial checkpoint. The payload does
+not save a half-finished task or choose a file location. The window persists it
+through the engine's transactional `ApplicationStore`. Solve counts include
+repeated solves.
 
 ```sh
 cargo run --locked -p chess3d -- --lesson rules.first-moves
@@ -101,10 +101,16 @@ Wrong legal moves also show verified explanation sentences when facts are found.
 The study camera leaves space for one wrapped text panel below the board. Escape
 returns to the browser, then the title; leaving study restores the play camera.
 
-Progress survives browser/title navigation in memory for this process only. The
-unchanged engine pin has no `ApplicationStore`, settings or save-slot API. The
-controller TODO names `feat/saved-games`; persistence must use that branch's engine
-store after integration. There is no separate progress-file writer. After a computer reply, the game and game-over menus' Why? resumes play with
+Progress loads at startup from the `training-progress` record in the same engine
+`ApplicationStore` used by saved games. Changes to completed steps and lessons,
+attempts, hints and puzzle totals are written immediately. Both the record
+metadata and JSON payload use version 1. Store, encoding, version and payload
+failures have typed `ProgressError` variants; damaged records are reported and
+preserved rather than replaced. Manual game slots and Continue remain usable
+when the progress record is corrupt. Training checkpoints never replace a game
+autosave. There is no separate progress-file writer.
+
+After a computer reply, the game and game-over menus' Why? resumes play with
 learner sentences for that reply, clearing them on a move or undo.
 
 Synthetic driver tests exercise navigation, locks, authored and wrong moves,

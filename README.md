@@ -709,10 +709,12 @@ launch a window. The runners handle wrong-answer feedback, retries, progressive
 hints, scripted replies and alternative mates through the existing rules core.
 The window's Lessons and Puzzles title choices open native browsers and playable
 board tasks, with hints, retries, scripted replies and completion marks. The
-game menu's Why? opens learner sentences after a computer reply. Progress stays
-in memory because this engine pin has no application store; the TODO names
-`feat/saved-games`. See the course documentation below for controls, storage
-limits and teaching-screen verification.
+game menu's Why? opens learner sentences after a computer reply. Lesson and
+puzzle progress loads at startup and persists when changed through a separate,
+versioned `training-progress` record in the saved-game `ApplicationStore`.
+Corrupt progress produces a typed error without disabling game saves or Continue.
+See the course documentation below for controls, storage limits and teaching-screen
+verification.
 
 Native menu and study panels use a shared alpha of 1.0 so the board cannot show
 through the text background. Locked lessons retain their `[locked]` marker and

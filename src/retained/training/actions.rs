@@ -38,6 +38,7 @@ impl BoardDriver {
             }
             _ => unreachable!("teaching action"),
         }
+        self.persist_training_progress();
         self.sync_menu_ui()
     }
     fn begin_lesson(&mut self, index: usize) -> Result<(), String> {

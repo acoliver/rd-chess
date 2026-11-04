@@ -1,4 +1,5 @@
-use super::{GamePayload, GameSettings, PAYLOAD_VERSION};
+use super::{GamePayload, GameSettings, PAYLOAD_VERSION, ProgressError};
+use crate::teaching::Progress;
 use std::{io::ErrorKind, path::PathBuf};
 use worldrunner::world::worldrunner_save::{
     ApplicationStore, SaveError, SlotId, SlotMetadata, StoreLimits,
@@ -12,19 +13,28 @@ pub(crate) const LIMITS: StoreLimits = StoreLimits {
     settings_entries: 16,
 };
 pub(crate) struct Storage {
-    store: ApplicationStore,
+    pub(super) store: ApplicationStore,
+    pub progress: Progress,
+    pub progress_error: Option<ProgressError>,
     pub current: Option<GamePayload>,
     pub labels: [String; 3],
     pub error: Option<String>,
 }
 impl Storage {
     pub fn open(root: PathBuf) -> Self {
-        Self {
+        let mut storage = Self {
             store: ApplicationStore::new(root, LIMITS).expect("fixed positive limits"),
+            progress: Progress::default(),
+            progress_error: None,
             current: None,
             labels: std::array::from_fn(|_| "Empty".into()),
             error: None,
+        };
+        match storage.read_progress() {
+            Ok(progress) => storage.progress = progress,
+            Err(error) => storage.progress_error = Some(error),
         }
+        storage
     }
     pub fn read(&self, name: &str) -> Result<Option<GamePayload>, String> {
         let contents = match self
@@ -72,17 +82,15 @@ impl Storage {
             Ok(None) => (),
             Err(error) => self.error = Some(error),
         }
-        match self.store.list_slots() {
-            Ok(slots) => {
-                self.labels = std::array::from_fn(|_| "Empty".into());
-                for (index, label) in self.labels.iter_mut().enumerate() {
-                    let name = format!("slot-{}", index + 1);
-                    if let Some(slot) = slots.iter().find(|s| s.id.as_str() == name) {
-                        label.clone_from(&slot.metadata.label);
-                    }
-                }
+        self.labels = std::array::from_fn(|_| "Empty".into());
+        for (index, label) in self.labels.iter_mut().enumerate() {
+            let id = SlotId::new(&format!("slot-{}", index + 1)).expect("manual slot");
+            // Only game slots supply game labels; progress has its own error channel.
+            match self.store.read_slot(&id) {
+                Ok(contents) => *label = contents.metadata.label,
+                Err(error) if missing(&error) => (),
+                Err(error) => self.error = Some(error.to_string()),
             }
-            Err(error) => self.error = Some(error.to_string()),
         }
     }
     pub fn settings(&self) -> Result<GameSettings, String> {
@@ -99,6 +107,6 @@ impl Storage {
             .map_err(|e| e.to_string())
     }
 }
-fn missing(error: &SaveError) -> bool {
+pub(super) fn missing(error: &SaveError) -> bool {
     matches!(error, SaveError::Io(error) if error.kind() == ErrorKind::NotFound)
 }

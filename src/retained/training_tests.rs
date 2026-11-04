@@ -130,9 +130,15 @@ use worldrunner::scene::{
 };
 
 fn fixture() -> BoardDriver {
+    fixture_store(None)
+}
+fn fixture_store(root: Option<&std::path::Path>) -> BoardDriver {
     let board = RetainedBoard::new(ChessState::initial(), 42).unwrap();
     let options = viewer_options(board.scene(), CameraPreset::Overhead, [800, 600]);
     let mut driver = BoardDriver::with_board(board);
+    if let Some(root) = root {
+        driver.open_store(root.to_path_buf());
+    }
     driver.configure(&options).unwrap();
     driver.show_title().unwrap();
     driver
@@ -400,4 +406,95 @@ fn puzzle_alternative_mate_is_accepted_in_window() {
         .unwrap();
     move_click(&mut driver, &mv.to_uci());
     assert!(driver.panel_text().contains("Completed"));
+}
+
+#[test]
+fn lesson_and_puzzle_progress_survives_application_store_round_trip() {
+    let root = tempfile::tempdir().unwrap();
+    let mut driver = fixture_store(Some(root.path()));
+    lessons(&mut driver);
+    key(&mut driver, "enter");
+    next(&mut driver);
+    click(&mut driver, [400., 565.]);
+    move_click(&mut driver, "e2e4");
+    next(&mut driver);
+    next(&mut driver);
+    move_click(&mut driver, "g1f3");
+    next(&mut driver);
+    next(&mut driver);
+    move_click(&mut driver, "e1d1");
+    next(&mut driver);
+    assert!(
+        driver
+            .progress()
+            .unwrap()
+            .completed_lessons
+            .contains("rules.first-moves")
+    );
+    let mut reopened = fixture_store(Some(root.path()));
+    assert_eq!(reopened.progress(), driver.progress());
+    assert!(reopened.study_ui_state().unwrap().lessons[1].1);
+    start_puzzle(&mut reopened);
+    for uci in ["e6e7", "b3c1", "h6c1"] {
+        move_click(&mut reopened, uci);
+    }
+    assert_eq!(reopened.progress().unwrap().bands["1800-plus"].solved, 1);
+    let next = fixture_store(Some(root.path()));
+    assert_eq!(next.progress(), reopened.progress());
+    assert!(next.progress_error().is_none());
+}
+
+#[test]
+fn changed_progress_is_written_before_leaving_the_training_screen() {
+    let root = tempfile::tempdir().unwrap();
+    let mut driver = fixture_store(Some(root.path()));
+    lessons(&mut driver);
+    key(&mut driver, "enter");
+    next(&mut driver);
+    click(&mut driver, [400., 565.]);
+    assert_eq!(
+        driver.progress().unwrap().lessons["rules.first-moves"].hints_used,
+        1
+    );
+    let next = fixture_store(Some(root.path()));
+    assert_eq!(next.progress(), driver.progress());
+    assert_eq!(driver.screen(), Screen::Lesson);
+}
+
+#[test]
+fn corrupt_progress_is_typed_preserved_and_does_not_break_saved_games() {
+    use crate::retained::persistence::ProgressError;
+    let root = tempfile::tempdir().unwrap();
+    let mut driver = fixture_store(Some(root.path()));
+    driver.menu_action(MenuAction::Friend).unwrap();
+    driver.play_uci("e2e4").unwrap();
+    driver.save_game(1).unwrap();
+    let game = driver.board().unwrap().game().clone();
+    let path = root.path().join("slot-training-progress.rds");
+    std::fs::write(&path, b"damaged progress").unwrap();
+    let mut next = fixture_store(Some(root.path()));
+    assert!(matches!(
+        next.progress_error(),
+        Some(ProgressError::Store(_))
+    ));
+    assert!(next.can_continue());
+    assert_eq!(next.slot_labels()[0], "Two players, move 1");
+    next.continue_game().unwrap();
+    assert_eq!(next.board().unwrap().game(), &game);
+    next.load_game(1).unwrap();
+    assert_eq!(next.board().unwrap().game(), &game);
+    next.show_title().unwrap();
+    lessons(&mut next);
+    key(&mut next, "enter");
+    click(&mut next, [240., 565.]);
+    assert!(matches!(
+        next.progress_error(),
+        Some(ProgressError::Store(_))
+    ));
+    assert_eq!(std::fs::read(&path).unwrap(), b"damaged progress");
+    next.show_title().unwrap();
+    next.continue_game().unwrap();
+    next.play_uci("e7e5").unwrap();
+    next.save_game(2).unwrap();
+    assert_eq!(next.saved_payload(2).unwrap().moves, ["e2e4", "e7e5"]);
 }

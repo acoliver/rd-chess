@@ -66,7 +66,11 @@ impl BoardDriver {
         });
         self.viewport = options.size;
         if let Some(board) = &self.board {
-            self.training = Some(super::training::Training::bundled()?);
+            let mut training = super::training::Training::bundled()?;
+            if let Some(storage) = &self.storage {
+                training.progress = storage.progress.clone();
+            }
+            self.training = Some(training);
             self.ui = Some(GameUi::new().map_err(|e| e.to_string())?);
             self.markers.base = board
                 .identities()

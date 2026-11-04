@@ -247,6 +247,7 @@ impl BoardDriver {
             camera.orbit = orbit;
             camera.dirty = true;
         }
+        self.persist_training_progress();
         self.reset_camera();
     }
     fn start_computer_game(&mut self) -> Result<(), String> {

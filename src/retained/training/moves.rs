@@ -40,6 +40,7 @@ impl BoardDriver {
             let edits = self.board.as_mut().expect("board").synchronize_game(game);
             self.enqueue_move(edits)?;
         }
+        self.persist_training_progress();
         self.refresh_training_panel();
         self.sync_menu_ui()
     }
