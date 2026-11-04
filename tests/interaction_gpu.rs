@@ -229,7 +229,6 @@ fn required_gpu_computer_replies_to_synthetic_e2e4() {
     let inputs = driver.inputs();
     let queue = driver.queue();
     let inbox = driver.captures();
-    let mut driver = SyntheticWorkReady(driver);
     let mut run = host
         .windowless(&mut driver)
         .expect("GPU required, never skip");
@@ -254,8 +253,8 @@ fn required_gpu_computer_replies_to_synthetic_e2e4() {
     for text in ["e2e4", "g8f6"] {
         expected.play(expected.parse_uci(text).unwrap()).unwrap();
     }
-    assert_eq!(driver.0.board().unwrap().game(), &expected);
-    assert_eq!(driver.0.status_text(), "White to move");
+    assert_eq!(driver.board().unwrap().game(), &expected);
+    assert_eq!(driver.status_text(), "White to move");
     assert_eq!(replied.pixels, reference_reply().pixels);
 }
 
@@ -293,30 +292,5 @@ fn wait_for_reply(
             break;
         }
         std::thread::yield_now();
-    }
-}
-
-// This engine pin only dispatches WorkReady through its desktop loop. Inject
-// that observation in the windowless test, without polling in the game driver.
-struct SyntheticWorkReady(BoardDriver);
-impl worldrunner::scene::viewer::RetainedDriver for SyntheticWorkReady {
-    fn update(
-        &mut self,
-        host: &mut RetainedHost,
-        tick: &worldrunner::scene::viewer::RetainedTick,
-    ) -> Result<(), String> {
-        self.0.update(host, tick)
-    }
-    fn event(
-        &mut self,
-        host: &mut worldrunner::scene::viewer::RetainedEventHost<'_>,
-        event: &worldrunner::scene::viewer::RetainedEvent,
-    ) -> Result<(), String> {
-        use worldrunner::scene::viewer::RetainedEvent;
-        self.0.event(host, event)?;
-        if matches!(event, RetainedEvent::Presented { .. }) {
-            self.0.event(host, &RetainedEvent::WorkReady)?;
-        }
-        Ok(())
     }
 }

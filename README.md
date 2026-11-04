@@ -42,7 +42,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`36c13e5935b6220526e083a4bd789188892e2f4a` from
+`99f2c88e85c302be184981532e33fb14a78b99ca` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -356,17 +356,13 @@ Cancellation cannot interrupt an individual rules/evaluation call.
 Engine limitation: this pin has work wakeups and retained ticks, but no scheduled
 host timer service. The cap uses monotonic deadlines in those existing callbacks;
 there is no game-created timer thread or executor. A literal scheduled host timer
-requires an engine API before the game can adopt it. The windowless host also
-never dispatches `WorkReady` from `frame`/`poll` at this pin, although desktop
-wakeups deliver it. The GPU test injects `WorkReady` observations from presented
-frames through a test-only driver, keeping production completion handling on the
-engine event boundary. The real queue, search and GPU transaction remain in use;
-this does not verify native windowless completion notification.
+requires an engine API before the game can adopt it (engine issue `c997bf5e36af`).
 
 CPU regressions use real engine queues on GPU-free retained hosts, injecting
 completion payloads only for failure/staleness cases. The required windowless GPU
-regression clicks e2-e4 versus Level 1 with game seed 42, verifies g8-f6's retained
-identity and transform, captures the reply, and compares exact pixels with an
+regression uses the production driver and native `WorkReady` delivery from
+`frame`/`poll`. It clicks e2-e4 versus Level 1 with game seed 42, verifies g8-f6's
+retained identity and transform, captures the reply, and compares exact pixels with an
 independent rules-driven reference. `tests/window_smoke.py` adds the same move and
 two-ply undo using its existing Xvfb click injection. Do not run a visible window
 on the macOS desktop.
