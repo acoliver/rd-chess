@@ -10,9 +10,42 @@ use worldrunner::scene::gpu;
 mod cli;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    fn print_explanation(fen: &str, uci: &str) -> Result<(), Box<dyn Error>> {
+        use chess3d::teaching::{Budget, explain_move, san_line};
+        let state = ChessState::from_fen(fen).map_err(|error| format!("FEN: {error}"))?;
+        let mv = state
+            .parse_uci(uci)
+            .map_err(|error| format!("move notation: {error}"))?;
+        let explanation = explain_move(&state, mv, Budget::default())?;
+        for (index, sentence) in explanation.sentences.iter().enumerate() {
+            println!("{sentence}");
+            if let Some(fact) = explanation.facts.get(index) {
+                println!("  Evidence: {}", san_line(&state, &fact.line));
+            }
+        }
+        println!("Line: {}", san_line(&state, &explanation.line));
+        let limits = explanation.limits;
+        println!(
+            "Analysis limits: {}/{} nodes; verified depth {}, alternative depth {}; requested depth {} (cap 6), verification/SEE extension cap 8, alternative recursion cap 128; unresolved {}.",
+            limits.nodes,
+            limits.budget.nodes,
+            limits.verified_depth,
+            limits.alternative_depth,
+            limits.budget.depth,
+            limits.unresolved
+        );
+        println!(
+            "Exchange facts cover legal captures on one square, with either side allowed to stop. Finite search does not establish a game-theoretic result."
+        );
+        Ok(())
+    }
+
     let Some(options) = cli::Options::parse()? else {
         return Ok(());
     };
+    if let Some((fen, uci)) = &options.explain {
+        return print_explanation(fen, uci);
+    }
     let position = position(&options)?;
     if let Some(path) = &options.save {
         position.save_atomic(path)?;

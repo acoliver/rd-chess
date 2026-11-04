@@ -1,4 +1,26 @@
 #[test]
+fn explanations_are_cpu_only_and_validate_both_arguments() {
+    let fen = "7k/8/5KQ1/8/8/8/8/8 w - - 0 1";
+    let output = cli().args(["--explain", fen, "g6g7"]).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(text.contains("Qg7# is checkmate."), "{text}");
+    assert!(text.contains("Line: Qg7#"), "{text}");
+    assert!(text.contains("nodes") && text.contains("depth"), "{text}");
+    for (args, message) in [
+        (vec!["--explain", fen], "--explain requires FEN and UCI"),
+        (vec!["--explain", "invalid", "g6g7"], "FEN"),
+        (vec!["--explain", fen, "g6g9"], "move notation"),
+        (
+            vec!["--explain", fen, "g6g7", "--window"],
+            "--explain cannot be combined",
+        ),
+    ] {
+        assert_failure(&cli().args(args).output().unwrap(), message);
+    }
+}
+
+#[test]
 fn computer_arguments_are_validated_without_launching_a_window() {
     for (args, message) in [
         (vec!["--play", "green"], "--play must be white or black"),
