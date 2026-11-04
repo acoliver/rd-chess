@@ -44,7 +44,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`5f99b20fb3b084de9d33d80e214a1fc7bc636e12` from
+`3eef068d2bad804ed0cc09e1df126cb0d87103cc` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -219,8 +219,9 @@ select command rows without executing them; Enter/Space or a click executes them
 Tab moves between setup fields. Side and level selection takes effect immediately.
 
 Computer setup offers White, Black or seed-determined Random, and all eight named
-profiles with one-line descriptions in a clipped scroll list. The defaults are
-White and Level 1. Start begins a new game; Back or Escape returns to title.
+profiles with one-line descriptions in a clipped scroll list. The initial defaults
+are White and Level 1; title settings can change them. The setup summary shows
+the active side and level. Start begins a new game; Back or Escape returns to title.
 Choosing Black schedules the computer's opening through the existing work queue.
 The adjacent self-play ordering and its limits are documented below. These
 profiles have no measured external ratings.
@@ -242,14 +243,51 @@ visible focus tints that move with navigation. No GPU test skips a missing devic
 The Xvfb smoke adds a no-game-flags title launch followed by Enter on Play a friend.
 It is not run as a visible macOS window.
 
-Settings controls and game save slots are not included in this engine pin.
-P6 part 2 needs native sliders/toggles and the engine's bounded transactional
-application settings/save-slot service, including application directories, listing,
-metadata and explicit corruption/permission errors. Chess will own versioned game
-payloads containing the initial FEN, move history, seed, opponent and controller
-result, so castling rights and repetition history survive relaunch. Fixed slot
-labels avoid requiring text entry; editable labels and cross-display UI scaling
-need the separate retained text-input/display-scale APIs.
+## Saved games and settings
+
+The viewer stores games and settings through the engine's `ApplicationStore`.
+The default root is `application_root("org.acoliver.chess3d")`, for example
+`~/Library/Application Support/org.acoliver.chess3d` on macOS. `--data-dir PATH`
+overrides that root. Windowless captures and editor views do not open the store.
+Tests use temporary directories and never write player data.
+
+Every committed human or computer move, undo and restart atomically saves the
+`current` slot. Resignation and claimed draws also save their result. Returning
+to title resets the displayed board without overwriting that slot. Continue is
+shown only for a valid unfinished current game. Saved games on the title and
+Save / Load in the pause menu offer three numbered slots with generated labels,
+such as `vs Level 3, move 24`. Saving from the title copies the current game,
+including a finished result, rather than the title's background board.
+
+Version-1 chess payloads contain an initial FEN, ordered UCI moves, seed,
+two-player or computer mode, human side, level and an optional result. Loading
+validates the whole payload and replays each move through `ChessState` before
+changing the live board. Castling rights, en passant, counters, piece identities
+and repetition history therefore survive relaunch. Computer games retain their
+side and level and schedule a reply through the existing work queue when needed.
+Loading may replace seed-dependent resident resources through the engine; normal
+moves, undo and restart continue to use object-only updates.
+
+Settings on the title offers native list choices for default computer level and
+human side (White, Black or seeded Random), legal-move markers and Hero/Overhead
+camera. Choices apply immediately and persist through the engine's typed Settings
+format. An explicit `--view` overrides the saved camera at launch. Sliders and
+toggles are not used. Editable slot names still require native text input.
+
+Storage reads and writes are bounded to 1 MiB per game, 256-byte labels and 4 KiB
+settings documents. Corruption, illegal saved moves, unknown versions, oversized
+files and I/O failures appear in status without stopping play. An invalid
+existing slot or settings document is not overwritten, including by autosave;
+move or remove the damaged file to restore saving. Failed loads leave the live
+game unchanged. File replacement and OS permission handling remain engine-owned.
+
+`tests/saved_games.rs`, `tests/storage_errors.rs` and `tests/saved_menus.rs`
+cover replay, autosave, slot labels, Continue, settings, results and preservation
+of invalid or unwritable files. Required windowless Metal/lavapipe tests relaunch
+a new driver after three moves, activate Continue and require exact pre-relaunch
+pixels, including restoration from a different starting seed. A second test
+requires the resumed computer's native WorkReady reply. The isolated Xvfb smoke
+uses temporary `--data-dir` roots and checks relaunch/Continue before undo.
 
 ## Legal chess rules
 
@@ -716,12 +754,24 @@ is required only on the same device/driver; no cross-GPU golden-image claim is m
 
 The original `tests/window_smoke.py` is retained, with its study fixture naturally
 resolved from this standalone root. `cargo xtask window` builds the viewer and
-launches it using an exclusive Xvfb `:100` via `xvfb-run`; it never uses the desktop.
-Requirements: Xvfb, xvfb-run, xauth, xdotool, libX11 and Pillow. Missing prerequisites
-fail explicitly. The smoke compares real window pixels to fresh offscreen frames,
-exercises orbit/zoom/reset/resize/unmap/remap, checks saved positions, title-to-friend Enter navigation, Escape menu/resume and
-clean window-manager exits. Its original readiness checks are bounded; the
-wrapper bounds the whole window run to five minutes and cleans up its process group.
+runs each of six cases in a separate `xvfb-run` invocation, selecting a free display
+starting at `:100`; it never uses the desktop. Requirements: Xvfb, xvfb-run, xauth,
+xdotool, libX11 and Pillow. Missing prerequisites fail explicitly. The smoke
+compares real window pixels to fresh offscreen frames, exercises
+orbit/zoom/reset/resize/unmap/remap, checks saved positions, title-to-friend Enter
+navigation, relaunch/Continue with exact restored pixels, Escape menu/resume and
+clean window-manager exits. Every case uses a temporary `--data-dir`.
+
+Window waits fail immediately if their current chess process exits, including
+after relaunch, or after 180 seconds without satisfying the awaited condition.
+Offscreen subprocesses allow the Rust capture watchdog's 1,200-second total bound.
+Each case has a separate 1,200-second outer bound, allowing sequential waits and
+pipeline compilation on a host running 4-6 times slower without the former
+150-second cutoff. Six cases have a combined execution wait budget of 7,200
+seconds, plus at most 60 seconds for process-group cleanup. These bounds do not
+interrupt synchronous Python work outside subprocess waits. Per-case logs retain
+flushed start/wait/ready/end progress and Xvfb diagnostics; failures report their
+tails, and completed results are preserved. Pixel tolerances are unchanged.
 
 The GitHub Actions workflow fetches the independent engine, provisions Mesa
 lavapipe and window-test prerequisites on the runner, and invokes `cargo xtask ci`.
