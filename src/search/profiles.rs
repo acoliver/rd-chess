@@ -17,6 +17,7 @@ pub enum Style {
 #[derive(Clone, Copy, Debug)]
 pub struct OpponentProfile {
     pub name: &'static str,
+    pub description: &'static str,
     pub nodes: u64,
     pub candidates: usize,
     pub weights: Weights,
@@ -26,7 +27,7 @@ pub struct OpponentProfile {
 }
 
 const fn profile(
-    name: &'static str,
+    identity: (&'static str, &'static str),
     nodes: u64,
     candidates: usize,
     weights: Weights,
@@ -34,7 +35,8 @@ const fn profile(
     style: Style,
 ) -> OpponentProfile {
     OpponentProfile {
-        name,
+        name: identity.0,
+        description: identity.1,
         nodes,
         candidates,
         weights,
@@ -53,7 +55,7 @@ const fn profile(
 /// Pip favors direct captures and development; low positional attention misses
 /// indirect threats. Immediate queen captures are screened at every level.
 pub const PIP: OpponentProfile = profile(
-    "Pip",
+    ("Pip", "Direct captures and development; shallow planning."),
     1200,
     2,
     Weights {
@@ -69,7 +71,7 @@ pub const PIP: OpponentProfile = profile(
 /// Rowan attends more to king cover and piece activity, with shallow tactical
 /// reach. No rating or reliably greater playing strength has been established.
 pub const ROWAN: OpponentProfile = profile(
-    "Rowan",
+    ("Rowan", "Piece activity and king cover; shallow tactics."),
     2400,
     3,
     Weights {
@@ -85,7 +87,10 @@ pub const ROWAN: OpponentProfile = profile(
 /// Mira emphasizes initiative and activity while paying little attention to
 /// pawn defects. Its larger budget remains a design target, not a rating.
 pub const MIRA: OpponentProfile = profile(
-    "Mira",
+    (
+        "Mira",
+        "Initiative and activity; less care for pawn defects.",
+    ),
     5000,
     3,
     Weights {
@@ -101,7 +106,7 @@ pub const MIRA: OpponentProfile = profile(
 /// Ellis develops steadily, preferring roughly equal exchanges among close
 /// choices. Intermediate moves can remain beyond its completed iterations.
 pub const ELLIS: OpponentProfile = profile(
-    "Ellis",
+    ("Ellis", "Steady development and roughly equal exchanges."),
     9000,
     4,
     Weights {
@@ -117,7 +122,7 @@ pub const ELLIS: OpponentProfile = profile(
 /// Nia favors activity and open lines with less pawn-structure attention. Its
 /// tactical reach depends on the actual position and measured completed depth.
 pub const NIA: OpponentProfile = profile(
-    "Nia",
+    ("Nia", "Active pieces and open lines before pawn structure."),
     18_000,
     4,
     Weights {
@@ -133,7 +138,7 @@ pub const NIA: OpponentProfile = profile(
 /// Tomas values pawn structure and endgames with the complete evaluator. The
 /// patient preference adds only a small bias to otherwise close choices.
 pub const TOMAS: OpponentProfile = profile(
-    "Tomas",
+    ("Tomas", "Patient pawn structure and endgame play."),
     32_000,
     5,
     Weights {
@@ -148,12 +153,27 @@ pub const TOMAS: OpponentProfile = profile(
 );
 /// Imani balances activity and safety with small seeded variation. Prophylaxis
 /// and practical complications are intended tendencies, not measured guarantees.
-pub const IMANI: OpponentProfile =
-    profile("Imani", 60_000, 5, Weights::BALANCED, 10, Style::Balanced);
+pub const IMANI: OpponentProfile = profile(
+    (
+        "Imani",
+        "Balanced activity and safety with small variation.",
+    ),
+    60_000,
+    5,
+    Weights::BALANCED,
+    10,
+    Style::Balanced,
+);
 /// Soren uses the largest supplied budget and near-best variation. No scheduled
 /// mistakes or claimed rating; strongest-ladder ordering still needs calibration.
-pub const SOREN: OpponentProfile =
-    profile("Soren", 120_000, 6, Weights::BALANCED, 4, Style::Balanced);
+pub const SOREN: OpponentProfile = profile(
+    ("Soren", "Largest search budget and near-best variation."),
+    120_000,
+    6,
+    Weights::BALANCED,
+    4,
+    Style::Balanced,
+);
 
 /// Eight named, uncalibrated configurations in intended increasing strength.
 /// No numerical ratings should be published from these settings alone.

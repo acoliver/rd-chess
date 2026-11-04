@@ -161,7 +161,7 @@ fn print_help() {
         [--capture image.png | --window] [--view hero|overhead|lineup]\n\
         [--width px --height px] [--seed n] [--play white|black --level 1..8]\n\
         Window and retained move capture require: cargo run -p chess3d --features viewer --\n\
-        Play: left click select/move, U/Backspace undo, R restart, Escape cancel/exit.\n\
+        Play: left click select/move, U/Backspace undo, R restart, Escape cancel/menu (editor: exit).\n\
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\
         --play chooses the human side against a computer; --seed also seeds its replies.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\

@@ -98,6 +98,8 @@ def run_case(args, environment, name, view, load=None, interaction=None):
 
     with (output / f"{name}.log").open("w") as log:
         opponent = ["--play", "white", "--level", "1"] if computer else []
+        if not computer and not load and view != "lineup" and interaction != "title":
+            opponent = ["--moves", ""]
         process = subprocess.Popen([str(args.binary), *common, *opponent, "--window", "--save", str(saved)],
                                    env=environment, stdout=log, stderr=log)
         try:
@@ -116,6 +118,18 @@ def run_case(args, environment, name, view, load=None, interaction=None):
                 image = screenshot()
                 return image if difference(reference_image, image) <= tolerance else None
 
+            title_controls = []
+            if interaction == "title":
+                def title_ready():
+                    image = screenshot()
+                    outside = (0, 0, 80, height)
+                    return image if (difference(expected.crop(outside), image.crop(outside)) <= 0.1
+                                     and difference(expected, image) > 2) else None
+
+                title = wait_for(title_ready, "title menu over retained board")
+                title.save(output / f"{name}-title.png")
+                xdo("key", "--window", window, "Return")
+                title_controls.append("title Enter starts Play a friend")
             initial = wait_for(lambda: matching(expected), "window matching headless chess capture")
             initial.save(output / f"{name}-initial.png")
             colors = initial.getcolors(2_000_000)
@@ -130,7 +144,7 @@ def run_case(args, environment, name, view, load=None, interaction=None):
                 assert len(position["pieces"]) == 32
                 assert position["seed"] == (42 if computer else 342)
             saved_bytes = saved.read_bytes()
-            records = []
+            records = title_controls
             if view == "overhead" and not load:
                 moved_reference = output / f"{name}-e2e4-capture.png"
                 sequence = "e2e4 g8f6" if computer else "e2e4"
@@ -186,7 +200,11 @@ def run_case(args, environment, name, view, load=None, interaction=None):
                            "unmap/map restoration"]
                 xdo("windowfocus", window)
                 xdo("key", "--window", window, "Escape")
-                records.append("Escape clean exit")
+                wait_for(lambda: difference(resized, screenshot()) > 2, "Escape opens game menu")
+                xdo("key", "--window", window, "Escape")
+                wait_for(lambda: matching(resized, 0), "Escape resumes board")
+                close_request(window)
+                records += ["Escape opens menu and resumes", "WM_DELETE_WINDOW clean exit"]
             else:
                 close_request(window)
                 records.append("WM_DELETE_WINDOW clean exit")
@@ -221,6 +239,7 @@ def main():
     fixture = Path(__file__).resolve().parent.parent / "assets/positions/study.json"
     results = [run_case(args, environment, "hero", "hero", interaction="camera"),
                run_case(args, environment, "overhead", "overhead"),
+               run_case(args, environment, "title-to-friend", "overhead", interaction="title"),
                run_case(args, environment, "computer-level-1", "overhead", interaction="computer"),
                run_case(args, environment, "study", "hero", load=fixture),
                run_case(args, environment, "lineup", "lineup")]

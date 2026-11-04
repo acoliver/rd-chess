@@ -6,6 +6,76 @@ use worldrunner::scene::{
     viewer::{MouseButton, RetainedInput},
 };
 
+#[test]
+fn a_computer_mate_delivered_with_the_menu_open_shows_game_over() {
+    let (mut driver, mut host) = setup("7k/5Q2/5K2/8/8/8/8/8 w - - 0 1", Side::Onyx);
+    menu_key(&mut driver, "escape");
+    let chess_move = game(&driver).parse_uci("f7g7").unwrap();
+    inject(&mut driver, &mut host, Some(chess_move));
+    wait(&mut driver);
+    assert_eq!(driver.screen(), crate::retained::Screen::GameOver);
+    assert_eq!(driver.status_text(), "Checkmate: White wins");
+}
+
+fn menu_key(driver: &mut BoardDriver, key: &str) {
+    use worldrunner::scene::viewer::{KeyCode, LogicalKey};
+    for pressed in [true, false] {
+        driver
+            .handle_input(
+                &RetainedInput::Key {
+                    key: key.into(),
+                    logical: LogicalKey::Character(key.into()),
+                    physical: KeyCode::Enter.into(),
+                    pressed,
+                    repeat: false,
+                },
+                None,
+                None,
+            )
+            .unwrap();
+    }
+}
+
+#[test]
+fn setup_black_human_schedules_the_opening_at_the_selected_level() {
+    let (mut driver, mut host) = setup(INITIAL_FEN, Side::Ivory);
+    driver.show_title().unwrap();
+    for key in ["arrowdown", "enter", "arrowdown", "tab", "tab", "enter"] {
+        menu_key(&mut driver, key);
+    }
+    // Black selected; level one selected. Tab through the remaining rows to Start.
+    for _ in 0..8 {
+        menu_key(&mut driver, "tab");
+    }
+    menu_key(&mut driver, "enter");
+    let config = driver.computer_game().unwrap();
+    assert_eq!((config.human(), config.level()), (Side::Onyx, 1));
+    driver.advance_computer(&mut host);
+    assert!(driver.computer.as_ref().unwrap().pending.is_some());
+    wait(&mut driver);
+    assert_eq!(game(&driver).side_to_move(), Side::Onyx);
+    assert_eq!(game(&driver).repetition_history().len(), 2);
+}
+
+#[test]
+fn title_discards_an_outstanding_result_before_starting_a_new_game() {
+    let (mut driver, mut host) = setup(INITIAL_FEN, Side::Onyx);
+    let reply = game(&driver).parse_uci("e2e4").unwrap();
+    inject(&mut driver, &mut host, Some(reply));
+    // A work notification can arrive after the menu transition.
+    for key in ["escape", "end", "enter"] {
+        menu_key(&mut driver, key);
+    }
+    assert!(driver.computer.is_none());
+    driver.drain_computer().unwrap();
+    assert_eq!(game(&driver), &ChessState::initial());
+    menu_key(&mut driver, "home");
+    menu_key(&mut driver, "enter");
+    assert_eq!(driver.screen(), crate::retained::Screen::Play);
+    assert!(driver.computer.is_none());
+    assert_eq!(game(&driver), &ChessState::initial());
+}
+
 fn setup(fen: &str, human: Side) -> (BoardDriver, RetainedHost) {
     let board = RetainedBoard::new(ChessState::from_fen(fen).unwrap(), 342).unwrap();
     let options = super::super::viewer_options(board.scene(), CameraPreset::Overhead, [800, 600]);
@@ -281,7 +351,7 @@ fn closed_queue_is_visible_and_draw_claim_does_not_schedule() {
 #[test]
 fn undo_restart_and_host_shutdown_cancel_running_jobs() {
     use std::sync::mpsc;
-    for action in ["undo", "restart", "close"] {
+    for action in ["undo", "restart", "title", "close"] {
         let (mut driver, mut host) = setup(INITIAL_FEN, Side::Ivory);
         driver.play_uci("e2e4").unwrap();
         let (started, running) = mpsc::channel();
@@ -310,6 +380,14 @@ fn undo_restart_and_host_shutdown_cancel_running_jobs() {
         match action {
             "undo" => driver.undo().unwrap(),
             "restart" => driver.restart().unwrap(),
+            "title" => {
+                menu_key(&mut driver, "escape");
+                menu_key(&mut driver, "end");
+                menu_key(&mut driver, "enter");
+                assert_eq!(driver.screen(), crate::retained::Screen::Title);
+                assert!(driver.computer.is_none());
+                assert_eq!(game(&driver), &ChessState::initial());
+            }
             "close" => drop(host),
             _ => unreachable!(),
         }

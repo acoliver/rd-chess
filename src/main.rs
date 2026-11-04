@@ -97,6 +97,14 @@ fn present(options: &cli::Options, position: &Position) -> Result<(), Box<dyn Er
             position.seed,
         )?)?;
     }
+    if options.window
+        && options.load.is_none()
+        && options.view != "lineup"
+        && options.play.is_none()
+        && options.moves.is_none()
+    {
+        driver.show_title()?;
+    }
     let host = RetainedHost::new(
         scene.clone(),
         viewer_options(&scene, preset, [options.width, options.height]),

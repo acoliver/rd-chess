@@ -1,7 +1,7 @@
-use super::{BoardDriver, ui};
+use super::BoardDriver;
 use crate::{
     Square,
-    rules::{GameStatus, LegalMove, PromotionPiece},
+    rules::{LegalMove, PromotionPiece},
 };
 use std::collections::BTreeSet;
 use worldrunner::{
@@ -87,6 +87,9 @@ impl BoardDriver {
             .collect()
     }
     pub fn status_text(&self) -> String {
+        if let Some(result) = &self.menus.result {
+            return result.clone();
+        }
         if let Some(status) = self.computer_status() {
             return status;
         }
@@ -130,6 +133,7 @@ impl BoardDriver {
         if self.unfocused {
             return Ok(false);
         }
+        self.sync_menu_ui()?;
         if let RetainedInput::Key {
             key,
             pressed,
@@ -159,9 +163,7 @@ impl BoardDriver {
         let response = ui
             .pointer(pointer, self.viewport)
             .map_err(|e| e.to_string())?;
-        if let Some(index) = ui::choice(&response.actions) {
-            self.promote(index)?;
-        }
+        self.ui_actions(&response.actions, true)?;
         Ok(response.consumed)
     }
 
@@ -218,7 +220,7 @@ impl BoardDriver {
         let Some(board) = &self.board else {
             return Ok(());
         };
-        if !matches!(board.game().status(), GameStatus::Ongoing { .. }) {
+        if self.game_ended() {
             return Ok(());
         }
         let Some(square) = square else {
@@ -257,7 +259,7 @@ impl BoardDriver {
         }
     }
 
-    fn promote(&mut self, index: usize) -> Result<(), String> {
+    pub(super) fn promote(&mut self, index: usize) -> Result<(), String> {
         let promotion = [
             PromotionPiece::Queen,
             PromotionPiece::Rook,
@@ -291,7 +293,8 @@ impl BoardDriver {
         self.clear_selection()?;
         edits.extend(self.markers.clear());
         self.pending.borrow_mut().push_back(edits);
-        Ok(())
+        self.refresh_game_over()?;
+        self.sync_menu_ui()
     }
     pub(super) fn clear_selection(&mut self) -> Result<(), String> {
         self.interaction.selected = None;
@@ -311,17 +314,32 @@ impl BoardDriver {
             let response = ui
                 .key(ui_key, pressed, repeat, self.viewport)
                 .map_err(|e| e.to_string())?;
-            if let Some(index) = ui::choice(&response.actions) {
-                self.promote(index)?;
+            self.ui_actions(
+                &response.actions,
+                matches!(ui_key, UiKey::Enter | UiKey::Space),
+            )?;
+            if response.consumed {
+                return Ok(true);
             }
-            return Ok(response.consumed);
         }
         if !pressed || repeat {
             return Ok(false);
         }
+        if self.screen() != super::Screen::Play && key != "escape" {
+            return Ok(true);
+        }
         match key {
             "escape" if self.promotion_pending() || self.selected().is_some() => {
                 self.clear_selection()?;
+            }
+            "escape" if self.board.is_some() => {
+                let screen = match self.screen() {
+                    super::Screen::Play => super::Screen::InGameMenu,
+                    super::Screen::InGameMenu => super::Screen::Play,
+                    super::Screen::ComputerSetup => super::Screen::Title,
+                    screen => screen,
+                };
+                self.transition(screen)?;
             }
             "escape" => self.exit = true,
             "u" | "backspace" if self.board.is_some() => {
@@ -339,7 +357,7 @@ impl BoardDriver {
         }
         Ok(false)
     }
-    fn reset_camera(&mut self) {
+    pub(super) fn reset_camera(&mut self) {
         self.interaction.cancel_pointer();
         if let Some(camera) = &mut self.camera {
             camera.orbit.reset();
@@ -350,6 +368,10 @@ impl BoardDriver {
 
 fn ui_key(key: &str) -> Option<UiKey> {
     match key {
+        "arrowup" | "up" => Some(UiKey::Up),
+        "arrowdown" | "down" => Some(UiKey::Down),
+        "home" => Some(UiKey::Home),
+        "end" => Some(UiKey::End),
         "tab" => Some(UiKey::Tab),
         "shift" => Some(UiKey::Shift),
         "enter" => Some(UiKey::Enter),

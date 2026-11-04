@@ -15,7 +15,7 @@ use worldrunner::scene::viewer::{RetainedHost, WorkQueue, WorkSubmitError, WorkT
 
 const SEARCH_BUDGET: Duration = Duration::from_secs(10);
 
-/// Game setup shared by CLI and future new-game menus. Levels are 1 through 8.
+/// Game setup shared by CLI and new-game menus. Levels are 1 through 8.
 #[derive(Clone, Copy, Debug)]
 pub struct ComputerGame {
     human: Side,
@@ -23,6 +23,16 @@ pub struct ComputerGame {
     seed: u64,
 }
 impl ComputerGame {
+    pub fn human(self) -> Side {
+        self.human
+    }
+    pub fn level(self) -> u8 {
+        self.level
+    }
+    pub fn seed(self) -> u64 {
+        self.seed
+    }
+
     pub fn new(human: Side, level: u8, seed: u64) -> Result<Self, String> {
         if !(1..=8).contains(&level) {
             return Err("computer level must be 1..=8".into());
@@ -116,6 +126,10 @@ impl Computer {
 }
 
 impl BoardDriver {
+    pub fn computer_game(&self) -> Option<ComputerGame> {
+        self.computer.as_ref().map(|computer| computer.config)
+    }
+
     pub fn set_computer(&mut self, config: ComputerGame) -> Result<(), String> {
         if self.board.is_none() {
             return Err("editor scenes have no legal game".into());
@@ -162,13 +176,15 @@ impl BoardDriver {
         })
     }
     pub(super) fn advance_computer(&mut self, host: &mut RetainedHost) {
-        if !self.computer_turn() {
+        if self.screen() != super::Screen::Play || self.game_ended() || !self.computer_turn() {
+            return;
+        }
+        if let Some(reason) = self.draw_claim_reason() {
+            self.finish(format!("Draw: {reason} claimed by computer"))
+                .expect("valid game UI");
             return;
         }
         let state = self.board.as_ref().expect("computer board").game();
-        let GameStatus::Ongoing { claims, .. } = state.status() else {
-            return;
-        };
         let computer = self.computer.as_mut().expect("computer turn");
         if let Some(request) = &computer.pending {
             if Instant::now() >= request.deadline {
@@ -177,10 +193,6 @@ impl BoardDriver {
             return;
         }
         if computer.message.is_some() {
-            return;
-        }
-        if claims.fifty_move || claims.threefold {
-            computer.message = Some("Draw: computer claims repetition/fifty-move rule".into());
             return;
         }
         if computer.queue.is_none() {
@@ -264,7 +276,7 @@ impl BoardDriver {
     }
 }
 
-fn move_seed(seed: u64, ply: usize) -> u64 {
+pub(super) fn move_seed(seed: u64, ply: usize) -> u64 {
     let mut value = seed.wrapping_add((ply as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15));
     value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);

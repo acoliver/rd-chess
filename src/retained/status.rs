@@ -31,7 +31,7 @@ pub(super) fn status_text(game: &ChessState) -> String {
         ),
     }
 }
-fn side_name(side: Side) -> &'static str {
+pub(super) fn side_name(side: Side) -> &'static str {
     match side {
         Side::Ivory => "White",
         Side::Onyx => "Black",

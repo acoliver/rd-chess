@@ -12,7 +12,8 @@ notation and outcomes. The CPU-only `search` module adds analysis and eight
 uncalibrated opponent profiles, available for computer play. The CLI can apply
 legal UCI sequences from the initial game and capture their retained result.
 Arbitrary scene documents remain editor inputs, separate from rules authority.
-A window without `--load` or `--view lineup` starts local two-player play.
+A window without game flags, `--load` or `--view lineup` opens the title menu
+over the retained marble board. Choose Play a friend or Play the computer.
 Add `--play white|black --level 1..8` to choose your side against a computer:
 
 ```sh
@@ -21,7 +22,8 @@ cargo run --locked -j4 --features viewer -- --window --view overhead \
 ```
 
 `--play` requires a window and a level, and rejects editor/lineup/`--moves` inputs.
-The default remains local two-player; `--seed` controls both marble and the game.
+`--play` starts directly in-game; `--moves ""` starts direct local two-player
+play for scripted input. `--seed` controls both marble and the game.
 Choosing black lets the computer make the opening move.
 
 ## Independent checkout and build
@@ -42,7 +44,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`99f2c88e85c302be184981532e33fb14a78b99ca` from
+`5f99b20fb3b084de9d33d80e214a1fc7bc636e12` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -113,7 +115,7 @@ seeded marble remain procedural source assets, not copied image textures.
   wheel zooms and Home restores the preset. U/Backspace undoes one ply in local
   play, or returns to the last human decision against a computer. R restarts
   the game and resets the camera. Escape cancels selection/promotion first, then
-  exits. Loaded editor and lineup views retain R/Home reset and Escape exit.
+  opens the in-game menu. Escape again resumes. Loaded editor and lineup views retain R/Home reset and Escape exit.
   Resize and unmap/remap affect presentation only; camera changes never rewrite
   the saved position. `--capture` and `--window` cannot be combined.
 
@@ -171,8 +173,9 @@ committing a move. Text is extracted through the engine and submitted with
 The bundled unmodified Space Mono font is licensed under SIL OFL 1.1; its notice
 and license are in `assets/fonts/OFL.txt`. No game-owned text renderer is used.
 Status names check, mate, stalemate, automatic draw reasons and available
-threefold/fifty-move claims. Claim buttons, resignation and agreed draws belong
-to the later play menus; the board stops on rules-core terminal results.
+threefold/fifty-move claims. Claim draw appears only when a human can claim the
+current position. Claims and resignation record a controller result and stop play;
+fivefold repetition and seventy-five moves remain automatic rules results.
 
 With the viewer feature, `tests/retained.rs` checks exact object edit sets,
 identity-preserving undo, resource-table storage reuse and admission pressure.
@@ -189,6 +192,47 @@ that unchanged status is not resubmitted and a move uses one object batch plus
 one status update. The Xvfb smoke retains orbit/reset/resize and adds a click
 move compared to an exact rules-driven reference, followed by undo. That
 Linux real-window smoke is run by the gate, not on the macOS desktop.
+
+## Play menus
+
+Title, computer setup, pause and game-over screens share the existing native UI
+world and retained overlay compositor. The game owns labels, profile descriptions,
+menu structure and typed actions. Engine list selection owns pointer targeting,
+keyboard focus, Up/Down/Home/End navigation, scrolling and state tints. Arrows
+select command rows without executing them; Enter/Space or a click executes them.
+Tab moves between setup fields. Side and level selection takes effect immediately.
+
+Computer setup offers White, Black or seed-determined Random, and all eight named
+profiles with one-line descriptions in a clipped scroll list. The defaults are
+White and Level 1. Start begins a new game; Back or Escape returns to title.
+Choosing Black schedules the computer's opening through the existing work queue.
+These profiles have no measured ratings or verified adjacent strength ordering.
+
+The in-game menu offers Resume, Undo, Restart, Resign and Return to title. Undo is
+disabled before a human decision exists. Menus consume board input, including
+clicks outside their panels. Resignation names the winner. Return to title bumps
+the game generation, cancels outstanding work, removes the computer controller
+and resets the board without rebuilding its resident resources. Terminal games
+show the result and reason in status and a New game/Title modal. New game keeps
+the current opponent configuration; Title returns to the title choices.
+
+`tests/menus.rs` exercises synthetic keyboard and pointer transitions, draw claims
+and terminal actions without a GPU. Computer unit tests exercise a black-side
+opening and cancellation on title return using real engine queues. The required
+`tests/menus_gpu.rs` captures title and in-game menus through the same windowless
+path, checks exact stable repeats, unchanged board pixels outside the panel and
+visible focus tints that move with navigation. No GPU test skips a missing device.
+The Xvfb smoke adds a no-game-flags title launch followed by Enter on Play a friend.
+It is not run as a visible macOS window.
+
+Settings controls and game save slots are not included in this engine pin.
+P6 part 2 needs native sliders/toggles and the engine's bounded transactional
+application settings/save-slot service, including application directories, listing,
+metadata and explicit corruption/permission errors. Chess will own versioned game
+payloads containing the initial FEN, move history, seed, opponent and controller
+result, so castling rights and repetition history survive relaunch. Fixed slot
+labels avoid requiring text entry; editable labels and cross-display UI scaling
+need the separate retained text-input/display-scale APIs.
 
 ## Legal chess rules
 
@@ -408,8 +452,8 @@ resolved from this standalone root. `cargo xtask window` builds the viewer and
 launches it using an exclusive Xvfb `:100` via `xvfb-run`; it never uses the desktop.
 Requirements: Xvfb, xvfb-run, xauth, xdotool, libX11 and Pillow. Missing prerequisites
 fail explicitly. The smoke compares real window pixels to fresh offscreen frames,
-exercises orbit/zoom/reset/resize/unmap/remap, checks saved positions and clean
-Escape/window-manager exits. Its original readiness checks are bounded; the
+exercises orbit/zoom/reset/resize/unmap/remap, checks saved positions, title-to-friend Enter navigation, Escape menu/resume and
+clean window-manager exits. Its original readiness checks are bounded; the
 wrapper bounds the whole window run to five minutes and cleans up its process group.
 
 The GitHub Actions workflow fetches the independent engine, provisions Mesa

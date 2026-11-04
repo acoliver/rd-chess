@@ -21,6 +21,7 @@ pub type InputInbox = Rc<RefCell<VecDeque<RetainedInput>>>;
 #[derive(Default)]
 pub struct BoardDriver {
     pub(super) board: Option<super::RetainedBoard>,
+    pub(super) menus: super::menus::Menus,
     pub(super) computer: Option<super::computer::Computer>,
     pub(super) pending: TransactionQueue,
     captures: CaptureInbox,
@@ -69,7 +70,8 @@ impl BoardDriver {
                 .expect("game has kings")
                 + 1;
         }
-        Ok(())
+        self.refresh_game_over()?;
+        self.sync_menu_ui()
     }
     pub fn camera_pose(&self) -> Option<CameraPose> {
         self.camera.as_ref().map(|camera| camera.orbit.pose())
@@ -79,10 +81,12 @@ impl BoardDriver {
             .board
             .as_mut()
             .ok_or("editor scenes have no legal game")?;
-        if !matches!(
-            board.game().status(),
-            crate::rules::GameStatus::Ongoing { .. }
-        ) {
+        if self.menus.result.is_some()
+            || !matches!(
+                board.game().status(),
+                crate::rules::GameStatus::Ongoing { .. }
+            )
+        {
             return Err("game has ended".into());
         }
         let edits = board
@@ -98,6 +102,8 @@ impl BoardDriver {
             .expect("playable board")
             .undo_plies(count)
             .map_err(|error| error.to_string())?;
+        self.menus.result = None;
+        self.menus.screen = super::Screen::Play;
         self.enqueue_move(edits)
     }
     pub fn restart(&mut self) -> Result<(), String> {
@@ -106,6 +112,8 @@ impl BoardDriver {
             .as_mut()
             .ok_or("editor scenes have no legal game")?
             .restart();
+        self.menus.result = None;
+        self.menus.screen = super::Screen::Play;
         self.enqueue_move(edits)
     }
     pub fn queue(&self) -> TransactionQueue {
@@ -144,10 +152,10 @@ impl BoardDriver {
         Ok(true)
     }
     fn publish_ui(&mut self, host: &mut RetainedHost) -> Result<bool, String> {
+        self.sync_menu_ui()?;
         let text = self.status_text();
-        let promotion = self.promotion_pending();
         if let Some(ui) = &mut self.ui {
-            if let Some(overlay) = ui.overlay(&text, promotion, self.viewport)? {
+            if let Some(overlay) = ui.overlay(&text, self.viewport)? {
                 self.overlay = Some(overlay);
             }
             if let Some(overlay) = &self.overlay {
