@@ -289,7 +289,7 @@ against a bare king, and bishop-only positions with all bishops on one square
 colour. Other dead positions, including blocked pawn fortresses, are not detected.
 FEN validation checks local legality and promotion budgets, not full retrograde
 reachability. Move counters use `u32`; an overflowing move fails without mutation.
-Timed play, flag-fall, Chess960 and PGN are outside this rules-core proposal.
+Timed play, flag-fall and Chess960 are outside this rules core.
 
 Run the CPU-only rules suite without a graphics adapter:
 
@@ -301,6 +301,47 @@ The default suite includes initial-position perft through depth four and the
 Chess Programming Wiki's positions 2–5, with their verified FENs. It also covers
 special moves, draw claims/history, strict FEN errors, SAN/UCI round trips, exact
 undo and deterministic random legal sequences. No perft test is ignored.
+
+## PGN records
+
+`rules::pgn` imports and exports game records without a GPU or viewer feature.
+`PgnGame` owns the initial FEN, validated main-line moves, current rules state,
+tags, result and optional comments. Start a record from a rules position, apply
+legal moves, and export it:
+
+```rust
+use chess3d::rules::{ChessState, pgn::{PgnGame, parse}};
+
+let mut record = PgnGame::new(&ChessState::initial());
+let chess_move = record.state().parse_uci("e2e4")?;
+record.play(chess_move)?;
+record.tags.insert("Black".into(), "Computer (Level 2)".into());
+record.set_comment(1, "White occupies the center.")?;
+let pgn = record.export()?;
+let imported = parse(&pgn)?;
+assert_eq!(imported[0].state(), record.state());
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+Export supplies the Seven Tag Roster with defaults, derives SetUp/FEN tags for
+noninitial starts, writes standard SAN and move numbers (including a black-side
+start), and wraps movetext at 80 columns. Player names are metadata supplied by
+the caller. Comments attach to ply zero or follow a committed ply; whitespace
+is normalized. Comments containing braces use semicolon lines. An unbroken
+comment word over 78 columns produces a typed export error instead of being
+altered or exceeding the line limit. Tags escape quotes and backslashes.
+
+Import accepts multiple games, optional SAN check/mate suffixes, zero-spelled
+castles, promotions with or without `=`, comments, annotations and recursive
+variations. Variation moves are validated from their branch position but are
+not retained. The main line rebuilds repetition history. Results are recorded
+declarations, so resignations and agreed draws need no terminal board position;
+the Result tag must agree with the movetext marker. Input is limited to 4 MiB
+and variation nesting to 32. Errors name the one-based game, ply and token.
+
+`cargo run --locked -j4 -- --pgn-check games.pgn` validates the entire file before
+printing `Game N: <final FEN> <result>` for each game. This CPU-only mode cannot
+be combined with scene, save or play options, and never opens a window.
 
 ## Computer analysis and opponent policy
 

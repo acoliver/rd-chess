@@ -14,6 +14,7 @@ pub struct Options {
     pub moves: Option<String>,
     pub play: Option<chess3d::Side>,
     pub level: Option<u8>,
+    pub pgn_check: Option<PathBuf>,
 }
 
 impl Options {
@@ -30,7 +31,9 @@ impl Options {
             moves: None,
             play: None,
             level: None,
+            pgn_check: None,
         };
+        let mut other_options = false;
         let mut args = std::env::args_os().skip(1);
         while let Some(arg) = args.next() {
             let flag = arg.to_string_lossy();
@@ -38,6 +41,7 @@ impl Options {
                 print_help();
                 return Ok(None);
             }
+            other_options |= flag != "--pgn-check";
             if flag == "--window" {
                 options.window = true;
                 continue;
@@ -53,6 +57,7 @@ impl Options {
                 "--moves",
                 "--play",
                 "--level",
+                "--pgn-check",
             ]
             .contains(&flag.as_ref())
             {
@@ -63,6 +68,9 @@ impl Options {
                 .ok_or_else(|| format!("{flag} requires a value"))?;
             options.set_value(&flag, value)?;
         }
+        if options.pgn_check.is_some() && other_options {
+            return Err("--pgn-check cannot be combined with other modes/options".into());
+        }
         options.validate()?;
         Ok(Some(options))
     }
@@ -71,6 +79,7 @@ impl Options {
         let text = value.to_string_lossy().into_owned();
         match flag {
             "--load" => self.load = Some(PathBuf::from(value)),
+            "--pgn-check" => self.pgn_check = Some(PathBuf::from(value)),
             "--save" => self.save = Some(PathBuf::from(value)),
             "--capture" => self.capture = Some(PathBuf::from(value)),
             "--view" => self.view = text,
@@ -164,6 +173,7 @@ fn print_help() {
         Play: left click select/move, U/Backspace undo, R restart, Escape cancel/menu (editor: exit).\n\
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\
         --play chooses the human side against a computer; --seed also seeds its replies.\n\
+        --pgn-check file.pgn validates games and prints final FEN/result without a GPU.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\
         --save writes the current position before capture/window; camera orbit is not saved."
     );
