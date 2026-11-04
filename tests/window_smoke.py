@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Opt-in real Chess3D pixel/input smoke on an exclusive Xvfb :100 (never desktop).
+"""Opt-in real Chess3D pixel/input smoke on an isolated Xvfb display (never desktop).
 
 Requires Pillow, xdotool, libX11 and a chess3d binary built with --features viewer.
-The caller starts Xvfb :100 and chooses Vulkan ICD/library paths. Each window is
-selected by child PID. Capture references exercise the same real game scene.
+The caller starts Xvfb, sets DISPLAY and chooses Vulkan ICD/library paths. Each
+window is selected by child PID. Capture references exercise the same real game scene.
 """
 
 import argparse
@@ -16,7 +16,7 @@ import time
 
 from PIL import Image, ImageChops, ImageGrab, ImageStat
 
-DISPLAY = ":100"
+DISPLAY = os.environ["DISPLAY"]
 
 
 def wait_for(predicate, label):
@@ -73,12 +73,15 @@ def close_request(window):
         x11.XCloseDisplay(display)
 
 
-def run_case(args, environment, name, view, load=None, controls=False):
+def run_case(args, environment, name, view, load=None, interaction=None):
+    computer = interaction == "computer"
     output = args.output
     saved = output / f"{name}-position.json"
     reference = output / f"{name}-capture.png"
     width, height = (1200, 600) if view == "lineup" else (960, 720)
     common = ["--view", view, "--width", str(width), "--height", str(height)]
+    if computer:
+        common += ["--seed", "42"]
     if load:
         common += ["--load", str(load)]
     headless = dict(environment)
@@ -94,7 +97,10 @@ def run_case(args, environment, name, view, load=None, controls=False):
                               check=check, timeout=10).stdout.strip()
 
     with (output / f"{name}.log").open("w") as log:
-        process = subprocess.Popen([str(args.binary), *common, "--window", "--save", str(saved)],
+        opponent = ["--play", "white", "--level", "1"] if computer else []
+        if not computer and not load and view != "lineup" and interaction != "title":
+            opponent = ["--moves", ""]
+        process = subprocess.Popen([str(args.binary), *common, *opponent, "--window", "--save", str(saved)],
                                    env=environment, stdout=log, stderr=log)
         try:
             window = wait_for(lambda: xdo("search", "--pid", process.pid, "--name",
@@ -112,6 +118,18 @@ def run_case(args, environment, name, view, load=None, controls=False):
                 image = screenshot()
                 return image if difference(reference_image, image) <= tolerance else None
 
+            title_controls = []
+            if interaction == "title":
+                def title_ready():
+                    image = screenshot()
+                    outside = (0, 0, 80, height)
+                    return image if (difference(expected.crop(outside), image.crop(outside)) <= 0.1
+                                     and difference(expected, image) > 2) else None
+
+                title = wait_for(title_ready, "title menu over retained board")
+                title.save(output / f"{name}-title.png")
+                xdo("key", "--window", window, "Return")
+                title_controls.append("title Enter starts Play a friend")
             initial = wait_for(lambda: matching(expected), "window matching headless chess capture")
             initial.save(output / f"{name}-initial.png")
             colors = initial.getcolors(2_000_000)
@@ -124,10 +142,29 @@ def run_case(args, environment, name, view, load=None, controls=False):
                 assert position == json.loads(load.read_text()), "loaded position changed"
             else:
                 assert len(position["pieces"]) == 32
-                assert position["seed"] == 342
+                assert position["seed"] == (42 if computer else 342)
             saved_bytes = saved.read_bytes()
-            records = []
-            if controls:
+            records = title_controls
+            if view == "overhead" and not load:
+                moved_reference = output / f"{name}-e2e4-capture.png"
+                sequence = "e2e4 g8f6" if computer else "e2e4"
+                subprocess.run([str(args.binary), *common, "--moves", sequence,
+                                "--capture", str(moved_reference)], env=headless,
+                               check=True, capture_output=True, timeout=60)
+                # Engine-projected board-plane centers at this fixed 960x720 preset.
+                xdo("mousemove", "--window", window, 516, 538)
+                xdo("click", 1)
+                wait_for(lambda: difference(initial, screenshot()) > 0.01,
+                         "e2 legal-target highlights")
+                xdo("mousemove", "--window", window, 515, 395)
+                xdo("click", 1)
+                moved = wait_for(lambda: matching(Image.open(moved_reference).convert("RGB")),
+                                 f"click and reply {sequence} matching rules-driven capture")
+                moved.save(output / f"{name}-clicked-e2e4.png")
+                xdo("key", "--window", window, "u")
+                wait_for(lambda: matching(initial, 0), "U exact board undo")
+                records += [f"click and reply {sequence} matches capture", "U exact board undo"]
+            if interaction == "camera":
                 def changed(reference_image):
                     image = screenshot()
                     return image if difference(reference_image, image) > 2 else None
@@ -163,7 +200,11 @@ def run_case(args, environment, name, view, load=None, controls=False):
                            "unmap/map restoration"]
                 xdo("windowfocus", window)
                 xdo("key", "--window", window, "Escape")
-                records.append("Escape clean exit")
+                wait_for(lambda: difference(resized, screenshot()) > 2, "Escape opens game menu")
+                xdo("key", "--window", window, "Escape")
+                wait_for(lambda: matching(resized, 0), "Escape resumes board")
+                close_request(window)
+                records += ["Escape opens menu and resumes", "WM_DELETE_WINDOW clean exit"]
             else:
                 close_request(window)
                 records.append("WM_DELETE_WINDOW clean exit")
@@ -196,8 +237,10 @@ def main():
     for key in ["WAYLAND_DISPLAY", "WAYLAND_SOCKET"]:
         environment.pop(key, None)
     fixture = Path(__file__).resolve().parent.parent / "assets/positions/study.json"
-    results = [run_case(args, environment, "hero", "hero", controls=True),
+    results = [run_case(args, environment, "hero", "hero", interaction="camera"),
                run_case(args, environment, "overhead", "overhead"),
+               run_case(args, environment, "title-to-friend", "overhead", interaction="title"),
+               run_case(args, environment, "computer-level-1", "overhead", interaction="computer"),
                run_case(args, environment, "study", "hero", load=fixture),
                run_case(args, environment, "lineup", "lineup")]
     encoded = json.dumps(results, indent=2) + "\n"

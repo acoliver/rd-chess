@@ -1,123 +1,24 @@
-use chess3d::{Piece, PieceKind, Position, Side, Square, piece_lineup_scene, render_scene};
-use glam::Vec3;
+use chess3d::{
+    CameraPreset, Piece, PieceKind, Position, Side, Square, piece_lineup_scene, render_scene,
+    rules::ChessState,
+};
 use std::error::Error;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
+#[cfg(not(feature = "viewer"))]
 use worldrunner::scene::gpu;
+mod cli;
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "CLI argument validation and capture dispatch form one compact application boundary"
-)]
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut load = None;
-    let mut save = None;
-    let mut capture = None;
-    let mut window = false;
-    let mut view = String::from("hero");
-    let mut width = 1280u32;
-    let mut height = 960u32;
-    let mut seed = None;
-    let mut args = std::env::args_os().skip(1);
-    while let Some(arg) = args.next() {
-        let flag = arg.to_string_lossy().into_owned();
-        let value =
-            |args: &mut std::iter::Skip<std::env::ArgsOs>| -> Result<PathBuf, Box<dyn Error>> {
-                args.next()
-                    .map(PathBuf::from)
-                    .ok_or_else(|| format!("{flag} requires a value").into())
-            };
-        match flag.as_str() {
-            "--load" => load = Some(value(&mut args)?),
-            "--save" => save = Some(value(&mut args)?),
-            "--capture" => capture = Some(value(&mut args)?),
-            "--window" => window = true,
-            "--view" => view = value(&mut args)?.to_string_lossy().into_owned(),
-            "--width" => width = value(&mut args)?.to_string_lossy().parse()?,
-            "--height" => height = value(&mut args)?.to_string_lossy().parse()?,
-            "--seed" => seed = Some(value(&mut args)?.to_string_lossy().parse::<u64>()?),
-            "--help" => {
-                println!(
-                    "chess3d [--load position.json] [--save position.json] [--capture image.png | --window] [--view hero|overhead|lineup] [--width px --height px] [--seed n]
-\
-                     Window mode requires: cargo run -p chess3d --features viewer -- --window
-\
-                     Controls: left-drag orbit, wheel zoom, R/Home reset, Escape/close exit.
-\
-                     --save writes the current position before capture/window; camera orbit is not saved."
-                );
-                return Ok(());
-            }
-            other => return Err(format!("unknown argument {other}; use --help").into()),
-        }
-    }
-    if window && capture.is_some() {
-        return Err("--capture and --window cannot be combined; run them separately".into());
-    }
-    if window && !cfg!(feature = "viewer") {
-        return Err("--window requires the optional viewer feature; run: cargo run -p chess3d --features viewer -- --window".into());
-    }
-    if !(64..=4096).contains(&width)
-        || !(64..=4096).contains(&height)
-        || u64::from(width) * u64::from(height) > 16_777_216
-    {
-        return Err(
-            "dimensions must be 64..=4096 pixels and at most 16,777,216 pixels total".into(),
-        );
-    }
-    if !["hero", "overhead", "lineup"].contains(&view.as_str()) {
-        return Err("--view must be hero, overhead, or lineup".into());
-    }
-    if load.is_some() && seed.is_some() {
-        return Err(
-            "--seed cannot be combined with --load; loaded seed/style are authoritative".into(),
-        );
-    }
-    if let Some(capture_path) = &capture {
-        let capture_path = resolved_path(capture_path)?;
-        for path in load.iter().chain(save.iter()) {
-            if resolved_path(path)? == capture_path {
-                return Err("capture path must differ from load/save position paths".into());
-            }
-        }
-    }
-    let position = if let Some(path) = load {
-        Position::load(&path)?
-    } else {
-        Position::initial(seed.unwrap_or(342))
+    let Some(options) = cli::Options::parse()? else {
+        return Ok(());
     };
-    if let Some(path) = save {
-        position.save_atomic(&path)?;
+    let position = position(&options)?;
+    if let Some(path) = &options.save {
+        position.save_atomic(path)?;
     }
-    if let Some(path) = capture {
-        let presentation = prepare_view(&position, &view)?;
-        let viewport = gpu::Viewport { width, height };
-        let camera = *presentation
-            .scene
-            .effects()
-            .expect("chess supplies studio lighting")
-            .camera();
-        let camera_view = gpu::SceneView::new(presentation.pose, camera, viewport)?;
-        let context = pollster::block_on(gpu::device::GpuContext::request_with_features(
-            gpu::wgpu::Features::empty(),
-        ))?;
-        let image = gpu::shadows::capture_scene_shadowed(
-            &context,
-            &presentation.scene,
-            &camera_view,
-            presentation.shadows,
-        )?;
-        write_png_atomic(&path, width, height, &image.pixels)?;
-        eprintln!(
-            "captured {}x{} {} view to {}",
-            width,
-            height,
-            view,
-            path.display()
-        );
-    } else if window {
-        #[cfg(feature = "viewer")]
-        open_window(prepare_view(&position, &view)?, width, height)?;
+    if options.capture.is_some() || options.window {
+        present(&options, &position)?;
     } else {
         println!(
             "Chess3D position ready: {} pieces, seed {}, style {}",
@@ -129,68 +30,134 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-struct Presentation {
-    scene: worldrunner::scene::plan::RenderScene,
-    pose: gpu::CameraPose,
-    shadows: gpu::shadows::DirectionalShadowSettings,
+fn position(options: &cli::Options) -> Result<Position, Box<dyn Error>> {
+    if let Some(path) = &options.load {
+        return Ok(Position::load(path)?);
+    }
+    let seed = options.seed.unwrap_or(342);
+    let Some(moves) = &options.moves else {
+        return Ok(Position::initial(seed));
+    };
+    let mut game = ChessState::initial();
+    for uci in moves.split_whitespace() {
+        let chess_move = game
+            .parse_uci(uci)
+            .map_err(|error| format!("invalid UCI move '{uci}': {error}"))?;
+        game.play(chess_move)?;
+    }
+    Ok(game.to_position(seed))
 }
 
-fn prepare_view(position: &Position, view: &str) -> Result<Presentation, chess3d::SceneBuildError> {
+fn prepare_view(
+    position: &Position,
+    view: &str,
+) -> Result<(worldrunner::scene::plan::RenderScene, CameraPreset), chess3d::SceneBuildError> {
     let scene = if view == "lineup" {
         piece_lineup_scene(&lineup_position(position))?
     } else {
         render_scene(position)?
     };
-    let pose = match view {
-        "hero" => chess3d::CameraPreset::Hero,
-        "overhead" => chess3d::CameraPreset::Overhead,
-        _ => chess3d::CameraPreset::Lineup,
-    }
-    .pose();
-    Ok(Presentation {
-        scene,
-        pose,
-        shadows: gpu::shadows::DirectionalShadowSettings {
-            focus_meters: Vec3::ZERO,
-            half_extent_meters: 8.0,
-            depth_half_extent_meters: 16.0,
-            resolution: 2048,
-            depth_bias: 0.0008,
-            normal_bias_meters: 0.012,
-        },
-    })
+    let preset = match view {
+        "hero" => CameraPreset::Hero,
+        "overhead" => CameraPreset::Overhead,
+        _ => CameraPreset::Lineup,
+    };
+    Ok((scene, preset))
 }
 
 #[cfg(feature = "viewer")]
-fn open_window(
-    presentation: Presentation,
-    width: u32,
-    height: u32,
-) -> Result<(), worldrunner::scene::viewer::ViewerError> {
-    use worldrunner::scene::viewer::{FrameProfile, OrbitLimits, ViewerOptions, run};
-    let camera = *presentation
-        .scene
-        .effects()
-        .expect("chess supplies studio lighting")
-        .camera();
-    run(
-        presentation.scene,
-        ViewerOptions {
-            title: "Chess3D — Nocturne / Ivory".into(),
-            size: [width, height],
-            pose: presentation.pose,
-            camera,
-            frame_profile: FrameProfile::Legacy,
-            frames_in_flight: 2,
-            orbit: OrbitLimits {
-                min_distance_millimeters: 2_000.0,
-                max_distance_millimeters: 40_000.0,
-                min_elevation_radians: 0.1,
-                max_elevation_radians: 1.47,
+fn present(options: &cli::Options, position: &Position) -> Result<(), Box<dyn Error>> {
+    use chess3d::retained::{BoardDriver, RetainedBoard, capture_frame, viewer_options};
+    use worldrunner::scene::viewer::RetainedHost;
+    let mut driver = BoardDriver::default();
+    let (scene, preset) = if options.load.is_none() && options.view != "lineup" {
+        driver = BoardDriver::with_board(RetainedBoard::new(ChessState::initial(), position.seed)?);
+        for uci in options.moves.as_deref().unwrap_or("").split_whitespace() {
+            driver.play_uci(uci)?;
+        }
+        (
+            driver
+                .board()
+                .expect("rules driver owns the game")
+                .scene()
+                .clone(),
+            if options.view == "overhead" {
+                CameraPreset::Overhead
+            } else {
+                CameraPreset::Hero
             },
-            shadows: Some(presentation.shadows),
-        },
-    )
+        )
+    } else {
+        prepare_view(position, &options.view)?
+    };
+    if let Some(human) = options.play {
+        driver.set_computer(chess3d::retained::ComputerGame::new(
+            human,
+            options.level.expect("validated level"),
+            position.seed,
+        )?)?;
+    }
+    if options.window
+        && options.load.is_none()
+        && options.view != "lineup"
+        && options.play.is_none()
+        && options.moves.is_none()
+    {
+        driver.show_title()?;
+    }
+    let host = RetainedHost::new(
+        scene.clone(),
+        viewer_options(&scene, preset, [options.width, options.height]),
+    )?;
+    if let Some(path) = &options.capture {
+        let queue = driver.queue();
+        let inbox = driver.captures();
+        let mut run = host.windowless(&mut driver)?;
+        let image = capture_frame(&mut run, &queue, &inbox)?;
+        write_png_atomic(
+            path,
+            image.viewport.width,
+            image.viewport.height,
+            &image.pixels,
+        )?;
+        run.shutdown()?;
+    } else {
+        host.run(&mut driver)?;
+    }
+    Ok(())
+}
+
+#[cfg(not(feature = "viewer"))]
+fn present(options: &cli::Options, position: &Position) -> Result<(), Box<dyn Error>> {
+    let (scene, preset) = prepare_view(position, &options.view)?;
+    let viewport = gpu::Viewport {
+        width: options.width,
+        height: options.height,
+    };
+    let camera_view = gpu::SceneView::new(
+        preset.pose(),
+        *scene
+            .effects()
+            .expect("chess supplies studio lighting")
+            .camera(),
+        viewport,
+    )?;
+    let context = pollster::block_on(gpu::device::GpuContext::request_with_features(
+        gpu::wgpu::Features::empty(),
+    ))?;
+    let image = gpu::shadows::capture_scene_shadowed(
+        &context,
+        &scene,
+        &camera_view,
+        chess3d::shadow_settings(),
+    )?;
+    write_png_atomic(
+        options.capture.as_ref().expect("capture without viewer"),
+        options.width,
+        options.height,
+        &image.pixels,
+    )?;
+    Ok(())
 }
 
 fn lineup_position(source: &Position) -> Position {

@@ -1,0 +1,275 @@
+use super::{interaction::Interaction, markers::Markers, ui::GameUi};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, VecDeque},
+    rc::Rc,
+    sync::Arc,
+};
+use worldrunner::scene::{
+    gpu::{CameraPose, SceneView, simulation::UiOverlay},
+    viewer::{
+        OrbitCamera, RetainedCaptureOutcome, RetainedDriver, RetainedEvent, RetainedEventHost,
+        RetainedHost, RetainedInput, RetainedTick, RetainedUpdate, SceneObjectEdit, ViewerError,
+        ViewerOptions,
+    },
+};
+
+pub type TransactionQueue = Rc<RefCell<VecDeque<Vec<SceneObjectEdit>>>>;
+pub type CaptureInbox = Rc<RefCell<BTreeMap<u64, RetainedCaptureOutcome>>>;
+pub type InputInbox = Rc<RefCell<VecDeque<RetainedInput>>>;
+
+#[derive(Default)]
+pub struct BoardDriver {
+    pub(super) board: Option<super::RetainedBoard>,
+    pub(super) menus: super::menus::Menus,
+    pub(super) computer: Option<super::computer::Computer>,
+    pub(super) pending: TransactionQueue,
+    captures: CaptureInbox,
+    inputs: InputInbox,
+    pub(super) interaction: Interaction,
+    pub(super) markers: Markers,
+    pub(super) ui: Option<GameUi>,
+    overlay: Option<Arc<UiOverlay>>,
+    pub(super) camera: Option<CameraControls>,
+    pub(super) view: Option<SceneView>,
+    pub(super) viewport: [u32; 2],
+    pub(super) generation: u64,
+    presented: Option<u64>,
+    pub(super) presenting: bool,
+    pub(super) unfocused: bool,
+    pub(super) exit: bool,
+}
+pub(super) struct CameraControls {
+    pub orbit: OrbitCamera,
+    pub dirty: bool,
+}
+
+impl BoardDriver {
+    pub fn with_board(board: super::RetainedBoard) -> Self {
+        Self {
+            board: Some(board),
+            ..Self::default()
+        }
+    }
+    pub fn board(&self) -> Option<&super::RetainedBoard> {
+        self.board.as_ref()
+    }
+    pub fn configure(&mut self, options: &ViewerOptions) -> Result<(), String> {
+        self.camera = Some(CameraControls {
+            orbit: OrbitCamera::new(options.pose, options.orbit).map_err(|e| e.to_string())?,
+            dirty: false,
+        });
+        self.viewport = options.size;
+        if let Some(board) = &self.board {
+            self.ui = Some(GameUi::new().map_err(|e| e.to_string())?);
+            self.markers.base = board
+                .identities()
+                .values()
+                .map(|ids| ids.body.0.max(ids.eye.0))
+                .max()
+                .expect("game has kings")
+                + 1;
+        }
+        self.refresh_game_over()?;
+        self.sync_menu_ui()
+    }
+    pub fn camera_pose(&self) -> Option<CameraPose> {
+        self.camera.as_ref().map(|camera| camera.orbit.pose())
+    }
+    pub fn play_uci(&mut self, uci: &str) -> Result<(), String> {
+        let board = self
+            .board
+            .as_mut()
+            .ok_or("editor scenes have no legal game")?;
+        if self.menus.result.is_some()
+            || !matches!(
+                board.game().status(),
+                crate::rules::GameStatus::Ongoing { .. }
+            )
+        {
+            return Err("game has ended".into());
+        }
+        let edits = board
+            .play_uci(uci)
+            .map_err(|error| format!("invalid UCI move '{uci}': {error}"))?;
+        self.enqueue_move(edits)
+    }
+    pub fn undo(&mut self) -> Result<(), String> {
+        let count = self.undo_plies()?;
+        let edits = self
+            .board
+            .as_mut()
+            .expect("playable board")
+            .undo_plies(count)
+            .map_err(|error| error.to_string())?;
+        self.menus.result = None;
+        self.menus.screen = super::Screen::Play;
+        self.enqueue_move(edits)
+    }
+    pub fn restart(&mut self) -> Result<(), String> {
+        let edits = self
+            .board
+            .as_mut()
+            .ok_or("editor scenes have no legal game")?
+            .restart();
+        self.menus.result = None;
+        self.menus.screen = super::Screen::Play;
+        self.enqueue_move(edits)
+    }
+    pub fn queue(&self) -> TransactionQueue {
+        self.pending.clone()
+    }
+    pub fn captures(&self) -> CaptureInbox {
+        self.captures.clone()
+    }
+    /// Test inputs pass through the same handler as native retained events.
+    pub fn inputs(&self) -> InputInbox {
+        self.inputs.clone()
+    }
+
+    fn publish_objects(&mut self, host: &mut RetainedHost) -> Result<bool, String> {
+        let mut pending = self.pending.borrow_mut();
+        if let Some(edits) = pending.front() {
+            if admit(host, RetainedUpdate::Objects(edits.clone()))? {
+                pending.pop_front();
+                self.presenting = true;
+            }
+            return Ok(false);
+        }
+        Ok(true)
+    }
+    fn publish_markers(&mut self, host: &mut RetainedHost) -> Result<bool, String> {
+        let mut next = self.destinations();
+        next.extend(self.selected());
+        let edits = self.markers.edits(&next);
+        if !edits.is_empty() {
+            if admit(host, RetainedUpdate::Objects(edits))? {
+                self.markers.visible = next;
+                self.presenting = true;
+            }
+            return Ok(false);
+        }
+        Ok(true)
+    }
+    fn publish_ui(&mut self, host: &mut RetainedHost) -> Result<bool, String> {
+        self.sync_menu_ui()?;
+        let text = self.status_text();
+        if let Some(ui) = &mut self.ui {
+            if let Some(overlay) = ui.overlay(&text, self.viewport)? {
+                self.overlay = Some(overlay);
+            }
+            if let Some(overlay) = &self.overlay {
+                if admit(host, RetainedUpdate::Ui(overlay.clone()))? {
+                    self.overlay = None;
+                    self.presenting = true;
+                }
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+    fn publish_camera(&mut self, host: &mut RetainedHost) -> Result<(), String> {
+        if let Some(camera) = &mut self.camera
+            && camera.dirty
+            && admit(
+                host,
+                RetainedUpdate::Camera {
+                    pose: camera.orbit.pose(),
+                    lens: host.options().camera,
+                    convention: host.options().camera_convention,
+                },
+            )?
+        {
+            camera.dirty = false;
+            self.presenting = true;
+        }
+        Ok(())
+    }
+    fn publish(&mut self, host: &mut RetainedHost) -> Result<(), String> {
+        if !self.publish_objects(host)? {
+            return Ok(());
+        }
+        if self.viewport.contains(&0) {
+            return Ok(());
+        }
+        if !self.publish_markers(host)? {
+            return Ok(());
+        }
+        if !self.publish_ui(host)? {
+            return Ok(());
+        }
+        self.publish_camera(host)
+    }
+}
+impl RetainedDriver for BoardDriver {
+    fn update(&mut self, host: &mut RetainedHost, _: &RetainedTick) -> Result<(), String> {
+        if self.camera.is_none() {
+            self.configure(host.options())?;
+        }
+        self.viewport = host.size();
+        self.view = host.view().map_err(|e| e.to_string())?;
+        self.generation = host.accepted_generation();
+        self.presenting = self.presented != Some(self.generation);
+        let inputs = std::mem::take(&mut *self.inputs.borrow_mut());
+        let view = self.view;
+        for input in inputs {
+            let hit = self.input_hit(&input, |point, include| host.pick(point, include));
+            self.handle_input(&input, view.as_ref(), hit)?;
+        }
+        if self.exit {
+            host.request_exit();
+        } else {
+            self.advance_computer(host);
+        }
+        let result = self.publish(host);
+        self.generation = host.accepted_generation();
+        result
+    }
+
+    fn event(
+        &mut self,
+        host: &mut RetainedEventHost<'_>,
+        event: &RetainedEvent,
+    ) -> Result<(), String> {
+        match event {
+            RetainedEvent::WorkReady => self.drain_computer()?,
+            RetainedEvent::Presented { .. } => {
+                let generation = host
+                    .statistics()
+                    .expect("presented frame statistics")
+                    .generation;
+                self.presented = Some(generation);
+                self.presenting = generation != self.generation;
+            }
+            RetainedEvent::Capture {
+                id,
+                generation,
+                outcome,
+                ..
+            } => {
+                if matches!(outcome, RetainedCaptureOutcome::Completed { .. }) {
+                    self.presented = Some(*generation);
+                    self.presenting = *generation != self.generation;
+                }
+                self.captures.borrow_mut().insert(*id, outcome.clone());
+            }
+            RetainedEvent::Input(input) => {
+                let view = self.view;
+                let hit = self.input_hit(input, |point, include| host.pick(point, include));
+                self.handle_input(input, view.as_ref(), hit)?;
+                if self.exit {
+                    host.request_exit();
+                }
+            }
+            RetainedEvent::Shutdown => {}
+        }
+        Ok(())
+    }
+}
+fn admit(host: &mut RetainedHost, update: RetainedUpdate) -> Result<bool, String> {
+    match host.apply(update) {
+        Ok(()) => Ok(true),
+        Err(ViewerError::BackPressure { .. }) => Ok(false),
+        Err(error) => Err(error.to_string()),
+    }
+}

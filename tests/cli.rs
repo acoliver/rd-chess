@@ -1,3 +1,64 @@
+#[test]
+fn computer_arguments_are_validated_without_launching_a_window() {
+    for (args, message) in [
+        (vec!["--play", "green"], "--play must be white or black"),
+        (vec!["--level", "0"], "--level must be 1..=8"),
+        (vec!["--level", "9"], "--level must be 1..=8"),
+        (vec!["--level", "1"], "--level requires --play"),
+        (vec!["--play", "white"], "--play requires --level"),
+        (
+            vec!["--play", "black", "--level", "1"],
+            "--play requires --window",
+        ),
+    ] {
+        assert_failure(&cli().args(args).output().unwrap(), message);
+    }
+    let output = cli().arg("--help").output().unwrap();
+    let help = String::from_utf8_lossy(&output.stdout);
+    assert!(help.contains("--play white|black"));
+    assert!(help.contains("--level 1..8"));
+}
+
+#[test]
+fn uci_sequence_saves_the_rules_result_and_illegal_input_writes_nothing() {
+    let directory = tempfile::tempdir().unwrap();
+    let save = directory.path().join("moves.json");
+    let sequence = "e2e4 d7d5 e4d5 g8f6";
+    let result = cli()
+        .args(["--moves", sequence, "--save"])
+        .arg(&save)
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let mut game = chess3d::rules::ChessState::initial();
+    for uci in sequence.split_whitespace() {
+        game.play(game.parse_uci(uci).unwrap()).unwrap();
+    }
+    assert_eq!(Position::load(&save).unwrap(), game.to_position(342));
+    let original = std::fs::read(&save).unwrap();
+    let result = cli()
+        .args(["--moves", "e2e4 e7e4", "--save"])
+        .arg(&save)
+        .output()
+        .unwrap();
+    assert_failure(&result, "invalid UCI move 'e7e4'");
+    assert_eq!(std::fs::read(&save).unwrap(), original);
+    assert_failure(
+        &cli()
+            .args(["--moves", "e2e4", "--load", "unused.json"])
+            .output()
+            .unwrap(),
+        "cannot use --load or lineup",
+    );
+    assert_failure(
+        &cli()
+            .args(["--moves", "e2e4", "--view", "lineup"])
+            .output()
+            .unwrap(),
+        "cannot use --load or lineup",
+    );
+}
+
 use chess3d::{Position, Square};
 use std::process::{Command, Output};
 
@@ -33,7 +94,7 @@ fn window_requires_explicit_build_feature_before_saving() {
     assert!(!path.exists());
 }
 
-#[cfg(feature = "viewer")]
+#[cfg(all(feature = "viewer", target_os = "linux"))]
 #[test]
 fn window_without_a_display_reports_launch_failure_without_panicking() {
     for view in ["hero", "overhead", "lineup"] {
