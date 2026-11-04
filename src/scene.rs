@@ -41,6 +41,7 @@ fn build_render_scene(
     meshes.push(scene_mesh(&board_frame_mesh()));
     meshes.push(scene_mesh(&stretch_detail(knight_eye_mesh())));
     meshes.push(scene_mesh(&board_inlay_mesh()));
+    meshes.push(scene_mesh(&crate::marker_mesh::marker_mesh()));
     let textures = [
         texture(512, 512, board_albedo(position.seed, 512)),
         texture(
@@ -111,29 +112,7 @@ fn build_render_scene(
         }
     }
     for piece in &position.pieces {
-        let kind = match piece.kind {
-            PieceKind::Pawn => 2,
-            PieceKind::Rook => 3,
-            PieceKind::Knight => 4,
-            PieceKind::Bishop => 5,
-            PieceKind::Queen => 6,
-            PieceKind::King => 7,
-        };
-        let x = i64::from(piece.square.file) * 1000 - 3500;
-        let y = i64::from(piece.square.rank) * 1000 - 3500;
-        let mat = if piece.side == Side::Ivory { 1 } else { 2 };
-        objects.push(SceneObject::new(
-            identity_transform([x, y, if include_board { 50 } else { -250 }]),
-            MeshHandle::from_raw(kind),
-            MaterialHandle::from_raw(mat),
-        ));
-        if piece.kind == PieceKind::Knight {
-            objects.push(SceneObject::new(
-                identity_transform([x, y, if include_board { 50 } else { -250 }]),
-                MeshHandle::from_raw(9),
-                MaterialHandle::from_raw(4),
-            ));
-        }
+        objects.extend(piece_objects(piece, include_board));
     }
     let camera = SceneCamera {
         vertical_fov_millidegrees: 43_000,
@@ -180,6 +159,40 @@ fn build_render_scene(
         effects: Some(effects),
     })?)
 }
+pub(crate) fn piece_objects(
+    piece: &crate::Piece,
+    include_board: bool,
+) -> Vec<worldrunner::scene::plan::SceneObject> {
+    use worldrunner::scene::plan::{MaterialHandle, MeshHandle, SceneObject};
+    let kind = match piece.kind {
+        PieceKind::Pawn => 2,
+        PieceKind::Rook => 3,
+        PieceKind::Knight => 4,
+        PieceKind::Bishop => 5,
+        PieceKind::Queen => 6,
+        PieceKind::King => 7,
+    };
+    let transform = identity_transform([
+        i64::from(piece.square.file) * 1000 - 3500,
+        i64::from(piece.square.rank) * 1000 - 3500,
+        if include_board { 50 } else { -250 },
+    ]);
+    let mat = if piece.side == Side::Ivory { 1 } else { 2 };
+    let mut objects = vec![SceneObject::new(
+        transform,
+        MeshHandle::from_raw(kind),
+        MaterialHandle::from_raw(mat),
+    )];
+    if piece.kind == PieceKind::Knight {
+        objects.push(SceneObject::new(
+            transform,
+            MeshHandle::from_raw(9),
+            MaterialHandle::from_raw(4),
+        ));
+    }
+    objects
+}
+
 fn identity_transform(position_millimeters: [i64; 3]) -> worldrunner::scene::plan::SceneTransform {
     worldrunner::scene::plan::SceneTransform {
         position_millimeters,
@@ -195,6 +208,7 @@ fn scene_mesh(mesh: &Mesh) -> worldrunner::scene::plan::SceneMesh {
         .zip(&mesh.normals)
         .zip(&mesh.uvs)
         .map(|((p, n), uv)| SceneVertex {
+            tangent_micro: None,
             position_millimeters: p.map(|v| f64::from(v).round() as i64),
             normal_micro: n.map(|v| (f64::from(v) * 1_000_000.).round() as i64),
             texcoord_micro: uv.map(|v| (f64::from(v) * 1_000_000.).round() as i64),

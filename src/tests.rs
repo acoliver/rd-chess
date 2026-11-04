@@ -195,7 +195,7 @@ fn facade_scene_has_board_six_meshes_and_current_piece_placements() {
     let mut position = Position::initial(12);
     position.pieces[0].square = Square { file: 0, rank: 2 };
     let scene = render_scene(&position).unwrap();
-    assert_eq!(scene.geometry().meshes().len(), 11);
+    assert_eq!(scene.geometry().meshes().len(), 12);
     assert_eq!(scene.geometry().objects().len(), 4 + 32 + 4);
     assert_eq!(
         scene.geometry().objects()[4]

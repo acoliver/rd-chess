@@ -1,3 +1,15 @@
+pub fn shadow_settings() -> worldrunner::scene::gpu::shadows::DirectionalShadowSettings {
+    worldrunner::scene::gpu::shadows::DirectionalShadowSettings {
+        focus_meters: glam::Vec3::ZERO,
+        half_extent_meters: 8.0,
+        depth_half_extent_meters: 16.0,
+        resolution: 2048,
+        depth_bias: 0.0008,
+        normal_bias_meters: 0.012,
+        refresh_policy: worldrunner::scene::gpu::shadows::CascadeRefreshPolicy::default(),
+    }
+}
+
 use worldrunner::scene::gpu::CameraPose;
 
 /// Game-owned camera presets shared by capture, window viewing and acceptance.

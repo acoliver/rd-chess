@@ -4,14 +4,15 @@ An original procedural marble chess scene and position editor, built on the
 **Real Disunity** engine. The root Rust package and executable are `chess3d`.
 All meshes, marble textures, board geometry, camera presets and position documents
 are game-owned. Rendering goes through the engine's `worldrunner` facade; no
-engine implementation or third-party art is vendored here.
+engine implementation or third-party 3D art is vendored here.
 
 The scene/position editor accepts arbitrary board layouts in JSON. A separate
 CPU-only `rules` module now supplies validated playable chess states, legal moves,
 notation and outcomes. The CPU-only `search` module adds analysis and eight
-uncalibrated opponent profiles. The CLI and optional window still inspect scene
-documents; they do not yet provide interactive play or invoke an opponent. The
-window provides view controls only.
+uncalibrated opponent profiles, not yet connected to play. The CLI can apply
+legal UCI sequences from the initial game and capture their retained result.
+Arbitrary scene documents remain editor inputs, separate from rules authority.
+A window without `--load` or `--view lineup` starts local two-player play.
 
 ## Independent checkout and build
 
@@ -31,7 +32,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`1ead975c7cf3efe672aad3e4f7a8050233843ad6` from
+`c1f2802891c0b89ff230ffed9f4d6c65482a72a9` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -70,10 +71,15 @@ cargo run --locked -j2 -- --load assets/positions/study.json \
 
 # Windowing is opt-in both at build time and launch time.
 cargo run --locked -j2 --features viewer -- --window --view hero
+
+# Windowless retained test control: legal moves, resident assets, no visible window.
+cargo run --locked -j2 --features viewer -- \
+  --moves "e2e4 e7e5 g1f3" --capture /tmp/chess-moves.png
 ```
 
 The default `scene` engine dependency excludes the window feature. The game's
-`viewer` feature enables `worldrunner/scene-viewer`. Hero, overhead and wide
+`viewer` feature enables `worldrunner/scene-viewer`, including request-driven
+windowless capture. Hero, overhead and wide
 lineup views share the same prepared scene and directional-shadow settings for
 offscreen and window rendering. Original curved sculpts and deterministic
 seeded marble remain procedural source assets, not copied image textures.
@@ -90,9 +96,77 @@ seeded marble remain procedural source assets, not copied image textures.
   and the two files are not a single transaction.
 - Inspection/save/load need no GPU. Captures require a functioning graphics
   adapter; Mesa lavapipe is a supported software Vulkan device.
-- Left-drag orbits, wheel zooms, R/Home resets the exact preset, Escape exits.
+- Left click selects a side-to-move piece and highlights its legal targets.
+  Click a target to move, the selected piece or outside the board to deselect,
+  or another friendly piece to switch selection. An illegal board target does
+  nothing. A press moving beyond six physical pixels orbits instead of clicking;
+  wheel zooms and Home restores the preset. U/Backspace undoes one ply; R restarts
+  the game and resets the camera. Escape cancels selection/promotion first, then
+  exits. Loaded editor and lineup views retain R/Home reset and Escape exit.
   Resize and unmap/remap affect presentation only; camera changes never rewrite
-  the position. `--capture` and `--window` cannot be combined.
+  the saved position. `--capture` and `--window` cannot be combined.
+
+## Retained board and game test controls
+
+`--moves "e2e4 e7e5 g1f3"` applies UCI moves in order through `ChessState`.
+It starts from the legal initial game, rejects illegal notation or moves with the
+failing token, and validates the whole sequence before any save or capture write.
+It cannot be combined with arbitrary editor `--load` input or the asset lineup.
+Without capture it needs no GPU; `--save` records the resulting position document.
+Move capture requires `--features viewer`. Default-feature editor captures still
+use the facade's direct scene capture API and have no viewer dependency.
+
+`retained::RetainedBoard` maps rules piece IDs to retained body/eye `ObjectId`s.
+Captured IDs stay reserved for undo. Pawns reserve an eye ID so promotion to a
+knight needs no identity reassignment. The initial scene builds all six meshes and
+marble textures once. Play and undo produce object descriptors only, referencing
+those resident mesh/material tables. Capture and castling each publish one
+`RetainedUpdate::Objects` transaction, including all affected bodies and eyes.
+Promotion replaces the body mesh/material reference and adds the reserved eye
+when needed. No mesh or texture generator is called during these edits.
+
+The native `BoardDriver` owns the rules board and identity mapping throughout
+play and `--moves` captures. Editor scenes have no rules game. The driver submits
+one queued move transaction per update. A `ViewerError::BackPressure` leaves it
+at the queue head; other errors end the run. Desktop viewing uses
+`RetainedHost::run`; captures use the same driver's windowless session. The bounded
+capture test pump drains driver changes before requesting the accepted generation.
+It never runs from an event-loop callback.
+
+Square picking uses the published engine camera's screen ray and the Z=0.05 m
+board plane, with physical top-left pixels. Board clicks wait for pending edits
+to be presented. Overhead is the readable play preset (`--view overhead`); hero
+view uses the same plane and does not yet pick piece silhouettes. Input wiring
+calls the engine's `OrbitCamera`, rather than implementing camera math in chess.
+Highlights share one resident ring mesh and reserved per-square object identities.
+A move removes its highlights in the same object batch as the pieces.
+
+One native UI world owns status text and the promotion choices. `UiRouter` routes
+four choice controls under a modal root before board input; its consumed flag
+prevents a choice click from reaching the board. Escape cancels promotion without
+committing a move. Text is extracted through the engine and submitted with
+`RetainedUpdate::Ui` only when status, dialog visibility or viewport changes.
+The bundled unmodified Space Mono font is licensed under SIL OFL 1.1; its notice
+and license are in `assets/fonts/OFL.txt`. No game-owned text renderer is used.
+Status names check, mate, stalemate, automatic draw reasons and available
+threefold/fifty-move claims. Claim buttons, resignation and agreed draws belong
+to the later play menus; the board stops on rules-core terminal results.
+
+With the viewer feature, `tests/retained.rs` checks exact object edit sets,
+identity-preserving undo, resource-table storage reuse and admission pressure.
+`tests/retained_gpu.rs` requires a device, applies a sequence with castling and a
+capture, captures the changed frame, undoes every move and requires exact initial
+pixel equality and restored object identities. Missing devices fail even when
+`CHESS3D_REQUIRE_GPU` is unset. On macOS run GPU tests with `WGPU_BACKEND=metal`
+through the shared rd-stranded AquaJob launcher, not a visible window.
+`tests/interaction.rs` drives synthetic retained pointer/key observations through
+selection, illegal clicks, orbit cancellation, promotion, undo/restart and status.
+`tests/interaction_gpu.rs` plays synthetic clicks through the windowless driver,
+asserting status/dialog pixel regions and changed board pixels. It also checks
+that unchanged status is not resubmitted and a move uses one object batch plus
+one status update. The Xvfb smoke retains orbit/reset/resize and adds a click
+move compared to an exact rules-driven reference, followed by undo. That
+Linux real-window smoke is run by the gate, not on the macOS desktop.
 
 ## Legal chess rules
 
