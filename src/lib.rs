@@ -266,11 +266,13 @@ pub enum SceneBuildError {
 
 mod geometry;
 mod presentation;
+#[cfg(feature = "viewer")]
+pub mod retained;
 pub mod rules;
 mod scene;
 mod textures;
 pub use geometry::{Mesh, board_mesh, piece_meshes};
-pub use presentation::CameraPreset;
+pub use presentation::{CameraPreset, shadow_settings};
 pub use scene::{piece_lineup_scene, render_scene};
 pub use textures::{board_albedo, marble_albedo};
 

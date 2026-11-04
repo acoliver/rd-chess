@@ -8,9 +8,10 @@ engine implementation or third-party art is vendored here.
 
 The scene/position editor accepts arbitrary board layouts in JSON. A separate
 CPU-only `rules` module now supplies validated playable chess states, legal moves,
-notation and outcomes. The CLI and optional window still inspect scene documents;
-they do not yet provide interactive play or an opponent. The window provides
-view controls only.
+notation and outcomes. The CLI can apply legal UCI sequences from the initial
+game and capture their retained result. Arbitrary scene documents remain editor
+inputs, separate from rules authority. The window provides view controls only;
+interactive play and an opponent are not implemented.
 
 ## Independent checkout and build
 
@@ -30,7 +31,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`1ead975c7cf3efe672aad3e4f7a8050233843ad6` from
+`e57c866a81e3a14a08b6997c8ae1b5def0c11e97` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -69,10 +70,15 @@ cargo run --locked -j2 -- --load assets/positions/study.json \
 
 # Windowing is opt-in both at build time and launch time.
 cargo run --locked -j2 --features viewer -- --window --view hero
+
+# Windowless retained test control: legal moves, resident assets, no visible window.
+cargo run --locked -j2 --features viewer -- \
+  --moves "e2e4 e7e5 g1f3" --capture /tmp/chess-moves.png
 ```
 
 The default `scene` engine dependency excludes the window feature. The game's
-`viewer` feature enables `worldrunner/scene-viewer`. Hero, overhead and wide
+`viewer` feature enables `worldrunner/scene-viewer`, including request-driven
+windowless capture. Hero, overhead and wide
 lineup views share the same prepared scene and directional-shadow settings for
 offscreen and window rendering. Original curved sculpts and deterministic
 seeded marble remain procedural source assets, not copied image textures.
@@ -92,6 +98,44 @@ seeded marble remain procedural source assets, not copied image textures.
 - Left-drag orbits, wheel zooms, R/Home resets the exact preset, Escape exits.
   Resize and unmap/remap affect presentation only; camera changes never rewrite
   the position. `--capture` and `--window` cannot be combined.
+
+## Retained board and game test controls
+
+`--moves "e2e4 e7e5 g1f3"` applies UCI moves in order through `ChessState`.
+It starts from the legal initial game, rejects illegal notation or moves with the
+failing token, and validates the whole sequence before any save or capture write.
+It cannot be combined with arbitrary editor `--load` input or the asset lineup.
+Without capture it needs no GPU; `--save` records the resulting position document.
+Move capture requires `--features viewer`. Default-feature editor captures still
+use the facade's direct scene capture API and have no viewer dependency.
+
+`retained::RetainedBoard` maps rules piece IDs to retained body/eye `ObjectId`s.
+Captured IDs stay reserved for undo. Pawns reserve an eye ID so promotion to a
+knight needs no identity reassignment. The initial scene builds all six meshes and
+marble textures once. Play and undo produce object descriptors only, referencing
+those resident mesh/material tables. Capture and castling each publish one
+`RetainedUpdate::Objects` transaction, including all affected bodies and eyes.
+Promotion replaces the body mesh/material reference and adds the reserved eye
+when needed. No mesh or texture generator is called during these edits.
+
+For `--moves`, the native `BoardDriver` owns the rules board and identity mapping
+throughout the session. Editor scenes have no rules game. The driver submits one
+queued transaction per update. A `ViewerError::BackPressure` leaves that
+transaction at the queue head for a later
+update; other errors end the run. Desktop viewing uses `RetainedHost::run` and
+captures use the same driver's `RetainedHost::windowless` session. The bounded
+windowless test pump waits for the requested accepted generation's capture event;
+it is not run from an event-loop callback. Orbit, zoom, reset and resize stay
+engine-owned, and left-drag still orbits. Mouse moves and picking belong to P4.
+
+With the viewer feature, `tests/retained.rs` checks exact object edit sets,
+identity-preserving undo, resource-table storage reuse and admission pressure.
+`tests/retained_gpu.rs` requires a device, applies a sequence with castling and a
+capture, captures the changed frame, undoes every move and requires exact initial
+pixel equality and restored object identities. Missing devices fail even when
+`CHESS3D_REQUIRE_GPU` is unset. On macOS run GPU tests with `WGPU_BACKEND=metal`
+through the shared rd-stranded AquaJob launcher, not a visible window.
+Real-window orbit/reset/resize verification remains pending for this pin update.
 
 ## Legal chess rules
 

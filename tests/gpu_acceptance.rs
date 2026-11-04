@@ -13,12 +13,8 @@ fn required_gpu_retained_renderer_survives_target_recreation_and_device_lifetime
         let context = required_context();
         let scene = render_scene(&position).unwrap();
         let settings = DirectionalShadowSettings {
-            focus_meters: Vec3::ZERO,
-            half_extent_meters: 8.0,
-            depth_half_extent_meters: 16.0,
             resolution: 512,
-            depth_bias: 0.0008,
-            normal_bias_meters: 0.012,
+            ..chess3d::shadow_settings()
         };
         let mut renderer = ShadowedScene::new(&context, &scene, settings).unwrap();
         let mut original = None;
@@ -90,12 +86,8 @@ fn capture(context: &gpu::device::GpuContext, position: &Position) -> Vec<u8> {
         &scene,
         &view,
         gpu::shadows::DirectionalShadowSettings {
-            focus_meters: Vec3::ZERO,
-            half_extent_meters: 8.0,
-            depth_half_extent_meters: 16.0,
             resolution: 512,
-            depth_bias: 0.0008,
-            normal_bias_meters: 0.012,
+            ..chess3d::shadow_settings()
         },
     )
     .unwrap();
@@ -157,7 +149,7 @@ fn effects_with_sun_and_cascades(
         sun.direction = worldrunner::scene::plan::SceneDirection::new([-x, -y, z]).unwrap();
     }
     SceneEffects::new(SceneEffectsParts {
-        water: source.water().copied(),
+        water: source.water().cloned(),
         sky: *source.sky(),
         sun,
         ambient: *source.ambient(),
@@ -194,12 +186,8 @@ fn piece_shadow_follows_light(context: &gpu::device::GpuContext) {
     )
     .unwrap();
     let settings = DirectionalShadowSettings {
-        focus_meters: Vec3::ZERO,
-        half_extent_meters: 8.0,
-        depth_half_extent_meters: 16.0,
         resolution: 1024,
-        depth_bias: 0.0008,
-        normal_bias_meters: 0.012,
+        ..chess3d::shadow_settings()
     };
     assert_light_updates(context, &scene, &view, settings);
     position.pieces.clear();
