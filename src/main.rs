@@ -72,9 +72,6 @@ fn present(options: &cli::Options, position: &Position) -> Result<(), Box<dyn Er
     let mut driver = BoardDriver::default();
     let (scene, preset) = if options.load.is_none() && options.view != "lineup" {
         driver = BoardDriver::with_board(RetainedBoard::new(ChessState::initial(), position.seed)?);
-        for uci in options.moves.as_deref().unwrap_or("").split_whitespace() {
-            driver.play_uci(uci)?;
-        }
         (
             driver
                 .board()
@@ -90,21 +87,16 @@ fn present(options: &cli::Options, position: &Position) -> Result<(), Box<dyn Er
     } else {
         prepare_view(position, &options.view)?
     };
-    if let Some(human) = options.play {
-        driver.set_computer(chess3d::retained::ComputerGame::new(
-            human,
-            options.level.expect("validated level"),
-            position.seed,
-        )?)?;
-    }
-    if options.window
-        && options.load.is_none()
-        && options.view != "lineup"
-        && options.play.is_none()
-        && options.moves.is_none()
-    {
-        driver.show_title()?;
-    }
+    configure_game(&mut driver, options, position.seed)?;
+    let preset = if options.window && !options.view_explicit && driver.board().is_some() {
+        if driver.settings().overhead {
+            CameraPreset::Overhead
+        } else {
+            CameraPreset::Hero
+        }
+    } else {
+        preset
+    };
     let host = RetainedHost::new(
         scene.clone(),
         viewer_options(&scene, preset, [options.width, options.height]),
@@ -123,6 +115,42 @@ fn present(options: &cli::Options, position: &Position) -> Result<(), Box<dyn Er
         run.shutdown()?;
     } else {
         host.run(&mut driver)?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "viewer")]
+fn configure_game(
+    driver: &mut chess3d::retained::BoardDriver,
+    options: &cli::Options,
+    seed: u64,
+) -> Result<(), Box<dyn Error>> {
+    if options.window && driver.board().is_some() {
+        let root = options.data_dir.clone().map_or_else(
+            || worldrunner::scene::viewer::application_root("org.acoliver.chess3d"),
+            Ok,
+        )?;
+        driver.open_store(root);
+        if options.play.is_some() || options.moves.is_some() {
+            driver.restart()?;
+        }
+    }
+    if let Some(human) = options.play {
+        driver.set_computer(chess3d::retained::ComputerGame::new(
+            human,
+            options.level.expect("validated level"),
+            seed,
+        )?)?;
+    }
+    for uci in options.moves.as_deref().unwrap_or("").split_whitespace() {
+        driver.play_uci(uci)?;
+    }
+    if options.window
+        && driver.board().is_some()
+        && options.play.is_none()
+        && options.moves.is_none()
+    {
+        driver.show_title()?;
     }
     Ok(())
 }
@@ -230,6 +258,46 @@ fn write_png_atomic(
     file.sync_all()?;
     file.commit()?;
     Ok(())
+}
+
+#[cfg(all(test, feature = "viewer"))]
+mod game_start_tests {
+    use super::*;
+    #[test]
+    fn direct_window_moves_autosave_but_title_start_preserves_current() {
+        let root = tempfile::tempdir().unwrap();
+        let mut options = cli::Options {
+            load: None,
+            data_dir: Some(root.path().to_path_buf()),
+            save: None,
+            capture: None,
+            window: true,
+            view: "hero".into(),
+            view_explicit: false,
+            width: 800,
+            height: 600,
+            seed: Some(42),
+            moves: Some("e2e4".into()),
+            play: None,
+            level: None,
+        };
+        let make_driver = || {
+            chess3d::retained::BoardDriver::with_board(
+                chess3d::retained::RetainedBoard::new(ChessState::initial(), 42).unwrap(),
+            )
+        };
+        let mut driver = make_driver();
+        configure_game(&mut driver, &options, 42).unwrap();
+        assert_eq!(driver.board().unwrap().game().side_to_move(), Side::Onyx);
+        let current = root.path().join("slot-current.rds");
+        let saved = std::fs::read(&current).unwrap();
+        options.moves = None;
+        let mut title = make_driver();
+        configure_game(&mut title, &options, 42).unwrap();
+        assert!(title.can_continue());
+        assert_eq!(title.screen(), chess3d::retained::Screen::Title);
+        assert_eq!(std::fs::read(current).unwrap(), saved);
+    }
 }
 
 #[cfg(test)]

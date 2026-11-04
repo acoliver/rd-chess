@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 import time
 
 from PIL import Image, ImageChops, ImageGrab, ImageStat
@@ -74,12 +75,18 @@ def close_request(window):
 
 
 def run_case(args, environment, name, view, load=None, interaction=None):
+    with tempfile.TemporaryDirectory(prefix="chess3d-window-data-") as data_dir:
+        return run_isolated_case(args, environment, name, view, data_dir, load, interaction)
+
+
+def run_isolated_case(args, environment, name, view, data_dir, load, interaction):
     computer = interaction == "computer"
     output = args.output
     saved = output / f"{name}-position.json"
     reference = output / f"{name}-capture.png"
     width, height = (1200, 600) if view == "lineup" else (960, 720)
-    common = ["--view", view, "--width", str(width), "--height", str(height)]
+    common = ["--view", view, "--width", str(width), "--height", str(height),
+              "--data-dir", data_dir]
     if computer:
         common += ["--seed", "42"]
     if load:
@@ -161,6 +168,20 @@ def run_case(args, environment, name, view, load=None, interaction=None):
                 moved = wait_for(lambda: matching(Image.open(moved_reference).convert("RGB")),
                                  f"click and reply {sequence} matching rules-driven capture")
                 moved.save(output / f"{name}-clicked-e2e4.png")
+                if interaction == "title":
+                    close_request(window)
+                    assert process.wait(timeout=15) == 0
+                    process = subprocess.Popen([str(args.binary), *common, "--window"],
+                                               env=environment, stdout=log, stderr=log)
+                    window = wait_for(lambda: xdo("search", "--pid", process.pid, "--name",
+                                                 "^Chess3D", check=False), "relaunch window")
+                    xdo("windowmove", window, 0, 0)
+                    xdo("windowfocus", window)
+                    wait_for(title_ready, "relaunch title menu")
+                    xdo("mousemove", "--window", window, width // 2 - 196, height // 2 + 140)
+                    xdo("click", 1)
+                    wait_for(lambda: matching(moved, 0), "Continue exact pre-relaunch pixels")
+                    records.append("relaunch Continue restores exact board pixels")
                 xdo("key", "--window", window, "u")
                 wait_for(lambda: matching(initial, 0), "U exact board undo")
                 records += [f"click and reply {sequence} matches capture", "U exact board undo"]
@@ -185,7 +206,8 @@ def run_case(args, environment, name, view, load=None, interaction=None):
 
                 resized_reference = output / f"{name}-resized-capture.png"
                 subprocess.run([str(args.binary), "--capture", str(resized_reference),
-                                "--view", view, "--width", "800", "--height", "600"],
+                                "--view", view, "--width", "800", "--height", "600",
+                                "--data-dir", data_dir],
                                env=headless, check=True, capture_output=True, timeout=60)
                 xdo("windowsize", window, 800, 600)
                 resized = wait_for(lambda: matching(Image.open(resized_reference).convert("RGB")),
