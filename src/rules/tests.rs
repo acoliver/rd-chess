@@ -1,3 +1,19 @@
+#[test]
+fn generated_application_matches_public_validation_and_exact_undo() {
+    for fen in [INITIAL_FEN, KIWIPETE, POSITION_3, POSITION_4, POSITION_5] {
+        let state = ChessState::from_fen(fen).unwrap();
+        for chess_move in state.legal_moves() {
+            let mut validated = state.clone();
+            let mut generated = state.clone();
+            validated.play(chess_move).unwrap();
+            generated.play_generated(chess_move).unwrap();
+            assert_eq!(generated, validated);
+            generated.undo().unwrap();
+            assert_eq!(generated, state);
+        }
+    }
+}
+
 use super::*;
 
 // Verified against https://www.chessprogramming.org/Perft_Results on 2026-11-04.

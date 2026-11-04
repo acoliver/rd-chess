@@ -19,6 +19,13 @@ pub(super) struct Features {
     board: [Option<(Side, PieceKind)>; 64],
     attacks: [[u8; 64]; 2],
     mobility: [i32; 64],
+    pawns: [[u8; 8]; 2],
+}
+
+fn adjacent_files(pawns: [u8; 8], file: usize) -> u8 {
+    let left = if file == 0 { 0 } else { pawns[file - 1] };
+    let right = if file == 7 { 0 } else { pawns[file + 1] };
+    left | right
 }
 
 pub(super) fn index(square: Square) -> usize {
@@ -47,9 +54,14 @@ impl Features {
             board,
             attacks: [[0; 64]; 2],
             mobility: [0; 64],
+            pawns: [[0; 8]; 2],
         };
         for offset in 0..64 {
             if let Some((side, kind)) = result.board[usize::from(offset)] {
+                if kind == PieceKind::Pawn {
+                    result.pawns[usize::from(side == Side::Onyx)][usize::from(offset % 8)] |=
+                        1 << (offset / 8);
+                }
                 result.piece_attacks(square(offset), side, kind);
             }
         }
@@ -118,25 +130,19 @@ impl Features {
     /// Doubled -12/-18 per extra pawn, isolated -10/-14 per pawn, passed pawn
     /// +3*r*r/+7*r*r with r measured from that pawn's home side.
     pub fn pawn_structure(&self, from: Square, side: Side) -> Term {
-        let pawns: Vec<_> = self
-            .men()
-            .filter(|(_, _, kind)| *kind == PieceKind::Pawn)
-            .collect();
-        let doubled = pawns.iter().any(|&(other, colour, _)| {
-            colour == side && other.file == from.file && other.rank < from.rank
-        });
-        let isolated = !pawns
-            .iter()
-            .any(|&(other, colour, _)| colour == side && other.file.abs_diff(from.file) == 1);
-        let passed = !pawns.iter().any(|&(other, colour, _)| {
-            colour != side
-                && other.file.abs_diff(from.file) <= 1
-                && if side == Side::Ivory {
-                    other.rank > from.rank
-                } else {
-                    other.rank < from.rank
-                }
-        });
+        let friendly = self.pawns[usize::from(side == Side::Onyx)];
+        let enemy = self.pawns[usize::from(side == Side::Ivory)];
+        let file = usize::from(from.file);
+        let lower_ranks = (1_u16 << from.rank) - 1;
+        let doubled = u16::from(friendly[file]) & lower_ranks != 0;
+        let isolated = adjacent_files(friendly, file) == 0;
+        let opposing = u16::from(enemy[file] | adjacent_files(enemy, file));
+        let ahead = if side == Side::Ivory {
+            opposing >> (from.rank + 1)
+        } else {
+            opposing & lower_ranks
+        };
+        let passed = ahead == 0;
         let rank = i32::from(if side == Side::Ivory {
             from.rank
         } else {
@@ -177,3 +183,6 @@ impl Features {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

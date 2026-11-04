@@ -47,7 +47,12 @@ impl ChessState {
     }
 
     pub fn status(&self) -> GameStatus {
-        if self.legal_moves().is_empty() {
+        self.status_with_legal(&self.legal_moves())
+    }
+
+    /// Reuse search's legal list from this exact position, before applying a move.
+    pub(crate) fn status_with_legal(&self, legal: &[LegalMove]) -> GameStatus {
+        if legal.is_empty() {
             return if self.in_check() {
                 GameStatus::Checkmate {
                     winner: opposite(self.core.side),
@@ -72,20 +77,22 @@ impl ChessState {
     }
 
     fn insufficient_material(&self) -> bool {
-        let minors: Vec<_> = self
+        let mut minors = self
             .core
             .men()
-            .filter(|(_, man)| man.kind != PieceKind::King)
-            .collect();
-        if minors.is_empty() {
+            .filter(|(_, man)| man.kind != PieceKind::King);
+        let Some((location, man)) = minors.next() else {
             return true;
+        };
+        match man.kind {
+            PieceKind::Knight => minors.next().is_none(),
+            PieceKind::Bishop => {
+                let colour = square(location).is_dark();
+                minors.all(|(location, man)| {
+                    man.kind == PieceKind::Bishop && square(location).is_dark() == colour
+                })
+            }
+            _ => false,
         }
-        if minors.len() == 1 {
-            return matches!(minors[0].1.kind, PieceKind::Knight | PieceKind::Bishop);
-        }
-        let colour = square(minors[0].0).is_dark();
-        minors.iter().all(|(location, man)| {
-            man.kind == PieceKind::Bishop && square(*location).is_dark() == colour
-        })
     }
 }

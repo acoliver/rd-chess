@@ -147,7 +147,7 @@ def run_case(args, environment, name, view, load=None, interaction=None):
             records = title_controls
             if view == "overhead" and not load:
                 moved_reference = output / f"{name}-e2e4-capture.png"
-                sequence = "e2e4 g8f6" if computer else "e2e4"
+                sequence = "e2e4 b8c6" if computer else "e2e4"
                 subprocess.run([str(args.binary), *common, "--moves", sequence,
                                 "--capture", str(moved_reference)], env=headless,
                                check=True, capture_output=True, timeout=60)
