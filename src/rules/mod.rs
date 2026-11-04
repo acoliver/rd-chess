@@ -188,6 +188,12 @@ impl ChessState {
         if !self.legal_moves().contains(&chess_move) {
             return Err(MoveError::IllegalMove);
         }
+        self.play_generated(chess_move)
+    }
+
+    /// Internal search copy-make: the move must come from this exact state's
+    /// legal list. External/controller moves always go through validating `play`.
+    pub(crate) fn play_generated(&mut self, chess_move: LegalMove) -> Result<(), MoveError> {
         let man = self.core.at(chess_move.from).expect("legal mover exists");
         let halfmove = if man.kind == PieceKind::Pawn || self.core.is_capture(chess_move) {
             0

@@ -9,7 +9,7 @@ engine implementation or third-party 3D art is vendored here.
 The scene/position editor accepts arbitrary board layouts in JSON. A separate
 CPU-only `rules` module now supplies validated playable chess states, legal moves,
 notation and outcomes. The CPU-only `search` module adds analysis and eight
-uncalibrated opponent profiles, available for computer play. The CLI can apply
+self-play-calibrated opponent profiles, available for computer play. The CLI can apply
 legal UCI sequences from the initial game and capture their retained result.
 Arbitrary scene documents remain editor inputs, separate from rules authority.
 A window without game flags, `--load` or `--view lineup` opens the title menu
@@ -222,7 +222,8 @@ Computer setup offers White, Black or seed-determined Random, and all eight name
 profiles with one-line descriptions in a clipped scroll list. The defaults are
 White and Level 1. Start begins a new game; Back or Escape returns to title.
 Choosing Black schedules the computer's opening through the existing work queue.
-These profiles have no measured ratings or verified adjacent strength ordering.
+The adjacent self-play ordering and its limits are documented below. These
+profiles have no measured external ratings.
 
 The in-game menu offers Resume, Undo, Restart, Resign and Return to title. Undo is
 disabled before a human decision exists. Menus consume board input, including
@@ -359,8 +360,8 @@ These features are heuristics, not proofs of a tactical explanation.
 
 Opponent policy is separate from neutral analysis. Pip, Rowan, Mira, Ellis, Nia,
 Tomas, Imani and Soren have data-only budgets, candidate widths, feature attention,
-bounded seeded perturbation and small style biases. No Elo ratings or adjacent
-strength ordering have been measured. A seed reproduces a choice for the same
+bounded seeded perturbation and small style biases. Adjacent self-play results
+are recorded below; no Elo rating is assigned. A seed reproduces a choice for the same
 position, history and profile. Noise applies only to centipawn candidates; it
 cannot change mate ordering. No wall-clock timer schedules mistakes.
 
@@ -384,9 +385,10 @@ CARGO_INCREMENTAL=0 nice -n 10 cargo test --release --locked -j4 -p chess3d --li
 
 The measurement searches 20,000 nodes each from the initial position and
 Kiwipete, using 65,536 TT slots. It prints nodes/second and completed depth; it
-is ignored in the default suite. Self-play and human calibration have not been
-performed. `BoardDriver` now runs the policy on the engine's retained CPU queue
-with one worker and one pending slot. It submits immutable rules/history snapshots
+is ignored in the default suite. Self-play below measures only this internal pool;
+human calibration has not been performed. `BoardDriver` now runs the policy on
+the engine's retained CPU queue with one worker and one pending slot. It submits
+immutable rules/history snapshots
 with a game generation, and derives each move seed from `(game seed, ply)` using
 the documented SplitMix-style integer mixing in `retained/computer.rs`. Completed
 results are drained on `WorkReady`, checked against both ticket and game generation,
@@ -421,11 +423,112 @@ requires an engine API before the game can adopt it (engine issue `c997bf5e36af`
 CPU regressions use real engine queues on GPU-free retained hosts, injecting
 completion payloads only for failure/staleness cases. The required windowless GPU
 regression uses the production driver and native `WorkReady` delivery from
-`frame`/`poll`. It clicks e2-e4 versus Level 1 with game seed 42, verifies g8-f6's
+`frame`/`poll`. It clicks e2-e4 versus Level 1 with game seed 42, verifies b8-c6's
 retained identity and transform, captures the reply, and compares exact pixels with an
 independent rules-driven reference. `tests/window_smoke.py` adds the same move and
 two-ply undo using its existing Xvfb click injection. Do not run a visible window
 on the macOS desktop.
+
+## Opponent ladder calibration (2026-11-04)
+
+Measured on an Apple M4 Max (16 logical CPUs), macOS 26.4, Rust 1.97.0.
+`examples/calibrate.rs` uses the production policy and only std threads, bounded
+to 1–6 workers. The 20 authored UCI lines select short standard openings. Tests
+require equal material, no check and an absolute balanced static evaluation below
+100 cp; this does not establish theoretical opening equality. Each opening/seed
+pair is played with reversed colours. Automatic outcomes and
+available draw claims stop play; the 200 searched-ply cap is a draw, with no
+material adjudication. Opening plies are excluded from move timings.
+
+The score is wins plus half the draws, divided by games. The 95% Hoeffding
+interval uses colour pairs as independent bounded samples, with radius
+`sqrt(ln(40) / games)`, clipped to [0, 1]. It describes this fixed opening/seed
+pool under that sampling assumption, with no external rating or simultaneous
+seven-comparison guarantee. Worker scheduling affects timings only. The CLI
+prints every game's index, result and searched UCI moves, plus nodes and timings
+in profile order. Pair `i` uses opening `i % 20`, seed `mix(seed + i)`, and move
+seed `mix(pair_seed + searched_ply)`; the mixing function is in `selfplay`.
+
+Commands used (the Git URL override is specific to this Mac session):
+
+```sh
+unset RUSTUP_TOOLCHAIN CARGO RUST_RECURSION_COUNT
+export CARGO_INCREMENTAL=0 CARGO_NET_GIT_FETCH_WITH_CLI=true GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0=url.hub-mac-llxprt-branch-1:real-disunity.git.insteadOf
+export GIT_CONFIG_VALUE_0=https://github.com/acoliver/real-disunity.git
+nice -n 10 cargo build --release --locked -j4 -p chess3d --example calibrate
+nice -n 10 target/release/examples/calibrate timing
+nice -n 10 target/release/examples/calibrate stress
+nice -n 10 target/release/examples/calibrate ladder 80 6 200 20261104
+# A single pair: calibrate LOW HIGH GAMES THREADS MAX_PLIES SEED
+# Release-only majority regression, ignored in the default suite:
+nice -n 10 cargo test --release --locked -j4 -p chess3d --lib \
+  search::selfplay::tests::strongest -- --ignored --nocapture
+```
+
+### Adjacent results
+
+Each row has 80 games (40 colour pairs), with W/D/L from the higher level's side.
+Every higher level scored at least 73.75%; all seven individual intervals exclude
+50%. The seven matches reported 1,008 s of wall time in total.
+
+| Match | Higher-level W/D/L | Score | 95% paired interval | Cap draws |
+| --- | ---: | ---: | ---: | ---: |
+| 1 vs 2 | 76 / 0 / 4 | 95.00% | 73.53–100.00% | 0 |
+| 2 vs 3 | 76 / 0 / 4 | 95.00% | 73.53–100.00% | 0 |
+| 3 vs 4 | 68 / 4 / 8 | 87.50% | 66.03–100.00% | 2 |
+| 4 vs 5 | 67 / 3 / 10 | 85.62% | 64.15–100.00% | 2 |
+| 5 vs 6 | 56 / 6 / 18 | 73.75% | 52.28–95.22% | 2 |
+| 6 vs 7 | 63 / 6 / 11 | 82.50% | 61.03–100.00% | 2 |
+| 7 vs 8 | 59 / 9 / 12 | 79.38% | 57.90–100.00% | 3 |
+
+### Single-worker move timings
+
+`timing` searches the 20 openings once per profile. `stress` searches the existing
+perft positions 2, 4 and 5. Wall time includes queen safety, fallback and all policy
+work; node counts include search only. Budgets are nodes per move, with a depth
+ceiling of 64 so a low fixed depth cannot hide a budget increase.
+
+| Level | Profile | Nodes | Candidates | Noise ±cp | Opening average / maximum ms | Stress maximum ms |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | Pip | 80 | 4 | 220 | 0.553 / 0.828 | 0.986 |
+| 2 | Rowan | 250 | 3 | 130 | 1.592 / 4.312 | 1.984 |
+| 3 | Mira | 750 | 3 | 80 | 4.018 / 5.175 | 6.466 |
+| 4 | Ellis | 2,250 | 3 | 45 | 12.305 / 15.570 | 19.741 |
+| 5 | Nia | 6,750 | 2 | 24 | 39.052 / 45.461 | 54.793 |
+| 6 | Tomas | 20,000 | 2 | 12 | 114.275 / 141.814 | 186.288 |
+| 7 | Imani | 60,000 | 2 | 6 | 339.490 / 384.639 | 538.781 |
+| 8 | Soren | 135,000 | 1 | 0 | 1,015.774 / 2,107.868 | 989.968 |
+
+Other jobs were running; host load ranged from 35 to 77 during this work.
+Level 8's slowest opening move was 2.108 s, slightly above two seconds, while
+its average was 1.016 s. These measurements are not a hard wall-time guarantee;
+the production ten-second emergency cancellation remains separate from budgets.
+In the six-worker 7v8 match, Level 8 averaged 572.930 ms and 134,920 search nodes,
+with a 3,264.128 ms maximum. Those positions and scheduling differ from the serial
+opening scan. The final sample was reduced from a planned 120 games per pair to 80 because
+pilot wall times under host contention projected beyond the calibration limit.
+
+Sampling found repeated legal generation and pawn-list construction in hot paths.
+Search now reuses each node's legal list for status and expansion and applies
+its generated moves without regenerating legality. Public `play` still validates.
+Pawn-file rank masks preserve the original evaluator, checked against its direct
+definition over seeded legal games; material-draw detection also avoids a list
+allocation. The five existing perft tests and their expected counts are unchanged.
+
+Pip's small budget often uses the static fallback. A regression demonstrates an
+elementary beginner opportunity: from the first Italian opening, one fixed seed
+plays Bxf7+ and permits Kxf7, losing a bishop for a pawn. Human beginner beatability
+and perceived mistake quality still need human play sessions. No Elo is claimed.
+The seed-42 computer-reply reference changed from g8-f6 to b8-c6; the retained
+identity/transform, independent pixel reference and Linux smoke sequence were
+updated, and the full Metal suite passed with the new reference.
+
+Verification: strict default/all-feature macOS Clippy and all-feature Linux Clippy
+through Zig passed, as did formatting. CPU library tests passed 91 with 2 ignored;
+the full all-feature Metal run passed 160 with 2 ignored. The explicit release
+majority regression passed, with Level 8 winning all six games against Level 1.
+The Xvfb window smoke was not run on macOS; its Python module passed syntax checks.
 
 ## Validation
 

@@ -6,8 +6,9 @@
 //! An interrupted iteration is discarded. With no completed iteration the result
 //! explicitly has depth zero, a static score and the first legal fallback move.
 //! Claims are taken immediately; analysis does not decline draws to seek a win.
-//! Search never mutates the caller's state. Host threads and stale-request
-//! rejection are deliberately outside this module.
+//! Search never mutates the caller's state. Production host threads and stale
+//! request rejection live outside this module. The self-play harness owns only
+//! its bounded diagnostic workers.
 #![deny(clippy::too_many_lines, clippy::too_many_arguments)]
 
 use crate::rules::{ChessState, LegalMove};
@@ -22,13 +23,14 @@ mod placement;
 mod policy;
 mod profiles;
 mod score;
+pub mod selfplay;
 mod table;
 mod tree;
 
-// A generated move failing legality is a search/rules bug, not cancellation.
+// Search already owns the current legal list; avoid generating it again on make.
 // Counter exhaustion is supported FEN input and cannot be advanced by the core.
 fn play_generated(state: &mut ChessState, chess_move: LegalMove) -> Option<()> {
-    match state.play(chess_move) {
+    match state.play_generated(chess_move) {
         Ok(()) => Some(()),
         Err(crate::rules::MoveError::CounterOverflow) => None,
         Err(error) => panic!("generated search move rejected: {error}"),
@@ -36,7 +38,7 @@ fn play_generated(state: &mut ChessState, chess_move: LegalMove) -> Option<()> {
 }
 
 pub use evaluation::{EvaluationBreakdown, Term, Weights, evaluate};
-pub use policy::{choose_move, choose_move_cancellable};
+pub use policy::{MoveDecision, choose_move, choose_move_cancellable, choose_move_measured};
 pub use profiles::{
     ELLIS, IMANI, LADDER, MIRA, NIA, OpponentProfile, PIP, ROWAN, SOREN, Style, TOMAS,
 };
