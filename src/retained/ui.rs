@@ -3,6 +3,7 @@ mod pages;
 mod readability_tests;
 mod study;
 pub(super) use study::StudyState;
+mod storage_pages;
 mod widgets;
 use super::menus::{self, MenuAction, Screen};
 use glam::Vec2;
@@ -17,12 +18,16 @@ use worldrunner::{
     },
 };
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct UiState {
     pub screen: Screen,
     pub promotion: bool,
     pub claim: bool,
     pub undo: bool,
+    pub continuation: Option<()>,
+    pub settings: super::persistence::GameSettings,
+    pub labels: [String; 3],
+    pub setup: (usize, u8),
 }
 pub(super) struct GameUi {
     native: NativeUi,
@@ -33,6 +38,8 @@ pub(super) struct GameUi {
     dialog: ObjectHandle,
     claim: ObjectHandle,
     undo: Option<ObjectHandle>,
+    settings_summary: Option<ObjectHandle>,
+    setup_summary: Option<ObjectHandle>,
     pages: Vec<(Screen, ObjectHandle)>,
     bindings: BTreeMap<ObjectHandle, Vec<MenuAction>>,
     state: Option<UiState>,
@@ -55,6 +62,8 @@ impl GameUi {
             dialog,
             claim,
             undo: None,
+            settings_summary: None,
+            setup_summary: None,
             pages: Vec::new(),
             bindings: BTreeMap::new(),
             state: None,
@@ -67,10 +76,14 @@ impl GameUi {
         Ok(ui)
     }
     pub fn synchronize(&mut self, state: UiState, viewport: [u32; 2]) -> Result<(), WorldError> {
-        if self.state == Some(state) {
+        if self.state.as_ref() == Some(&state) {
             return Ok(());
         }
-        let changed = self.state.is_none_or(|old| old.screen != state.screen);
+        let changed = self
+            .state
+            .as_ref()
+            .is_none_or(|old| old.screen != state.screen);
+        self.sync_storage_controls(&state)?;
         for &(screen, object) in &self.pages {
             self.native
                 .world
@@ -86,9 +99,10 @@ impl GameUi {
                 .expect("undo control")
                 .enabled = state.undo;
         }
-        self.state = Some(state);
         self.dirty = true;
-        if changed && state.screen != Screen::Play && !viewport.contains(&0) {
+        let modal = state.screen != Screen::Play;
+        self.state = Some(state);
+        if changed && modal && !viewport.contains(&0) {
             self.focus_first(viewport)?;
         }
         Ok(())
@@ -131,7 +145,10 @@ impl GameUi {
         viewport: [u32; 2],
     ) -> Result<UiResponse, WorldError> {
         if self.native.router.focused().is_none()
-            && self.state.is_some_and(|state| state.screen != Screen::Play)
+            && self
+                .state
+                .as_ref()
+                .is_some_and(|state| state.screen != Screen::Play)
         {
             self.focus_first(viewport)?;
         }

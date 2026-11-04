@@ -121,10 +121,7 @@ fn escape_opens_menu_instead_of_exiting_and_blocks_board_input() {
         },
     )
     .unwrap();
-    let point = view
-        .resolved_view()
-        .world_to_screen(glam::Vec3::new(0.5, -2.5, 0.05))
-        .unwrap();
+    let point = glam::Vec2::new(40., 580.);
     for input in [
         RetainedInput::PointerMoved([f64::from(point.x), f64::from(point.y)]),
         RetainedInput::Button {

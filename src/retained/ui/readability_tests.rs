@@ -18,6 +18,10 @@ fn study_panel_color(ui: &mut GameUi) -> [f32; 4] {
             promotion: false,
             claim: false,
             undo: false,
+            continuation: None,
+            settings: super::super::persistence::GameSettings::default(),
+            labels: std::array::from_fn(|_| "Empty".into()),
+            setup: (0, 1),
         },
         [800, 600],
     )

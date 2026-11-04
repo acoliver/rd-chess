@@ -1,4 +1,52 @@
 #[test]
+fn loading_a_saved_game_clears_the_previous_reply_explanation() {
+    let root = tempfile::tempdir().unwrap();
+    let mut driver = fixture();
+    driver.open_store(root.path().to_path_buf());
+    driver.menu_action(MenuAction::Friend).unwrap();
+    driver.save_game(1).unwrap();
+    let before = ChessState::initial();
+    let mv = before.parse_uci("e2e4").unwrap();
+    driver.training.as_mut().unwrap().reply = Some((before, mv));
+    driver.explain_computer_reply().unwrap();
+    assert!(driver.study_ui_state().unwrap().why);
+    assert!(!driver.panel_text().is_empty());
+    driver.load_game(1).unwrap();
+    assert!(!driver.study_ui_state().unwrap().why);
+    assert!(driver.panel_text().is_empty());
+}
+
+#[test]
+fn training_checkpoints_preserve_saved_games_and_return_to_continue() {
+    let root = tempfile::tempdir().unwrap();
+    let mut driver = fixture();
+    driver.open_store(root.path().to_path_buf());
+    driver.menu_action(MenuAction::Friend).unwrap();
+    driver.play_uci("e2e4").unwrap();
+    let game = driver.board().unwrap().game().clone();
+    driver.save_game(1).unwrap();
+    driver.show_title().unwrap();
+    start_puzzle(&mut driver);
+    move_click(&mut driver, "e6e7");
+    driver.show_title().unwrap();
+    driver.continue_game().unwrap();
+    assert_eq!(driver.board().unwrap().game(), &game);
+    assert_eq!(driver.saved_payload(1).unwrap().replay().unwrap(), game);
+    assert!(driver.markers.base >= 68);
+    assert_eq!(driver.squares.base, driver.markers.base + 64);
+    assert!(driver.squares.visible.is_empty());
+    driver.show_title().unwrap();
+    lessons(&mut driver);
+    key(&mut driver, "enter");
+    next(&mut driver);
+    move_click(&mut driver, "e2e4");
+    let mut reopened = fixture();
+    reopened.open_store(root.path().to_path_buf());
+    reopened.continue_game().unwrap();
+    assert_eq!(reopened.board().unwrap().game(), &game);
+}
+
+#[test]
 fn status_is_hidden_on_browsers_and_shown_on_board_screens() {
     let mut driver = fixture();
     for screen in [

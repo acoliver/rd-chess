@@ -48,7 +48,7 @@ impl GameUi {
             .find(|(screen, _)| *screen == Screen::InGameMenu)
             .expect("pause page")
             .1;
-        let why = self.native.text(pause, "Why?", [120., 32.], [0., -156.])?;
+        let why = self.native.text(pause, "Why?", [120., 32.], [0., -208.])?;
         self.native.control(why, UiControl::button());
         self.study = Some(StudyWidgets {
             lessons,

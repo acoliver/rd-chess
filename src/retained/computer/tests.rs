@@ -11,7 +11,7 @@ fn why_control_shows_verified_sentences_after_a_computer_reply() {
         crate::teaching::explain_reply(&before, mv, crate::teaching::Budget::default()).unwrap();
     menu_key(&mut driver, "escape");
     for input in [
-        RetainedInput::PointerMoved([400., 456.]),
+        RetainedInput::PointerMoved([400., 508.]),
         button(true),
         button(false),
     ] {
@@ -46,7 +46,7 @@ fn a_computer_mate_delivered_with_the_menu_open_shows_game_over() {
     assert_eq!(driver.screen(), crate::retained::Screen::GameOver);
     assert_eq!(driver.status_text(), "Checkmate: White wins");
     for input in [
-        RetainedInput::PointerMoved([400., 456.]),
+        RetainedInput::PointerMoved([400., 508.]),
         button(true),
         button(false),
     ] {

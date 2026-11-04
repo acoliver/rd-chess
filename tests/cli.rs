@@ -1,4 +1,51 @@
 #[test]
+fn every_value_flag_is_recognized_before_requiring_its_value() {
+    for flag in [
+        "--load",
+        "--data-dir",
+        "--save",
+        "--capture",
+        "--view",
+        "--width",
+        "--height",
+        "--seed",
+        "--moves",
+        "--play",
+        "--level",
+        "--lesson",
+        "--puzzle",
+    ] {
+        assert_failure(&cli().arg(flag).output().unwrap(), "requires a value");
+    }
+}
+
+#[test]
+fn data_directory_and_position_flags_parse_together_without_gpu() {
+    let directory = tempfile::tempdir().unwrap();
+    let data = directory.path().join("application-data");
+    let save = directory.path().join("position.json");
+    let result = cli()
+        .arg("--data-dir")
+        .arg(&data)
+        .arg("--save")
+        .arg(&save)
+        .args([
+            "--moves", "e2e4", "--view", "overhead", "--width", "800", "--height", "600", "--seed",
+            "42",
+        ])
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let mut game = chess3d::rules::ChessState::initial();
+    game.play(game.parse_uci("e2e4").unwrap()).unwrap();
+    assert_eq!(Position::load(&save).unwrap(), game.to_position(42));
+    assert!(
+        !data.exists(),
+        "CPU inspection must not open the game store"
+    );
+}
+
+#[test]
 fn teaching_modes_are_mutually_exclusive_and_all_appear_in_help() {
     let fen = "r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1";
     for mode in ["--lesson", "--puzzle"] {

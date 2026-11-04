@@ -87,10 +87,14 @@ impl BoardDriver {
             .collect()
     }
     pub fn status_text(&self) -> String {
+        if let Some(error) = self.storage.as_ref().and_then(|s| s.error.as_ref()) {
+            return format!("Storage error: {error}");
+        }
         if matches!(
             self.screen(),
             super::Screen::Title
                 | super::Screen::ComputerSetup
+                | super::Screen::Settings
                 | super::Screen::Lessons
                 | super::Screen::Puzzles
         ) {
@@ -308,6 +312,7 @@ impl BoardDriver {
         edits.extend(self.markers.clear());
         self.pending.borrow_mut().push_back(edits);
         self.refresh_game_over()?;
+        self.autosave();
         self.sync_menu_ui()
     }
     pub(super) fn clear_selection(&mut self) -> Result<(), String> {
@@ -351,6 +356,7 @@ impl BoardDriver {
                     super::Screen::Play => super::Screen::InGameMenu,
                     super::Screen::InGameMenu => super::Screen::Play,
                     super::Screen::ComputerSetup
+                    | super::Screen::Settings
                     | super::Screen::Lessons
                     | super::Screen::Puzzles => {
                         self.show_title()?;
@@ -360,6 +366,7 @@ impl BoardDriver {
                         self.training_action(super::menus::MenuAction::StudyExit)?;
                         return Ok(true);
                     }
+                    super::Screen::Slots => self.menus.parent,
                     screen => screen,
                 };
                 self.transition(screen)?;
