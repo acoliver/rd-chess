@@ -6,9 +6,10 @@ All meshes, marble textures, board geometry, camera presets and position documen
 are game-owned. Rendering goes through the engine's `worldrunner` facade; no
 engine implementation or third-party art is vendored here.
 
-This is a scene/position vertical slice, **not a chess rules engine**. It supports
-arbitrary validated board positions, captures and promotions in JSON, not turn
-order, legal moves, AI or interactive piece editing. The optional window provides
+The scene/position editor accepts arbitrary board layouts in JSON. A separate
+CPU-only `rules` module now supplies validated playable chess states, legal moves,
+notation and outcomes. The CLI and optional window still inspect scene documents;
+they do not yet provide interactive play or an opponent. The window provides
 view controls only.
 
 ## Independent checkout and build
@@ -91,6 +92,58 @@ seeded marble remain procedural source assets, not copied image textures.
 - Left-drag orbits, wheel zooms, R/Home resets the exact preset, Escape exits.
   Resize and unmap/remap affect presentation only; camera changes never rewrite
   the position. `--capture` and `--window` cannot be combined.
+
+## Legal chess rules
+
+`chess3d::rules::ChessState` owns a private 0x88 board, turn, castling rights,
+en-passant target, move counters and Zobrist repetition history. It starts from
+the standard initial position or a validated six-field FEN. It never infers game
+state from an editor `Position`, which may have no kings or other illegal layouts.
+
+```rust
+use chess3d::rules::ChessState;
+
+let mut game = ChessState::initial();
+let chess_move = game.parse_uci("e2e4")?;
+assert_eq!(game.to_san(chess_move)?, "e4");
+game.play(chess_move)?;
+let scene_document = game.to_position(42);
+game.undo()?;
+# Ok::<(), chess3d::rules::MoveError>(())
+```
+
+Legal moves include both castles, en passant checked for exposed king attacks,
+and all four promotions. `play` revalidates moves and commits atomically; `undo`
+restores pieces, identities, rights, counters, targets and repetition history.
+SAN parsing accepts exact standard SAN, including check/mate suffixes; UCI accepts
+lower-case promotion suffixes. Scene conversion preserves piece IDs across moves
+and promotions within a state, but importing a fresh FEN assigns fresh IDs.
+
+`status` gives mate/stalemate and automatic draws. Fifty-move and threefold draws
+are claimable, exposed separately through `draw_claims` and `claims_after` for an
+intended move. Fivefold repetition and seventy-five moves are automatic, with
+checkmate precedence. The game controller must stop play on terminal status and
+record claims, resignations and agreed draws; the rules value remains usable for
+analysis. FEN restores placement and counters, not repetition history. Saving a
+game requires its initial FEN and moves.
+
+Automatic dead-position recognition covers bare kings, one bishop or knight
+against a bare king, and bishop-only positions with all bishops on one square
+colour. Other dead positions, including blocked pawn fortresses, are not detected.
+FEN validation checks local legality and promotion budgets, not full retrograde
+reachability. Move counters use `u32`; an overflowing move fails without mutation.
+Timed play, flag-fall, Chess960 and PGN are outside this rules-core proposal.
+
+Run the CPU-only rules suite without a graphics adapter:
+
+```sh
+CARGO_INCREMENTAL=0 nice -n 10 cargo test --locked -j4 -p chess3d --lib rules -- --test-threads=4
+```
+
+The default suite includes initial-position perft through depth four and the
+Chess Programming Wiki's positions 2–5, with their verified FENs. It also covers
+special moves, draw claims/history, strict FEN errors, SAN/UCI round trips, exact
+undo and deterministic random legal sequences. No perft test is ignored.
 
 ## Validation
 

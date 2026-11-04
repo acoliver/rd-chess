@@ -266,6 +266,7 @@ pub enum SceneBuildError {
 
 mod geometry;
 mod presentation;
+pub mod rules;
 mod scene;
 mod textures;
 pub use geometry::{Mesh, board_mesh, piece_meshes};
