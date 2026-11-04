@@ -146,6 +146,22 @@ at the queue head; other errors end the run. Desktop viewing uses
 capture test pump drains driver changes before requesting the accepted generation.
 It never runs from an event-loop callback.
 
+The capture pump and windowless computer-reply wait use `retained::ProgressPump`.
+Accepted-generation changes, preparation-count changes, submitted ordinary frames,
+and capture acceptance/completion reset its 180-second stall clock. Calling `frame`
+without submitting or polling pending work does not count as progress. The stall
+window allows a single pipeline compile on a heavily loaded software-GPU host:
+gate result `071fb52630bf` exceeded the former 60-second capture limit while the
+same suites grew from 25-36 seconds passing to 81-127 seconds under load.
+A separate 1,200-second total bound catches endless progress, allowing over 30
+times the passing suite duration. Neither bound restarts between preparation
+and capture. Failures report the awaited operation, unchanged progress values,
+and stall/total elapsed time. Checks run between engine calls; they cannot
+interrupt synchronous engine work. CPU-only computer test waits share the same
+watchdog, observing whether a result remains pending. Production computer search
+budgets are unchanged. Fake-clock unit tests cover slow progress, stalls, each
+progress signal, and the independent hard bound without sleeping or a GPU.
+
 Board clicks query the engine's last presented geometry at physical top-left
 pixels. The filter includes piece bodies, knight eyes, the board and visible
 target rings, excluding the studio floor and decorative frame/inlay. Body and eye
@@ -487,12 +503,24 @@ is required only on the same device/driver; no cross-GPU golden-image claim is m
 
 The original `tests/window_smoke.py` is retained, with its study fixture naturally
 resolved from this standalone root. `cargo xtask window` builds the viewer and
-launches it using an exclusive Xvfb `:100` via `xvfb-run`; it never uses the desktop.
-Requirements: Xvfb, xvfb-run, xauth, xdotool, libX11 and Pillow. Missing prerequisites
-fail explicitly. The smoke compares real window pixels to fresh offscreen frames,
-exercises orbit/zoom/reset/resize/unmap/remap, checks saved positions, title-to-friend Enter navigation, Escape menu/resume and
-clean window-manager exits. Its original readiness checks are bounded; the
-wrapper bounds the whole window run to five minutes and cleans up its process group.
+runs each of six cases in a separate `xvfb-run` invocation, selecting a free display
+starting at `:100`; it never uses the desktop. Requirements: Xvfb, xvfb-run, xauth,
+xdotool, libX11 and Pillow. Missing prerequisites fail explicitly. The smoke
+compares real window pixels to fresh offscreen frames, exercises
+orbit/zoom/reset/resize/unmap/remap, checks saved positions, title-to-friend Enter
+navigation, relaunch/Continue with exact restored pixels, Escape menu/resume and
+clean window-manager exits. Every case uses a temporary `--data-dir`.
+
+Window waits fail immediately if their current chess process exits, including
+after relaunch, or after 180 seconds without satisfying the awaited condition.
+Offscreen subprocesses allow the Rust capture watchdog's 1,200-second total bound.
+Each case has a separate 1,200-second outer bound, allowing sequential waits and
+pipeline compilation on a host running 4-6 times slower without the former
+150-second cutoff. Six cases have a combined execution wait budget of 7,200
+seconds, plus at most 60 seconds for process-group cleanup. These bounds do not
+interrupt synchronous Python work outside subprocess waits. Per-case logs retain
+flushed start/wait/ready/end progress and Xvfb diagnostics; failures report their
+tails, and completed results are preserved. Pixel tolerances are unchanged.
 
 The GitHub Actions workflow fetches the independent engine, provisions Mesa
 lavapipe and window-test prerequisites on the runner, and invokes `cargo xtask ci`.

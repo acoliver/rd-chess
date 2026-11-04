@@ -1,6 +1,6 @@
-use super::{CaptureInbox, TransactionQueue};
+use super::{CaptureInbox, ProgressPump, TransactionQueue};
 use crate::CameraPreset;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use worldrunner::scene::{
     gpu::offscreen::RgbaImage,
     plan::RenderScene,
@@ -50,11 +50,11 @@ pub fn capture_frame(
     queue: &TransactionQueue,
     inbox: &CaptureInbox,
 ) -> Result<RgbaImage, ViewerError> {
-    let deadline = Instant::now() + Duration::from_mins(1);
+    let mut pump = ProgressPump::new(run, "retained capture preparation/completion");
     let mut stable = 0;
     while stable < 2 {
         let generation = run.host().accepted_generation();
-        progress(run, deadline)?;
+        pump.step(run)?;
         if queue.borrow().is_empty()
             && run.host().preparations_in_flight() == 0
             && run.host().accepted_generation() == generation
@@ -66,8 +66,9 @@ pub fn capture_frame(
     }
     let generation = run.host().accepted_generation();
     let id = run.host_mut().request_capture(generation)?;
+    pump.capture_accepted()?;
     loop {
-        progress(run, deadline)?;
+        pump.capture_step(run, inbox, id)?;
         if let Some(outcome) = inbox.borrow_mut().remove(&id) {
             return match outcome {
                 RetainedCaptureOutcome::Completed { image, .. } => Ok(image),
@@ -77,16 +78,4 @@ pub fn capture_frame(
             };
         }
     }
-}
-
-fn progress(run: &mut WindowlessRetained<'_>, deadline: Instant) -> Result<(), ViewerError> {
-    if Instant::now() >= deadline {
-        return Err(ViewerError::Driver(
-            "chess retained capture timed out".into(),
-        ));
-    }
-    run.frame()?;
-    run.poll()?;
-    std::thread::yield_now();
-    Ok(())
 }

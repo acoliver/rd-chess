@@ -91,10 +91,20 @@ fn game(driver: &BoardDriver) -> &ChessState {
     driver.board().unwrap().game()
 }
 fn wait(driver: &mut BoardDriver) {
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let clock = Instant::now();
+    let mut watchdog = crate::retained::watchdog::ProgressWatchdog::new(
+        Duration::ZERO,
+        true,
+        "computer pending result",
+    );
     while driver.computer.as_ref().unwrap().pending.is_some() {
-        assert!(Instant::now() < deadline, "computer result did not arrive");
         driver.drain_computer().unwrap();
+        watchdog
+            .observe(
+                clock.elapsed(),
+                driver.computer.as_ref().unwrap().pending.is_some(),
+            )
+            .unwrap();
         std::thread::yield_now();
     }
 }

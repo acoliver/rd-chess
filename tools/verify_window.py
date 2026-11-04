@@ -19,7 +19,11 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = ("hero", "overhead", "title-to-friend", "computer-level-1", "study", "lineup")
-CASE_TIMEOUT = 150
+# Match the capture watchdog's hard bound, with room for sequential 180 s waits
+# and pipeline compilation on a 4-6x slower host. Each case owns its Xvfb server.
+CASE_TIMEOUT = 1200
+# Six cases allow 7,200 s of execution plus at most two 5 s cleanup waits each.
+SMOKE_TIMEOUT_SECONDS = len(CASES) * (CASE_TIMEOUT + 10)
 
 
 def prerequisites(target):
@@ -84,6 +88,8 @@ def run_case(name, output, tools, binary, environment):
             f"real-window harness case {name} {failure}\n"
             f"case {name}: {progress_log} (last 40 progress lines):\n"
             f"{log_tail(progress_log, 40, '[window case=')}"
+            f"case {name}: {output / 'progress.log'} (last 20 lines):\n"
+            f"{log_tail(output / 'progress.log', 20)}"
             f"case {name}: {progress_log} (last 20 output lines):\n{log_tail(progress_log, 20)}"
             f"case {name}: {xvfb_log} (last 20 lines):\n{log_tail(xvfb_log, 20)}")
     results = json.loads((output / "results.json").read_text())
@@ -104,6 +110,7 @@ def run(args):
                 "WGPU_ADAPTER_NAME", "WGPU_BACKEND", "MESA_VK_DEVICE_SELECT",
                 "MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE"):
         environment.pop(key, None)
+    print(f"Window suite: {len(CASES)} cases, total wait bound {SMOKE_TIMEOUT_SECONDS}s", flush=True)
     results = []
     for name in CASES:
         results.append(run_case(name, output / name, tools, binary, environment))

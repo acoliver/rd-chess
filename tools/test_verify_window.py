@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import runpy
 import signal
 import subprocess
 import sys
@@ -28,6 +29,15 @@ def case_result(name):
     return {"case": name, "view": "hero", "saved_pieces": 32, "rendered_pieces": 32,
             "capture_window_mean_absolute_error": 0.02, "colors": 1001,
             "controls": ["WM_DELETE_WINDOW clean exit"], "exit": 0, "elapsed_seconds": 1.25}
+
+
+def relaunch_image(outside, label):
+    frame = Mock(name=label)
+    frame.label = label
+    frame.convert.return_value = frame
+    frame.crop.return_value = outside
+    frame.getcolors.return_value = [None] * 1001
+    return frame
 
 
 class WindowHarnessTests(unittest.TestCase):
@@ -72,7 +82,37 @@ class WindowHarnessTests(unittest.TestCase):
             self.assertEqual(invocation.kwargs["stderr"], subprocess.STDOUT)
             self.assertTrue(invocation.kwargs["start_new_session"])
         self.assertEqual(self.process.wait.call_args_list,
-                         [call(timeout=150), call(timeout=5)] * len(verify_window.CASES))
+                         [call(timeout=1200), call(timeout=5)] * len(verify_window.CASES))
+
+    def test_command_selects_free_display_and_retains_xvfb_log(self):
+        verify_window.run(self.args)
+        command = self.popen.call_args.args[0]
+        self.assertIn("--auto-servernum", command)
+        self.assertIn("--server-num=100", command)
+        self.assertIn(f"--error-file={self.args.output / 'lineup/xvfb.log'}", command)
+        self.assertTrue(self.args.output.is_dir())
+
+    def test_failure_reports_xvfb_log_tail(self):
+        self.process.wait.return_value = 1
+
+        def launch(command, **kwargs):
+            output = Path(command[command.index("--output") + 1])
+            lines = ["old diagnostic"] + [f"Xvfb diagnostic {index}" for index in range(20)]
+            (output / "xvfb.log").write_text("\n".join(lines) + "\n")
+            return self.process
+
+        self.popen.side_effect = launch
+        with self.assertRaises(ValueError) as raised:
+            verify_window.run(self.args)
+        message = str(raised.exception)
+        self.assertIn("real-window harness case hero failed with exit 1", message)
+        self.assertIn(str(self.args.output / "hero/xvfb.log"), message)
+        self.assertIn("Xvfb diagnostic 19", message)
+        self.assertNotIn("old diagnostic", message)
+
+    def test_total_bound_includes_all_case_and_cleanup_waits(self):
+        self.assertEqual(verify_window.CASE_TIMEOUT, 1200)
+        self.assertEqual(verify_window.SMOKE_TIMEOUT_SECONDS, len(verify_window.CASES) * (1200 + 10))
 
     def test_merges_complete_case_results_in_original_order(self):
         verify_window.run(self.args)
@@ -107,7 +147,7 @@ class WindowHarnessTests(unittest.TestCase):
         self.assertEqual(self.popen.call_count, 1)
 
     def test_timeout_reports_case_limit_progress_tail_and_preserves_completed_results(self):
-        self.process.wait.side_effect = [0, 0, 0, 0, subprocess.TimeoutExpired("xvfb-run", 150), 0]
+        self.process.wait.side_effect = [0, 0, 0, 0, subprocess.TimeoutExpired("xvfb-run", 1200), 0]
 
         def launch(command, **kwargs):
             self.launch(command, **kwargs)
@@ -119,7 +159,7 @@ class WindowHarnessTests(unittest.TestCase):
         with self.assertRaises(ValueError) as raised:
             verify_window.run(self.args)
         message = str(raised.exception)
-        self.assertIn("case title-to-friend timed out after 150 seconds", message)
+        self.assertIn("case title-to-friend timed out after 1200 seconds", message)
         self.assertIn("Xvfb still running", message)
         self.assertIn("[window case=title-to-friend elapsed=10s] wait: step 10", message)
         self.assertIn("[window case=title-to-friend elapsed=49s] wait: step 49", message)
@@ -132,13 +172,13 @@ class WindowHarnessTests(unittest.TestCase):
         self.killpg.assert_called_with(self.process.pid, signal.SIGTERM)
 
     def test_timeout_kills_group_if_termination_does_not_finish(self):
-        self.process.wait.side_effect = [subprocess.TimeoutExpired("xvfb-run", 150),
+        self.process.wait.side_effect = [subprocess.TimeoutExpired("xvfb-run", 1200),
                                          subprocess.TimeoutExpired("xvfb-run", 5), 0]
-        with self.assertRaisesRegex(ValueError, "case hero timed out after 150 seconds"):
+        with self.assertRaisesRegex(ValueError, "case hero timed out after 1200 seconds"):
             verify_window.run(self.args)
         self.assertEqual(self.killpg.call_args_list,
                          [call(self.process.pid, signal.SIGTERM), call(self.process.pid, signal.SIGKILL)])
-        self.assertEqual(self.process.wait.call_args_list, [call(timeout=150), call(timeout=5), call(timeout=5)])
+        self.assertEqual(self.process.wait.call_args_list, [call(timeout=1200), call(timeout=5), call(timeout=5)])
 
     def test_failure_without_xvfb_log_still_reports_exit(self):
         self.process.wait.return_value = 7
@@ -158,13 +198,46 @@ class WindowHarnessTests(unittest.TestCase):
         self.assertFalse((self.args.output / "results.json").exists())
 
     def test_main_prints_timeout_diagnostics_and_fails(self):
-        self.process.wait.side_effect = [subprocess.TimeoutExpired("xvfb-run", 150), 0]
+        self.process.wait.side_effect = [subprocess.TimeoutExpired("xvfb-run", 1200), 0]
         with patch.object(sys, "argv", ["verify_window.py", "--output", str(self.args.output)]), \
                 patch("sys.stderr", new_callable=io.StringIO) as stderr:
             self.assertEqual(verify_window.main(), 1)
         self.assertIn("Window acceptance FAILED:", stderr.getvalue())
-        self.assertIn("case hero timed out after 150 seconds", stderr.getvalue())
+        self.assertIn("case hero timed out after 1200 seconds", stderr.getvalue())
         self.assertIn("wait: step 49", stderr.getvalue())
+
+    def test_timeout_reports_progress_and_xvfb_tails_with_total_bound(self):
+        self.process.wait.side_effect = [subprocess.TimeoutExpired("smoke", 1200), 0]
+
+        def launch(command, **kwargs):
+            output = Path(command[command.index("--output") + 1])
+            for filename, prefix in (("progress.log", "window progress"), ("xvfb.log", "Xvfb")):
+                lines = ["old diagnostic"] + [f"{prefix} {index}" for index in range(20)]
+                (output / filename).write_text("\n".join(lines) + "\n")
+            return self.process
+
+        self.popen.side_effect = launch
+        with self.assertRaises(ValueError) as raised:
+            verify_window.run(self.args)
+        message = str(raised.exception)
+        self.assertIn("real-window harness case hero timed out after 1200 seconds", message)
+        self.assertIn(str(self.args.output / "hero/progress.log"), message)
+        self.assertIn("window progress 0", message)
+        self.assertIn("window progress 19", message)
+        self.assertIn(str(self.args.output / "hero/xvfb.log"), message)
+        self.assertIn("Xvfb 19", message)
+        self.assertNotIn("old diagnostic", message)
+        self.assertEqual(self.process.wait.call_args_list[0].kwargs, {"timeout": 1200})
+        self.assertEqual(self.process.wait.call_args_list[1].kwargs, {"timeout": 5})
+        self.killpg.assert_called_once_with(self.process.pid, signal.SIGTERM)
+        self.assertEqual(self.popen.call_args.kwargs["stdout"].name,
+                         str(self.args.output / "hero/smoke.log"))
+        self.assertEqual(self.popen.call_args.kwargs["stderr"], subprocess.STDOUT)
+
+    def test_timeout_without_logs_still_reports_total_bound(self):
+        self.process.wait.side_effect = [subprocess.TimeoutExpired("smoke", 1200), 0]
+        with self.assertRaisesRegex(ValueError, "real-window harness case hero timed out after 1200 seconds"):
+            verify_window.run(self.args)
 
     def test_nonempty_output_is_preserved(self):
         self.args.output.mkdir()
@@ -258,11 +331,14 @@ class SmokeControlsTests(unittest.TestCase):
         self.assertIn("end failed", output.call_args.args[0])
         self.assertTrue(all(invocation.kwargs["flush"] for invocation in output.call_args_list))
 
-    def test_predicate_wait_still_fails_after_thirty_seconds(self):
-        with patch.object(self.smoke.time, "monotonic", side_effect=[0, 0, 31]), \
-                patch.object(self.smoke.time, "sleep"):
+    def test_predicate_wait_fails_after_stall_window(self):
+        process = Mock()
+        process.poll.return_value = None
+        with patch.object(self.smoke.time, "monotonic", side_effect=[0, 0, 0, 181]), \
+                patch.object(self.smoke.time, "sleep"), patch("builtins.print"):
+            progress = self.smoke.CaseProgress("hero", self.root)
             with self.assertRaisesRegex(AssertionError, "Timed out waiting for test wait"):
-                self.smoke.wait_for(lambda: None, "test wait")
+                self.smoke.wait_for(lambda: None, "test wait", process=process, progress=progress)
 
     def test_failed_smoke_kills_window_if_termination_times_out(self):
         process = Mock(pid=101)
@@ -281,13 +357,7 @@ class SmokeControlsTests(unittest.TestCase):
     def test_title_relaunch_reuses_store_after_exit_and_compares_continue_and_undo_references(self):
         outside = Mock(name="outside")
 
-        def image(label):
-            frame = Mock(name=label)
-            frame.label = label
-            frame.convert.return_value = frame
-            frame.crop.return_value = outside
-            frame.getcolors.return_value = [None] * 1001
-            return frame
+        image = lambda label: relaunch_image(outside, label)
 
         expected, reference_moved = image("initial"), image("moved")
         title, initial, highlights, moved = [image(label) for label in ("title", "initial", "highlights", "moved")]
@@ -297,7 +367,7 @@ class SmokeControlsTests(unittest.TestCase):
         first, second = Mock(pid=101), Mock(pid=202)
         for process in (first, second):
             process.wait.return_value = 0
-            process.poll.return_value = 0
+            process.poll.side_effect = lambda process=process: 0 if process.wait.called else None
         launches = []
 
         def launch(command, **kwargs):
@@ -312,7 +382,7 @@ class SmokeControlsTests(unittest.TestCase):
         def run(command, **kwargs):
             self.assertGreater(kwargs["timeout"], 0)
             if command[0] == str(self.args.binary):
-                self.assertEqual(kwargs["timeout"], 60)
+                self.assertEqual(kwargs["timeout"], 1200)
                 self.assertNotIn("DISPLAY", kwargs["env"])
                 return Mock()
             self.assertEqual(kwargs["timeout"], 10)
@@ -340,6 +410,12 @@ class SmokeControlsTests(unittest.TestCase):
                 patch.object(self.smoke.time, "sleep"), patch("builtins.print") as progress:
             result = self.smoke.run_case(self.args, {"DISPLAY": ":107"}, "title-to-friend", "overhead",
                                          interaction="title")
+        images = SimpleNamespace(first=first, second=second, moved=moved, inexact_resume=inexact_resume,
+                                 resumed=resumed, initial=initial, inexact_undo=inexact_undo, undone=undone,
+                                 comparisons=comparisons, progress=progress)
+        self.assert_title_relaunch(result, launches, calls, close, images)
+
+    def assert_title_relaunch(self, result, launches, calls, close, images):
         self.assertEqual(len(launches), 2)
         initial_command, relaunch_command = [entry[0] for entry in launches]
         data_dir = initial_command[initial_command.index("--data-dir") + 1]
@@ -349,24 +425,102 @@ class SmokeControlsTests(unittest.TestCase):
             self.assertNotIn("--play", command)
         self.assertIs(launches[0][1]["stdout"], launches[1][1]["stdout"])
         self.assertEqual(close.call_args_list, [call("1"), call("2")])
-        second.wait.assert_called_once_with(timeout=15)
-        first.terminate.assert_not_called()
-        second.terminate.assert_not_called()
+        images.second.wait.assert_called_once_with(timeout=15)
+        images.first.terminate.assert_not_called()
+        images.second.terminate.assert_not_called()
         commands = [invocation.args[0] for invocation in calls.call_args_list]
         self.assertIn([str(self.args.xdotool), "mousemove", "--window", "2", "284", "500"], commands)
-        self.assertIn(call(moved, inexact_resume), comparisons.call_args_list)
-        self.assertIn(call(moved, resumed), comparisons.call_args_list)
-        self.assertIn(call(initial, inexact_undo), comparisons.call_args_list)
-        self.assertIn(call(initial, undone), comparisons.call_args_list)
+        self.assertIn(call(images.moved, images.inexact_resume), images.comparisons.call_args_list)
+        self.assertIn(call(images.moved, images.resumed), images.comparisons.call_args_list)
+        self.assertIn(call(images.initial, images.inexact_undo), images.comparisons.call_args_list)
+        self.assertIn(call(images.initial, images.undone), images.comparisons.call_args_list)
         self.assertIn("relaunch Continue restores exact board pixels", result["controls"])
         self.assertIn("U exact board undo", result["controls"])
-        messages = [invocation.args[0] for invocation in progress.call_args_list]
+        messages = [invocation.args[0] for invocation in images.progress.call_args_list]
         for label in ("launch: headless reference capture", "launch: chess window",
                       "wait: first chess window exit", "launch: relaunch chess window with saved data",
                       "wait: relaunch title menu", "wait: Continue exact pre-relaunch pixels",
                       "wait: U exact board undo", "end passed"):
             self.assertTrue(any(message.endswith(label) for message in messages), label)
-        self.assertTrue(all(invocation.kwargs["flush"] for invocation in progress.call_args_list))
+        self.assertTrue(all(invocation.kwargs["flush"] for invocation in images.progress.call_args_list))
+
+class WindowWaitTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.output = Path(self.temp.name)
+        self.log = self.output / "overhead.log"
+        self.log.write_text("old diagnostic\n" + "".join(f"chess log {index}\n" for index in range(20)))
+        with patch.dict(os.environ, {"DISPLAY": ":107"}), patch.dict("sys.modules", {"PIL": Mock()}):
+            harness = runpy.run_path(str(verify_window.ROOT / "tests/window_smoke.py"))
+        self.wait_for = harness["wait_for"]
+        self.progress = harness["CaseProgress"]("overhead", self.output)
+        self.progress.started = 0.0
+        self.now = 0.0
+        clock = SimpleNamespace(monotonic=lambda: self.now, sleep=self.advance)
+        self.print = Mock()
+        globals_patch = patch.dict(self.wait_for.__globals__, {"time": clock, "print": self.print})
+        globals_patch.start()
+        self.addCleanup(globals_patch.stop)
+        self.process = Mock()
+        self.process.poll.return_value = None
+
+    def advance(self, seconds):
+        self.now += seconds
+
+    def wait(self, predicate):
+        return self.wait_for(predicate, "chess window", process=self.process,
+                             progress=self.progress)
+
+    def test_exited_process_fails_immediately_with_exit_code_and_log_tail(self):
+        self.process.poll.return_value = 17
+        predicate = Mock()
+        with self.assertRaises(AssertionError) as raised:
+            self.wait(predicate)
+        message = str(raised.exception)
+        self.assertIn("Chess process exited with code 17 waiting for chess window (case overhead)", message)
+        self.assertIn(str(self.log), message)
+        self.assertIn("chess log 19", message)
+        self.assertNotIn("old diagnostic", message)
+        predicate.assert_not_called()
+        self.assertEqual(self.now, 0.0)
+
+    def test_exit_during_predicate_is_reported_before_success(self):
+        self.process.poll.side_effect = [None, 9]
+        with self.assertRaisesRegex(AssertionError, "Chess process exited with code 9"):
+            self.wait(lambda: "window id")
+        self.assertEqual(self.now, 0.0)
+
+    def test_exit_during_failed_predicate_reports_process_exit(self):
+        self.process.poll.side_effect = [None, 9]
+        predicate = Mock(side_effect=subprocess.CalledProcessError(1, "xdotool"))
+        with self.assertRaisesRegex(AssertionError, "Chess process exited with code 9"):
+            self.wait(predicate)
+        self.assertEqual(self.now, 0.0)
+
+    def test_predicate_failure_while_alive_is_not_retried(self):
+        predicate = Mock(side_effect=subprocess.CalledProcessError(1, "xdotool"))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.wait(predicate)
+        predicate.assert_called_once_with()
+
+    def test_slow_live_process_can_succeed_beyond_thirty_seconds(self):
+        self.assertEqual(self.wait(lambda: "window id" if self.now >= 45 else None), "window id")
+        self.assertGreaterEqual(self.now, 45)
+        lines = (self.output / "progress.log").read_text().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertIn("[window case=overhead elapsed=0.00s] wait: chess window", lines[0])
+        self.assertIn(f"[window case=overhead elapsed={self.now:.2f}s] ready: chess window", lines[1])
+        for call, line in zip(self.print.call_args_list, lines):
+            self.assertEqual(call.args, (line,))
+            self.assertEqual(call.kwargs, {"flush": True})
+
+    def test_live_process_without_progress_fails_at_stall_bound(self):
+        with self.assertRaisesRegex(AssertionError, "after 180s without progress"):
+            self.wait(lambda: None)
+        self.assertGreaterEqual(self.now, 180)
+        self.assertLess(self.now, 180.1)
+        self.assertEqual(len((self.output / "progress.log").read_text().splitlines()), 1)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,9 @@
 #![cfg(feature = "viewer")]
 use chess3d::{
     CameraPreset, PieceKind, Side, Square,
-    retained::{BoardDriver, InputInbox, RetainedBoard, capture_frame, viewer_options},
+    retained::{
+        BoardDriver, InputInbox, ProgressPump, RetainedBoard, capture_frame, viewer_options,
+    },
     rules::ChessState,
 };
 use worldrunner::scene::{
@@ -276,14 +278,9 @@ fn wait_for_reply(
     id: worldrunner::scene::viewer::ObjectId,
     initial_object: worldrunner::scene::plan::SceneObject,
 ) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut pump = ProgressPump::new(run, "computer reply publication");
     loop {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "computer did not publish its reply"
-        );
-        run.frame().unwrap();
-        run.poll().unwrap();
+        pump.step(run).unwrap();
         if run
             .host()
             .objects()
@@ -291,6 +288,5 @@ fn wait_for_reply(
         {
             break;
         }
-        std::thread::yield_now();
     }
 }
