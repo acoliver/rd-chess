@@ -340,6 +340,68 @@ class SmokeControlsTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "Timed out waiting for test wait"):
                 self.smoke.wait_for(lambda: None, "test wait", process=process, progress=progress)
 
+    def exit_case(self, exit_after, status=0):
+        progress = Mock(name="progress")
+        progress.name = "title-to-friend"
+        case = self.smoke.SmokeCase(self.args, {},
+                                   {"view": "overhead", "load": None, "interaction": "title"},
+                                   str(self.root), progress)
+        case.process = Mock(pid=101)
+        self.now = 0
+
+        def wait(timeout):
+            if exit_after > timeout:
+                self.now += timeout
+                raise subprocess.TimeoutExpired("chess3d", timeout)
+            self.now += exit_after
+            return status
+
+        case.process.wait.side_effect = wait
+        case.window = "1"
+        case.find_window = Mock()
+        case.wait = Mock()
+        case.xdo = Mock()
+        case.records = []
+        return case
+
+    def test_clean_exit_can_finish_after_fifteen_seconds(self):
+        case = self.exit_case(45)
+        first = case.process
+        with patch.object(self.smoke, "close_request"), \
+                patch.object(self.smoke.subprocess, "Popen") as launch:
+            case.relaunch(Mock(), Mock())
+        self.assertEqual(self.now, 45)
+        first.wait.assert_called_once_with(timeout=180)
+        launch.assert_called_once()
+        self.assertIn(call("ready: first chess window exit (exit 0)"), case.progress.call_args_list)
+
+    def test_clean_exit_without_progress_fails_at_existing_stall_bound(self):
+        case = self.exit_case(181)
+        with patch.object(self.smoke, "close_request"), \
+                patch.object(self.smoke.subprocess, "Popen") as launch:
+            with self.assertRaises(subprocess.TimeoutExpired) as raised:
+                case.relaunch(Mock(), Mock())
+        self.assertEqual(raised.exception.timeout, self.smoke.STALL_TIMEOUT_SECONDS)
+        self.assertEqual(self.now, 180)
+        launch.assert_not_called()
+        self.assertEqual(case.progress.call_args_list,
+                         [call("close: first chess window"), call("wait: first chess window exit")])
+        case.process.terminate.assert_not_called()
+        case.process.kill.assert_not_called()
+
+    def test_nonzero_exit_fails_immediately_without_relaunch(self):
+        case = self.exit_case(0, 17)
+        case.window = "1"
+        with patch.object(self.smoke, "close_request") as close, \
+                patch.object(self.smoke.subprocess, "Popen") as launch:
+            with self.assertRaises(AssertionError):
+                case.relaunch(Mock(), Mock())
+        close.assert_called_once_with("1")
+        launch.assert_not_called()
+        self.assertEqual(self.now, 0)
+        case.process.wait.assert_called_once_with(timeout=180)
+        self.assertIn(call("ready: first chess window exit (exit 17)"), case.progress.call_args_list)
+
     def test_failed_smoke_kills_window_if_termination_times_out(self):
         process = Mock(pid=101)
         process.poll.return_value = None
@@ -376,7 +438,7 @@ class SmokeControlsTests(unittest.TestCase):
                 Path(command[command.index("--save") + 1]).write_text(
                     json.dumps({"pieces": [None] * 32, "seed": 342}))
                 return first
-            first.wait.assert_called_once_with(timeout=15)
+            first.wait.assert_called_once_with(timeout=180)
             return second
 
         def run(command, **kwargs):
@@ -425,7 +487,7 @@ class SmokeControlsTests(unittest.TestCase):
             self.assertNotIn("--play", command)
         self.assertIs(launches[0][1]["stdout"], launches[1][1]["stdout"])
         self.assertEqual(close.call_args_list, [call("1"), call("2")])
-        images.second.wait.assert_called_once_with(timeout=15)
+        images.second.wait.assert_called_once_with(timeout=180)
         images.first.terminate.assert_not_called()
         images.second.terminate.assert_not_called()
         commands = [invocation.args[0] for invocation in calls.call_args_list]
