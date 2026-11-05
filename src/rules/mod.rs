@@ -190,21 +190,12 @@ impl ChessState {
 
     /// Initial position and committed moves, including reversible repetition history.
     pub fn record(&self) -> (String, Vec<String>) {
-        let initial_fen = self.undo.first().map_or_else(
-            || self.to_fen(),
-            |snapshot| {
-                Self {
-                    core: snapshot.core,
-                    halfmove: snapshot.halfmove,
-                    fullmove: snapshot.fullmove,
-                    repetition: vec![snapshot.core.zobrist()],
-                    undo: Vec::new(),
-                }
-                .to_fen()
-            },
-        );
+        let mut initial = self.clone();
+        for _ in 0..self.undo.len() {
+            initial.undo().expect("committed move has undo history");
+        }
         (
-            initial_fen,
+            initial.to_fen(),
             self.undo.iter().map(|s| s.chess_move.to_uci()).collect(),
         )
     }
