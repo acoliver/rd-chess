@@ -75,9 +75,7 @@ impl BoardDriver {
         Ok(())
     }
     fn start_training(&mut self, screen: Screen) -> Result<(), String> {
-        if let Some(computer) = &mut self.computer {
-            computer.changed();
-        }
+        self.computer_changed();
         self.computer = None;
         self.menus.result = None;
         self.transition(screen)?;

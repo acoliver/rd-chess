@@ -25,6 +25,7 @@ const VALUE_FLAGS: &[&str] = &[
     "--level",
     "--lesson",
     "--puzzle",
+    "--pgn-check",
 ];
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -47,6 +48,7 @@ pub struct Options {
     pub explain_verbose: bool,
     pub lesson: Option<String>,
     pub puzzle: Option<String>,
+    pub pgn_check: Option<PathBuf>,
 }
 
 impl Options {
@@ -69,11 +71,13 @@ impl Options {
             explain_verbose: false,
             lesson: None,
             puzzle: None,
+            pgn_check: None,
         }
     }
 
     pub fn parse() -> Result<Option<Self>> {
         let mut options = Self::initial();
+        let mut other_options = false;
         let mut args = std::env::args_os().skip(1);
         while let Some(arg) = args.next() {
             let flag = arg.to_string_lossy();
@@ -81,6 +85,7 @@ impl Options {
                 print_help();
                 return Ok(None);
             }
+            other_options |= flag != "--pgn-check";
             if flag == "--explain" {
                 options.explain = Some(explanation_args(&mut args)?);
                 continue;
@@ -104,6 +109,9 @@ impl Options {
                 .ok_or_else(|| format!("{flag} requires a value"))?;
             options.set_value(&flag, value)?;
         }
+        if options.pgn_check.is_some() && other_options {
+            return Err("--pgn-check cannot be combined with other modes/options".into());
+        }
         options.validate()?;
         Ok(Some(options))
     }
@@ -112,6 +120,7 @@ impl Options {
         let text = value.to_string_lossy().into_owned();
         match flag {
             "--load" => self.load = Some(PathBuf::from(value)),
+            "--pgn-check" => self.pgn_check = Some(PathBuf::from(value)),
             "--data-dir" => self.data_dir = Some(PathBuf::from(value)),
             "--save" => self.save = Some(PathBuf::from(value)),
             "--capture" => self.capture = Some(PathBuf::from(value)),
@@ -218,16 +227,7 @@ impl Options {
         if self.lesson.is_some() && self.puzzle.is_some() {
             return Err("choose --lesson or --puzzle, not both".into());
         }
-        if self.window
-            || self.capture.is_some()
-            || self.load.is_some()
-            || self.save.is_some()
-            || self.moves.is_some()
-            || self.play.is_some()
-            || self.level.is_some()
-            || self.seed.is_some()
-            || self.view != "hero"
-        {
+        if std::env::args_os().len() != 3 {
             return Err("teaching inspection cannot combine with game/editor options".into());
         }
         Ok(())
@@ -247,6 +247,7 @@ fn print_help() {
         --play chooses the human side against a computer; --seed also seeds its replies.\n\
         --explain <fen> <uci> prints a CPU-only verified explanation.\n\
         --explain-verbose adds developer diagnostics; no other options may accompany --explain.\n\
+        --pgn-check file.pgn validates games and prints final FEN/result without a GPU.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\
         --save writes the current position before capture/window; camera orbit is not saved."
     );

@@ -44,7 +44,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`3eef068d2bad804ed0cc09e1df126cb0d87103cc` from
+`c4bd5e7c3e73f217da380f94086e7b6755ff41f4` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -223,8 +223,8 @@ profiles with one-line descriptions in a clipped scroll list. The initial defaul
 are White and Level 1; title settings can change them. The setup summary shows
 the active side and level. Start begins a new game; Back or Escape returns to title.
 Choosing Black schedules the computer's opening through the existing work queue.
-The adjacent self-play ordering and its limits are documented below. These
-profiles have no measured external ratings.
+The [self-play ordering and its limits](docs/computer-analysis.md#opponent-ladder-calibration-2026-11-04)
+are documented separately. These profiles have no measured external ratings.
 
 The in-game menu offers Resume, Undo, Restart, Resign and Return to title. Undo is
 disabled before a human decision exists. Menus consume board input, including
@@ -328,7 +328,7 @@ against a bare king, and bishop-only positions with all bishops on one square
 colour. Other dead positions, including blocked pawn fortresses, are not detected.
 FEN validation checks local legality and promotion budgets, not full retrograde
 reachability. Move counters use `u32`; an overflowing move fails without mutation.
-Timed play, flag-fall, Chess960 and PGN are outside this rules-core proposal.
+Timed play, flag-fall and Chess960 are outside this rules core.
 
 Run the CPU-only rules suite without a graphics adapter:
 
@@ -341,232 +341,52 @@ Chess Programming Wiki's positions 2–5, with their verified FENs. It also cove
 special moves, draw claims/history, strict FEN errors, SAN/UCI round trips, exact
 undo and deterministic random legal sequences. No perft test is ignored.
 
-## Computer analysis and opponent policy
+## PGN records
 
-`chess3d::search` is an original Rust implementation with no external chess-engine
-source or dependency. It uses the existing legal rules API without changing the
-move generator. Analysis uses iterative-deepening negamax alpha-beta, capture and
-promotion quiescence (all legal evasions when checked), TT/MVV-LVA/killer/history
-ordering and a caller-sized transposition table. Analysis retains an exact top-N
-root set, using its worst score as the alpha bound for later roots. Inferior
-bound-only moves are omitted. Reported candidates have comparable exact scores
-from the same completed iteration. Neutral analysis keeps one candidate by
-default; `Search::candidates(n)` requests more, at a higher node cost.
+`rules::pgn` imports and exports game records without a GPU or viewer feature.
+`PgnGame` owns the initial FEN, validated main-line moves, current rules state,
+tags, result and optional comments. Start a record from a rules position, apply
+legal moves, and export it:
 
 ```rust
-use chess3d::rules::ChessState;
-use chess3d::search::{Limits, Search, LADDER, choose_move};
-use std::sync::atomic::AtomicBool;
+use chess3d::rules::{ChessState, pgn::{PgnGame, parse}};
 
-let game = ChessState::initial();
-let mut search = Search::new(16_384); // fixed TT slots; zero disables caching
-let cancel = AtomicBool::new(false);
-let analysis = search.analyze(&game, Limits { nodes: 5_000, depth: Some(3) }, &cancel);
-assert!(game.legal_moves().contains(&analysis.pv[0]));
-let opponent_move = choose_move(&game, &LADDER[3], 42);
-assert!(game.legal_moves().contains(&opponent_move));
+let mut record = PgnGame::new(&ChessState::initial());
+let chess_move = record.state().parse_uci("e2e4")?;
+record.play(chess_move)?;
+record.tags.insert("Black".into(), "Computer (Level 2)".into());
+record.set_comment(1, "White occupies the center.")?;
+let pgn = record.export()?;
+let imported = parse(&pgn)?;
+assert_eq!(imported[0].state(), record.state());
+# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-`Score::Centipawns` is relative to the side to move. `Score::Mate` carries an
-absolute winner and a ply distance; mate ordering and TT ply adjustment never
-convert it to an ordinary centipawn value. The TT validates a fingerprint of the
-reversible repetition-history multiset and halfmove counter in addition to the
-position hash. This avoids reusing bounds across different draw contexts. Hash
-collisions remain theoretically possible. Deeper entries replace shallower ones
-within a search age; the next search may replace entries from older ages.
+Export supplies the Seven Tag Roster with defaults, derives SetUp/FEN tags for
+noninitial starts, writes standard SAN and move numbers (including a black-side
+start), and wraps movetext at 80 columns. Player names are metadata supplied by
+the caller. Comments attach to ply zero or follow a committed ply; whitespace
+is normalized. Comments containing braces use semicolon lines. An unbroken
+comment word over 78 columns produces a typed export error instead of being
+altered or exceeding the line limit. Tags escape quotes and backslashes.
 
-Every visited root, normal and quiescence node counts once. The node limit is
-exact, including on interruption. Cancellation is checked before each node, not
-inside move generation or evaluation. Only completed iterations are published;
-`analyze_progress` can publish them to a host callback. With no completed
-iteration, depth zero explicitly denotes an unsearched first-legal-move fallback
-and a static score. Completed candidate lists exclude that fallback. Checkmate
-precedes draw counters. Supported automatic draws and available threefold or
-fifty-move claims score zero; this initial analysis always takes an available
-claim rather than analyzing whether to decline it. Normal depth is capped at 64,
-and a 128-ply recursion limit aborts an iteration instead of evaluating a checked
-king as a quiet position. Rules-counter overflow also aborts the iteration.
+Import accepts multiple games, optional SAN check/mate suffixes, zero-spelled
+castles, promotions with or without `=`, comments, annotations and recursive
+variations. Variation moves are validated from their branch position but are
+not retained. The main line rebuilds repetition history. Results are recorded
+declarations, so resignations and agreed draws need no terminal board position;
+the Result tag must agree with the movetext marker. Input is limited to 4 MiB
+and variation nesting to 32. Errors name the one-based game, ply and token.
 
-`evaluate` exposes independent material, placement, mobility, king-safety and
-pawn-structure terms in an `EvaluationBreakdown`, with middlegame/endgame values
-and a material phase. The piece-square tables are generated at compile time
-from original formulas documented in `src/search/evaluation.rs`. Mobility counts
-attack space, not fully legal moves; pawn/king mobility receives no bonus. Pawn
-structure includes doubled/isolated penalties and rank-dependent passed-pawn
-bonuses. King safety counts shield pawns and enemy attacks in the king ring.
-These features are heuristics, not proofs of a tactical explanation.
+`cargo run --locked -j4 -- --pgn-check games.pgn` validates the entire file before
+printing `Game N: <final FEN> <result>` for each game. This CPU-only mode cannot
+be combined with scene, save or play options, and never opens a window.
 
-Opponent policy is separate from neutral analysis. Pip, Rowan, Mira, Ellis, Nia,
-Tomas, Imani and Soren have data-only budgets, candidate widths, feature attention,
-bounded seeded perturbation and small style biases. Adjacent self-play results
-are recorded below; no Elo rating is assigned. A seed reproduces a choice for the same
-position, history and profile. Noise applies only to centipawn candidates; it
-cannot change mate ordering. No wall-clock timer schedules mistakes.
+## Computer analysis and opponent policy
 
-Before selection, a finite one-reply scan excludes moves that leave a queen
-immediately capturable when a queen-safe alternative exists. Policy then selects
-within the top-N remaining search candidates, never uniformly over all legal
-moves. This conservative rule can reject sound queen sacrifices and does not
-prevent every other kind of blunder. If the profile budget completes no iteration,
-policy ranks a one-ply static fallback. Safety scanning and fallback preparation
-are bounded by the legal move lists, but are outside the analysis node count.
-`choose_move` requires at least one legal move and panics on mate/stalemate;
-a controller must handle terminal states and draw claims before requesting play.
-
-Run the CPU search regressions or the fixed-budget release throughput measurement:
-
-```sh
-CARGO_INCREMENTAL=0 nice -n 10 cargo test --locked -j4 -p chess3d --lib search -- --test-threads=4
-CARGO_INCREMENTAL=0 nice -n 10 cargo test --release --locked -j4 -p chess3d --lib \
-  search::tests::throughput -- --ignored --nocapture
-```
-
-The measurement searches 20,000 nodes each from the initial position and
-Kiwipete, using 65,536 TT slots. It prints nodes/second and completed depth; it
-is ignored in the default suite. Self-play below measures only this internal pool;
-human calibration has not been performed. `BoardDriver` now runs the policy on
-the engine's retained CPU queue with one worker and one pending slot. It submits
-immutable rules/history snapshots
-with a game generation, and derives each move seed from `(game seed, ply)` using
-the documented SplitMix-style integer mixing in `retained/computer.rs`. Completed
-results are drained on `WorkReady`, checked against both ticket and game generation,
-then revalidated and committed through the same single object transaction as human
-moves. A computer promotion uses its selected piece without opening a dialog.
-Board clicks cannot select or move pieces on the computer's turn; orbit and zoom
-remain available. Status names the level/profile while thinking and displays
-worker panic, closed-queue, illegal-result and timeout errors until undo/restart.
-
-Undo/restart invalidate the request generation and cancel the engine ticket,
-including a result already queued for delivery. Undo removes the human move plus
-its computer reply when present, or just the human move while search is pending.
-For a black human, the computer's opening is retained as the first decision point;
-there is no human move to undo before that point. Available repetition/fifty-move
-claims are taken by the computer and shown as a draw without requesting search.
-
-A fixed ten-second elapsed safety budget is separate from each profile's node
-budget. Retained updates signal cooperative cancellation at the deadline. The
-policy also checks that deadline on its worker at every node and between policy
-candidates, so paused presentation does not leave search running indefinitely.
-It returns the seeded policy choice from the last fully completed iteration; if
-none completed, status reports the timeout instead of inventing a move. Normal
-node-budget exhaustion still uses the existing finite static fallback. Exact seed
-reproduction applies when the elapsed emergency cap does not interrupt search.
-Cancellation cannot interrupt an individual rules/evaluation call.
-
-Engine limitation: this pin has work wakeups and retained ticks, but no scheduled
-host timer service. The cap uses monotonic deadlines in those existing callbacks;
-there is no game-created timer thread or executor. A literal scheduled host timer
-requires an engine API before the game can adopt it (engine issue `c997bf5e36af`).
-
-CPU regressions use real engine queues on GPU-free retained hosts, injecting
-completion payloads only for failure/staleness cases. The required windowless GPU
-regression uses the production driver and native `WorkReady` delivery from
-`frame`/`poll`. It clicks e2-e4 versus Level 1 with game seed 42, verifies b8-c6's
-retained identity and transform, captures the reply, and compares exact pixels with an
-independent rules-driven reference. `tests/window_smoke.py` adds the same move and
-two-ply undo using its existing Xvfb click injection. Do not run a visible window
-on the macOS desktop.
-
-## Opponent ladder calibration (2026-11-04)
-
-Measured on an Apple M4 Max (16 logical CPUs), macOS 26.4, Rust 1.97.0.
-`examples/calibrate.rs` uses the production policy and only std threads, bounded
-to 1–6 workers. The 20 authored UCI lines select short standard openings. Tests
-require equal material, no check and an absolute balanced static evaluation below
-100 cp; this does not establish theoretical opening equality. Each opening/seed
-pair is played with reversed colours. Automatic outcomes and
-available draw claims stop play; the 200 searched-ply cap is a draw, with no
-material adjudication. Opening plies are excluded from move timings.
-
-The score is wins plus half the draws, divided by games. The 95% Hoeffding
-interval uses colour pairs as independent bounded samples, with radius
-`sqrt(ln(40) / games)`, clipped to [0, 1]. It describes this fixed opening/seed
-pool under that sampling assumption, with no external rating or simultaneous
-seven-comparison guarantee. Worker scheduling affects timings only. The CLI
-prints every game's index, result and searched UCI moves, plus nodes and timings
-in profile order. Pair `i` uses opening `i % 20`, seed `mix(seed + i)`, and move
-seed `mix(pair_seed + searched_ply)`; the mixing function is in `selfplay`.
-
-Commands used (the Git URL override is specific to this Mac session):
-
-```sh
-unset RUSTUP_TOOLCHAIN CARGO RUST_RECURSION_COUNT
-export CARGO_INCREMENTAL=0 CARGO_NET_GIT_FETCH_WITH_CLI=true GIT_CONFIG_COUNT=1
-export GIT_CONFIG_KEY_0=url.hub-mac-llxprt-branch-1:real-disunity.git.insteadOf
-export GIT_CONFIG_VALUE_0=https://github.com/acoliver/real-disunity.git
-nice -n 10 cargo build --release --locked -j4 -p chess3d --example calibrate
-nice -n 10 target/release/examples/calibrate timing
-nice -n 10 target/release/examples/calibrate stress
-nice -n 10 target/release/examples/calibrate ladder 80 6 200 20261104
-# A single pair: calibrate LOW HIGH GAMES THREADS MAX_PLIES SEED
-# Release-only majority regression, ignored in the default suite:
-nice -n 10 cargo test --release --locked -j4 -p chess3d --lib \
-  search::selfplay::tests::strongest -- --ignored --nocapture
-```
-
-### Adjacent results
-
-Each row has 80 games (40 colour pairs), with W/D/L from the higher level's side.
-Every higher level scored at least 73.75%; all seven individual intervals exclude
-50%. The seven matches reported 1,008 s of wall time in total.
-
-| Match | Higher-level W/D/L | Score | 95% paired interval | Cap draws |
-| --- | ---: | ---: | ---: | ---: |
-| 1 vs 2 | 76 / 0 / 4 | 95.00% | 73.53–100.00% | 0 |
-| 2 vs 3 | 76 / 0 / 4 | 95.00% | 73.53–100.00% | 0 |
-| 3 vs 4 | 68 / 4 / 8 | 87.50% | 66.03–100.00% | 2 |
-| 4 vs 5 | 67 / 3 / 10 | 85.62% | 64.15–100.00% | 2 |
-| 5 vs 6 | 56 / 6 / 18 | 73.75% | 52.28–95.22% | 2 |
-| 6 vs 7 | 63 / 6 / 11 | 82.50% | 61.03–100.00% | 2 |
-| 7 vs 8 | 59 / 9 / 12 | 79.38% | 57.90–100.00% | 3 |
-
-### Single-worker move timings
-
-`timing` searches the 20 openings once per profile. `stress` searches the existing
-perft positions 2, 4 and 5. Wall time includes queen safety, fallback and all policy
-work; node counts include search only. Budgets are nodes per move, with a depth
-ceiling of 64 so a low fixed depth cannot hide a budget increase.
-
-| Level | Profile | Nodes | Candidates | Noise ±cp | Opening average / maximum ms | Stress maximum ms |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| 1 | Pip | 80 | 4 | 220 | 0.553 / 0.828 | 0.986 |
-| 2 | Rowan | 250 | 3 | 130 | 1.592 / 4.312 | 1.984 |
-| 3 | Mira | 750 | 3 | 80 | 4.018 / 5.175 | 6.466 |
-| 4 | Ellis | 2,250 | 3 | 45 | 12.305 / 15.570 | 19.741 |
-| 5 | Nia | 6,750 | 2 | 24 | 39.052 / 45.461 | 54.793 |
-| 6 | Tomas | 20,000 | 2 | 12 | 114.275 / 141.814 | 186.288 |
-| 7 | Imani | 60,000 | 2 | 6 | 339.490 / 384.639 | 538.781 |
-| 8 | Soren | 135,000 | 1 | 0 | 1,015.774 / 2,107.868 | 989.968 |
-
-Other jobs were running; host load ranged from 35 to 77 during this work.
-Level 8's slowest opening move was 2.108 s, slightly above two seconds, while
-its average was 1.016 s. These measurements are not a hard wall-time guarantee;
-the production ten-second emergency cancellation remains separate from budgets.
-In the six-worker 7v8 match, Level 8 averaged 572.930 ms and 134,920 search nodes,
-with a 3,264.128 ms maximum. Those positions and scheduling differ from the serial
-opening scan. The final sample was reduced from a planned 120 games per pair to 80 because
-pilot wall times under host contention projected beyond the calibration limit.
-
-Sampling found repeated legal generation and pawn-list construction in hot paths.
-Search now reuses each node's legal list for status and expansion and applies
-its generated moves without regenerating legality. Public `play` still validates.
-Pawn-file rank masks preserve the original evaluator, checked against its direct
-definition over seeded legal games; material-draw detection also avoids a list
-allocation. The five existing perft tests and their expected counts are unchanged.
-
-Pip's small budget often uses the static fallback. A regression demonstrates an
-elementary beginner opportunity: from the first Italian opening, one fixed seed
-plays Bxf7+ and permits Kxf7, losing a bishop for a pawn. Human beginner beatability
-and perceived mistake quality still need human play sessions. No Elo is claimed.
-The seed-42 computer-reply reference changed from g8-f6 to b8-c6; the retained
-identity/transform, independent pixel reference and Linux smoke sequence were
-updated, and the full Metal suite passed with the new reference.
-
-Verification: strict default/all-feature macOS Clippy and all-feature Linux Clippy
-through Zig passed, as did formatting. CPU library tests passed 91 with 2 ignored;
-the full all-feature Metal run passed 160 with 2 ignored. The explicit release
-majority regression passed, with Level 8 winning all six games against Level 1.
-The Xvfb window smoke was not run on macOS; its Python module passed syntax checks.
+See [computer analysis and ladder calibration](docs/computer-analysis.md) for
+search APIs, opponent budgets, host-timer scheduling, cancellation and measured
+self-play results.
 
 ## Verified move explanations
 
@@ -704,7 +524,7 @@ cargo test --locked -p chess3d --lib --test teaching_course --test teaching_expl
 
 `--lesson ID` prints the steps, FENs, hints and accepted lines after validating
 the course. `--puzzle ID` prints the position after the opponent's setup move,
-then the solver's line. These inspection modes cannot write position files or
+then the solver's line. These inspection modes cannot combine with other options, write position files or
 launch a window. The runners handle wrong-answer feedback, retries, progressive
 hints, scripted replies and alternative mates through the existing rules core.
 The window's Lessons and Puzzles title choices open native browsers and playable

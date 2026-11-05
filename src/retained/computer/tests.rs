@@ -30,11 +30,31 @@ fn why_control_shows_verified_sentences_after_a_computer_reply() {
 
 use super::*;
 use crate::{CameraPreset, PieceKind, Square, retained::RetainedBoard, rules::INITIAL_FEN};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use worldrunner::scene::{
     gpu::{SceneView, Viewport},
     viewer::{MouseButton, RetainedInput},
 };
+
+mod timers;
+
+#[test]
+fn timer_admission_failure_does_not_submit_or_leak_a_partial_pair() {
+    use worldrunner::scene::viewer::MAX_HOST_TIMERS;
+    for available in [0, 1] {
+        let (mut driver, mut host) = setup(INITIAL_FEN, Side::Onyx);
+        for _ in 0..MAX_HOST_TIMERS - available {
+            host.timer_at(host.timer_now() + SEARCH_BUDGET).unwrap();
+        }
+        driver.advance_computer(&mut host);
+        assert!(driver.computer.as_ref().unwrap().pending.is_none());
+        assert!(driver.status_text().contains("host timer limit exceeded"));
+        if available == 1 {
+            host.timer_at(host.timer_now()).unwrap();
+        }
+        assert!(host.timer_at(host.timer_now()).is_err());
+    }
+}
 
 #[test]
 fn a_computer_mate_delivered_with_the_menu_open_shows_game_over() {
@@ -162,7 +182,7 @@ fn inject(driver: &mut BoardDriver, host: &mut RetainedHost, result: Option<Lega
             chess_move: result,
         })
         .unwrap();
-    computer.pending = Some(Request::new(ticket, generation));
+    computer.pending = Some(Request::new(ticket, generation, host));
 }
 
 #[test]
@@ -174,7 +194,7 @@ fn replies_once_and_is_deterministic_for_seed_and_level() {
         let expected = crate::search::choose_move(game(&driver), &LADDER[0], move_seed(42, 1));
         assert_eq!(expected.to_uci(), "b8c6", "Linux window smoke reference");
         driver.advance_computer(&mut host);
-        assert_eq!(driver.status_text(), "Computer (Level 1, Pip) is thinking");
+        assert!(!driver.status_text().contains("thinking"));
         wait(&mut driver);
         assert_eq!(game(&driver).repetition_history().len(), 3);
         replies.push(game(&driver).clone());
@@ -237,7 +257,7 @@ fn illegal_and_missing_results_and_panics_surface_without_mutating() {
         .unwrap()
         .submit(|_| panic!("test job"))
         .unwrap();
-    computer.pending = Some(Request::new(ticket, computer.generation));
+    computer.pending = Some(Request::new(ticket, computer.generation, &mut host));
     wait(&mut driver);
     assert!(driver.status_text().contains("panicked"));
 }
@@ -344,7 +364,7 @@ fn terminal_states_do_not_submit_and_levels_are_bounded() {
 }
 
 #[test]
-fn elapsed_budget_signals_stop_and_accepts_completed_result() {
+fn unrelated_host_timer_does_not_stop_a_pending_search() {
     let (mut driver, mut host) = setup(INITIAL_FEN, Side::Onyx);
     let chess_move = game(&driver).parse_uci("e2e4").unwrap();
     let computer = driver.computer.as_mut().unwrap();
@@ -369,11 +389,14 @@ fn elapsed_budget_signals_stop_and_accepts_completed_result() {
     computer.pending = Some(Request {
         ticket,
         generation,
-        deadline: Instant::now(),
+        timers: SearchTimers::new(&mut host).unwrap(),
         stop: stop.clone(),
     });
+    let unrelated = host.timer_at(host.timer_now()).unwrap();
+    driver.computer_timer(&unrelated);
     driver.advance_computer(&mut host);
-    assert!(stop.load(Ordering::Relaxed));
+    assert!(!stop.load(Ordering::Relaxed));
+    stop.store(true, Ordering::Relaxed);
     wait(&mut driver);
     assert_eq!(game(&driver).repetition_history().len(), 2);
     assert!(!driver.status_text().contains("error"));
@@ -426,7 +449,7 @@ fn undo_restart_and_host_shutdown_cancel_running_jobs() {
                 }
             })
             .unwrap();
-        computer.pending = Some(Request::new(ticket, generation));
+        computer.pending = Some(Request::new(ticket, generation, &mut host));
         running.recv_timeout(Duration::from_secs(5)).unwrap();
         match action {
             "undo" => driver.undo().unwrap(),
