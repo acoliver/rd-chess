@@ -53,18 +53,18 @@ fn title_continue_is_absent_until_a_resumable_save_exists() {
     let mut driver = fixture(root.path());
     driver.show_title().unwrap();
     assert!(!driver.can_continue());
-    click(&mut driver, [204., 510.]);
+    click(&mut driver, [400., 358.]);
     assert_eq!(
         driver.screen(),
         Screen::Slots,
-        "without Continue, Saved games is the first secondary row"
+        "without Continue, Saved games follows Lessons and Puzzles"
     );
     key(&mut driver, "escape");
-    click(&mut driver, [400., 258.]);
+    click(&mut driver, [400., 150.]);
     driver.play_uci("e2e4").unwrap();
     let game = driver.board().unwrap().game().clone();
     driver.show_title().unwrap();
-    click(&mut driver, [204., 510.]);
+    click(&mut driver, [400., 150.]);
     assert_eq!(driver.screen(), Screen::Play);
     assert_eq!(driver.board().unwrap().game(), &game);
 }
@@ -74,7 +74,7 @@ fn native_settings_choices_persist_and_set_new_computer_defaults() {
     let root = tempfile::tempdir().unwrap();
     let mut driver = fixture(root.path());
     driver.show_title().unwrap();
-    click(&mut driver, [400., 510.]);
+    click(&mut driver, [400., 410.]);
     assert_eq!(driver.screen(), Screen::Settings);
     click(&mut driver, [290., 212.]);
     click(&mut driver, [400., 292.]);
@@ -91,7 +91,7 @@ fn native_settings_choices_persist_and_set_new_computer_defaults() {
     let mut restarted = fixture(root.path());
     assert_eq!(restarted.settings(), settings);
     restarted.show_title().unwrap();
-    click(&mut restarted, [400., 310.]);
+    click(&mut restarted, [400., 202.]);
     click(&mut restarted, [250., 515.]);
     assert_eq!(
         (
@@ -108,7 +108,7 @@ fn title_and_pause_offer_manual_save_load_with_generated_labels() {
     let mut driver = fixture(root.path());
     driver.play_uci("e2e4").unwrap();
     key(&mut driver, "escape");
-    click(&mut driver, [400., 455.]);
+    click(&mut driver, [250., 455.]);
     assert_eq!(driver.screen(), Screen::Slots);
     for y in [160., 272., 384.] {
         click(&mut driver, [250., y]);
@@ -122,7 +122,7 @@ fn title_and_pause_offer_manual_save_load_with_generated_labels() {
     key(&mut driver, "escape");
     assert_eq!(driver.screen(), Screen::InGameMenu);
     driver.show_title().unwrap();
-    click(&mut driver, [400., 510.]);
+    click(&mut driver, [400., 410.]);
     click(&mut driver, [250., 272.]);
     click(&mut driver, [550., 272.]);
     assert_eq!(driver.screen(), Screen::Play);

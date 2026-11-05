@@ -22,6 +22,7 @@ fn study_panel_color(ui: &mut GameUi) -> [f32; 4] {
             settings: super::super::persistence::GameSettings::default(),
             labels: std::array::from_fn(|_| "Empty".into()),
             setup: (0, 1),
+            pgn_entries: Vec::new(),
         },
         [800, 600],
     )

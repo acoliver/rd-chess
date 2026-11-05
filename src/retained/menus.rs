@@ -11,6 +11,8 @@ pub enum Screen {
     Puzzle,
     Slots,
     Settings,
+    PgnImport,
+    PgnGames,
     #[default]
     Play,
     InGameMenu,
@@ -50,13 +52,19 @@ pub(super) enum MenuAction {
     Load(u8),
     Markers(bool),
     Overhead(bool),
+    ImportPgn,
+    ExportPgn,
+    PgnEntry(usize),
 }
 
 pub(super) const TITLE: &[(&str, MenuAction)] = &[
+    ("Continue", MenuAction::Continue),
     ("Play a friend", MenuAction::Friend),
     ("Play the computer", MenuAction::Computer),
     ("Lessons", MenuAction::Lessons),
     ("Puzzles", MenuAction::Puzzles),
+    ("Saved games", MenuAction::Slots),
+    ("Settings", MenuAction::Settings),
     ("Quit", MenuAction::Quit),
 ];
 pub(super) const PAUSE: &[(&str, MenuAction)] = &[
@@ -167,6 +175,9 @@ impl BoardDriver {
     }
     pub(super) fn transition(&mut self, screen: Screen) -> Result<(), String> {
         self.clear_selection()?;
+        if !matches!(screen, Screen::PgnImport | Screen::PgnGames) {
+            self.pgn.message = None;
+        }
         self.menus.screen = screen;
         self.sync_menu_ui()
     }
@@ -180,6 +191,7 @@ impl BoardDriver {
             settings: self.preferences,
             labels: self.slot_labels(),
             setup: (self.menus.side, self.menus.level),
+            pgn_entries: self.pgn_entries(),
         };
         let study = self.study_ui_state();
         if let Some(ui) = &mut self.ui {
@@ -205,6 +217,9 @@ impl BoardDriver {
                 self.menus.level = level;
             }
             MenuAction::Start => self.start_computer_game()?,
+            MenuAction::Back if matches!(self.screen(), Screen::PgnImport | Screen::PgnGames) => {
+                self.pgn_back()?;
+            }
             MenuAction::Back if self.screen() == Screen::Slots => {
                 self.transition(self.menus.parent)?;
             }
@@ -231,7 +246,20 @@ impl BoardDriver {
             | MenuAction::StudyRetry
             | MenuAction::StudyExit
             | MenuAction::Why => self.training_action(action)?,
-            action => self.storage_menu_action(action)?,
+            MenuAction::ImportPgn | MenuAction::ExportPgn | MenuAction::PgnEntry(_) => {
+                self.pgn_menu_action(action)?;
+            }
+            MenuAction::Continue
+            | MenuAction::Slots
+            | MenuAction::Settings
+            | MenuAction::Save(_)
+            | MenuAction::Load(_)
+            | MenuAction::Side(_)
+            | MenuAction::Level(_)
+            | MenuAction::Markers(_)
+            | MenuAction::Overhead(_) => {
+                self.storage_menu_action(action)?;
+            }
         }
         Ok(())
     }

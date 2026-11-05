@@ -15,7 +15,7 @@ impl GameUi {
         self.command_page(Screen::InGameMenu, "Game menu", menus::PAUSE)?;
         self.command_page(Screen::GameOver, "Game over", menus::OVER)?;
         self.storage_pages()?;
-        Ok(())
+        self.pgn_pages()
     }
     fn command_page(
         &mut self,
@@ -37,7 +37,7 @@ impl GameUi {
         let list = self.native.rect(
             panel,
             [560., count * 52. - 8.],
-            [0., if screen == Screen::Title { -62. } else { -10. }],
+            [0., if screen == Screen::Title { -32. } else { -10. }],
         )?;
         self.native.stack(list, UiAxis::Vertical, 8);
         self.list_rows(list, entries, [560., 44.])?;
@@ -83,7 +83,7 @@ impl GameUi {
             [180., 40.],
         )?;
         self.native
-            .text(panel, "Levels (uncalibrated)", [580., 32.], [0., 108.])?;
+            .text(panel, "Computer levels", [580., 32.], [0., 108.])?;
         self.level_list(panel)?;
         self.native.text(
             panel,

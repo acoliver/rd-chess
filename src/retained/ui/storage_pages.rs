@@ -6,28 +6,27 @@ use worldrunner::{
 
 impl GameUi {
     pub(super) fn storage_pages(&mut self) -> Result<(), WorldError> {
-        let title = self
-            .pages
-            .iter()
-            .find(|p| p.0 == Screen::Title)
-            .expect("title")
-            .1;
-        self.choice_row(
-            title,
-            -210.,
-            &[
-                ("Continue", MenuAction::Continue),
-                ("Saved games", MenuAction::Slots),
-                ("Settings", MenuAction::Settings),
-            ],
-        )?;
         let pause = self
             .pages
             .iter()
             .find(|p| p.0 == Screen::InGameMenu)
             .expect("pause")
             .1;
-        self.choice_row(pause, -155., &[("Save / Load", MenuAction::Slots)])?;
+        self.choice_row(
+            pause,
+            -155.,
+            &[
+                ("Save / Load", MenuAction::Slots),
+                ("Export PGN", MenuAction::ExportPgn),
+            ],
+        )?;
+        let over = self
+            .pages
+            .iter()
+            .find(|p| p.0 == Screen::GameOver)
+            .expect("game over")
+            .1;
+        self.choice_row(over, -155., &[("Export PGN", MenuAction::ExportPgn)])?;
         self.slots_page()?;
         self.settings_page()
     }
@@ -61,6 +60,7 @@ impl GameUi {
                 ],
             )?;
         }
+        self.choice_row(panel, -135., &[("Import PGN", MenuAction::ImportPgn)])?;
         self.choice_row(panel, -190., &[("Back", MenuAction::Back)])
     }
     fn settings_page(&mut self) -> Result<(), WorldError> {

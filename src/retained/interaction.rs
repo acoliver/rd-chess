@@ -87,7 +87,26 @@ impl BoardDriver {
             .collect()
     }
     pub fn status_text(&self) -> String {
-        if let Some(error) = self.storage.as_ref().and_then(|s| s.error.as_ref()) {
+        let error = self.storage.as_ref().and_then(|s| s.error.as_ref());
+        let pgn = self.pgn.message.clone().or_else(|| {
+            matches!(
+                self.screen(),
+                super::Screen::PgnImport | super::Screen::PgnGames
+            )
+            .then(|| self.pgn_location_text())
+        });
+        if let Some(message) = pgn {
+            return error.map_or_else(
+                || message.clone(),
+                |error| {
+                    format!(
+                        "{message}
+Storage error: {error}"
+                    )
+                },
+            );
+        }
+        if let Some(error) = error {
             return format!("Storage error: {error}");
         }
         if matches!(
@@ -308,6 +327,7 @@ impl BoardDriver {
 
     pub(super) fn enqueue_move(&mut self, mut edits: Vec<SceneObjectEdit>) -> Result<(), String> {
         self.clear_explanation();
+        self.pgn.message = None;
         self.computer_changed();
         self.clear_selection()?;
         edits.extend(self.markers.clear());
@@ -326,7 +346,7 @@ impl BoardDriver {
         Ok(())
     }
 
-    fn key_input(&mut self, key: &str, pressed: bool, repeat: bool) -> Result<bool, String> {
+    fn route_key(&mut self, key: &str, pressed: bool, repeat: bool) -> Result<bool, String> {
         if let Some(ui_key) = ui_key(key)
             && let Some(ui) = &mut self.ui
             && !self.viewport.contains(&0)
@@ -338,19 +358,33 @@ impl BoardDriver {
                 &response.actions,
                 matches!(ui_key, UiKey::Enter | UiKey::Space),
             )?;
-            if response.consumed {
-                return Ok(true);
-            }
+            return Ok(response.consumed);
+        }
+        Ok(false)
+    }
+    fn key_input(&mut self, key: &str, pressed: bool, repeat: bool) -> Result<bool, String> {
+        if self.route_key(key, pressed, repeat)? {
+            return Ok(true);
         }
         if !pressed || repeat {
             return Ok(false);
         }
-        if self.screen() != super::Screen::Play && key != "escape" {
+        let undo_finished =
+            self.screen() == super::Screen::GameOver && matches!(key, "u" | "backspace");
+        if self.screen() != super::Screen::Play && key != "escape" && !undo_finished {
             return Ok(true);
         }
         match key {
             "escape" if self.promotion_pending() || self.selected().is_some() => {
                 self.clear_selection()?;
+            }
+            "escape"
+                if matches!(
+                    self.screen(),
+                    super::Screen::PgnImport | super::Screen::PgnGames
+                ) =>
+            {
+                self.pgn_back()?;
             }
             "escape" if self.board.is_some() => {
                 let screen = match self.screen() {

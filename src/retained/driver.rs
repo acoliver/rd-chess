@@ -24,6 +24,7 @@ pub struct BoardDriver {
     pub(super) training: Option<super::training::Training>,
     pub(super) squares: Markers,
     pub(super) menus: super::menus::Menus,
+    pub(super) pgn: super::pgn_menus::PgnMenu,
     pub(super) computer: Option<super::computer::Computer>,
     pub(super) cancelled_timers: Vec<TimerHandle>,
     pub(super) storage: Option<super::persistence::Storage>,

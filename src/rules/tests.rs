@@ -93,6 +93,46 @@ pub(super) fn has_move(state: &ChessState, uci: &str) -> bool {
 }
 
 #[test]
+fn record_restores_initial_fen_and_moves_without_mutating_game() {
+    for (fen, moves) in [
+        (INITIAL_FEN, "e2e4 e7e5 g1f3"),
+        (
+            "r3k2r/8/8/3pP3/8/8/8/R3K2R w KQkq d6 0 20",
+            "e5d6 e8g8 e1c1 a8d8 d6d7 d8d7",
+        ),
+        (
+            "r3k2r/8/8/3pP3/8/8/8/R3K2R w KQkq - 17 20",
+            "e1c1 e8g8 d1d5 a8d8 e5e6 d8d5",
+        ),
+    ] {
+        let mut state = ChessState::from_fen(fen).unwrap();
+        assert_eq!(state.record(), (fen.to_owned(), Vec::new()));
+        let expected_moves: Vec<_> = moves.split_whitespace().map(str::to_owned).collect();
+        for uci in &expected_moves {
+            play(&mut state, uci);
+        }
+        let before = state.clone();
+        let (initial_fen, recorded_moves) = state.record();
+        assert_eq!(initial_fen, fen);
+        assert_eq!(recorded_moves, expected_moves);
+        assert_eq!(state, before);
+        let mut replayed = ChessState::from_fen(&initial_fen).unwrap();
+        for uci in &recorded_moves {
+            play(&mut replayed, uci);
+        }
+        assert_eq!(replayed, state);
+        state.undo().unwrap();
+        let (initial_fen, recorded_moves) = state.record();
+        assert_eq!(initial_fen, fen);
+        assert_eq!(recorded_moves, expected_moves[..expected_moves.len() - 1]);
+        for _ in 0..recorded_moves.len() {
+            state.undo().unwrap();
+        }
+        assert_eq!(state.record(), (fen.to_owned(), Vec::new()));
+    }
+}
+
+#[test]
 fn fen_round_trip_preserves_fields_and_checks() {
     for fen in [INITIAL_FEN, KIWIPETE, POSITION_3, POSITION_4, POSITION_5] {
         let state = ChessState::from_fen(fen).unwrap();

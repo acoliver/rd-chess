@@ -185,6 +185,8 @@ mod interaction;
 mod markers;
 mod menus;
 pub mod persistence;
+mod pgn_files;
+mod pgn_menus;
 mod picking;
 mod pump;
 mod save_menus;

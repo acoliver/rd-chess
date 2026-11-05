@@ -211,6 +211,10 @@ Linux real-window smoke is run by the gate, not on the macOS desktop.
 
 ## Play menus
 
+The title lists Continue (when available), Play a friend, Play the computer,
+Lessons, Puzzles, Saved games, Settings and Quit, in that order. Saved games
+includes Import PGN; pause and game-over screens offer Export PGN.
+
 Title, computer setup, pause and game-over screens share the existing native UI
 world and retained overlay compositor. The game owns labels, profile descriptions,
 menu structure and typed actions. Engine list selection owns pointer targeting,
@@ -339,7 +343,10 @@ CARGO_INCREMENTAL=0 nice -n 10 cargo test --locked -j4 -p chess3d --lib rules --
 The default suite includes initial-position perft through depth four and the
 Chess Programming Wiki's positions 2–5, with their verified FENs. It also covers
 special moves, draw claims/history, strict FEN errors, SAN/UCI round trips, exact
-undo and deterministic random legal sequences. No perft test is ignored.
+undo and deterministic random legal sequences. Ignored release benchmarks add
+initial-position perft through depth six and Kiwipete through depth five.
+[Move-generation performance](docs/movegen-performance.md) records the baseline,
+techniques, reproduction commands and exact-behaviour regression coverage.
 
 ## PGN records
 
@@ -384,11 +391,26 @@ only `--pgn-check`; it rejects review, explanation, lesson, puzzle, scene, save,
 play and `--data-dir` options,
 including explicit rendering defaults, and never opens a window.
 
+### PGN menu files
+
+Export PGN is available in pause and game-over menus. Saved games offers Import
+PGN from the application-data `exports/` directory, including `--data-dir` roots.
+Imports replay the main line, result and undo history as a local two-player game.
+See [PGN menu files](docs/pgn-menu-files.md) for metadata, file naming, controls,
+input limits, path safety and tests.
+
 ## Computer analysis and opponent policy
 
 See [computer analysis and ladder calibration](docs/computer-analysis.md) for
 search APIs, opponent budgets, host-timer scheduling, cancellation and measured
-self-play results.
+self-play results. The faster rules generator and internal make/unmake path
+preserve the search tree; see [move-generation performance](docs/movegen-performance.md).
+The frozen pre-calibration ladder fixture is checked without changing its recorded
+profiles or expected rows:
+
+```sh
+cargo test --release --locked -j4 -p chess3d --lib exact_ladder_baseline
+```
 
 ## Verified move explanations
 

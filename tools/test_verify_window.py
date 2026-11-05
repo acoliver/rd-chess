@@ -487,7 +487,7 @@ class SmokeControlsTests(unittest.TestCase):
         images.first.terminate.assert_not_called()
         images.second.terminate.assert_not_called()
         commands = [invocation.args[0] for invocation in calls.call_args_list]
-        self.assertIn([str(self.args.xdotool), "mousemove", "--window", "2", "284", "570"], commands)
+        self.assertIn([str(self.args.xdotool), "mousemove", "--window", "2", "480", "210"], commands)
         self.assertIn(call(images.moved, images.inexact_resume), images.comparisons.call_args_list)
         self.assertIn(call(images.moved, images.resumed), images.comparisons.call_args_list)
         self.assertIn(call(images.initial, images.inexact_undo), images.comparisons.call_args_list)

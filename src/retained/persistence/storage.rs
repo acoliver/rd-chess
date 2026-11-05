@@ -16,6 +16,7 @@ pub(crate) struct Storage {
     pub(super) store: ApplicationStore,
     pub progress: Progress,
     pub progress_error: Option<ProgressError>,
+    pub root: PathBuf,
     pub current: Option<GamePayload>,
     pub labels: [String; 3],
     pub error: Option<String>,
@@ -23,9 +24,10 @@ pub(crate) struct Storage {
 impl Storage {
     pub fn open(root: PathBuf) -> Self {
         let mut storage = Self {
-            store: ApplicationStore::new(root, LIMITS).expect("fixed positive limits"),
+            store: ApplicationStore::new(root.clone(), LIMITS).expect("fixed positive limits"),
             progress: Progress::default(),
             progress_error: None,
+            root,
             current: None,
             labels: std::array::from_fn(|_| "Empty".into()),
             error: None,
