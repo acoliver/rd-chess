@@ -16,7 +16,7 @@ impl GameUi {
         self.command_page(Screen::GameOver, "Game over", menus::OVER)?;
         self.storage_pages()?;
         self.review_pages()?;
-        Ok(())
+        self.pgn_pages()
     }
     fn command_page(
         &mut self,
@@ -24,15 +24,25 @@ impl GameUi {
         title: &str,
         entries: &[(&str, MenuAction)],
     ) -> Result<(), WorldError> {
-        let panel = self.native.panel([620., 360.])?;
-        self.pages.push((screen, panel));
-        self.native.text(panel, title, [580., 44.], [0., 148.])?;
-        let count = f32::from(u16::try_from(entries.len()).expect("small menu"));
-        let list = self
+        let panel = self
             .native
-            .rect(panel, [560., count * 52. - 8.], [0., -10.])?;
+            .panel([620., if screen == Screen::Title { 528. } else { 464. }])?;
+        self.pages.push((screen, panel));
+        self.native.text(
+            panel,
+            title,
+            [580., 44.],
+            [0., if screen == Screen::Title { 200. } else { 148. }],
+        )?;
+        let count = f32::from(u16::try_from(entries.len()).expect("small menu"));
+        let row_height = if screen == Screen::Title { 38. } else { 44. };
+        let list = self.native.rect(
+            panel,
+            [560., count * (row_height + 8.) - 8.],
+            [0., if screen == Screen::Title { -32. } else { -10. }],
+        )?;
         self.native.stack(list, UiAxis::Vertical, 8);
-        self.list_rows(list, entries, [560., 44.])?;
+        self.list_rows(list, entries, [560., row_height])?;
         Ok(())
     }
     pub(super) fn list_rows(
@@ -42,6 +52,7 @@ impl GameUi {
         size: [f32; 2],
     ) -> Result<(), WorldError> {
         let mut actions = Vec::new();
+        let mut rows = Vec::new();
         for (index, &(label, action)) in entries.iter().enumerate() {
             let object = self.native.text(list, label, size, [0., 0.])?;
             self.native
@@ -49,10 +60,11 @@ impl GameUi {
             if action == MenuAction::Undo {
                 self.undo = Some(object);
             }
-            self.rows.push((object, action));
             actions.push(action);
+            rows.push(object);
         }
         self.bindings.insert(list, actions);
+        self.rows.insert(list, rows);
         Ok(())
     }
     fn setup_page(&mut self) -> Result<(), WorldError> {
@@ -73,7 +85,7 @@ impl GameUi {
             [180., 40.],
         )?;
         self.native
-            .text(panel, "Levels (uncalibrated)", [580., 32.], [0., 108.])?;
+            .text(panel, "Computer levels", [580., 32.], [0., 108.])?;
         self.level_list(panel)?;
         self.native.text(
             panel,

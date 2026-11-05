@@ -5,6 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LessonProgress {
+    #[serde(default)]
+    pub completed_steps: BTreeSet<usize>,
     /// Submitted moves, including wrong answers; opening a task is not an attempt.
     pub attempts: u64,
     /// Count revealed hints once each per attempt, not repeated requests at the cap.

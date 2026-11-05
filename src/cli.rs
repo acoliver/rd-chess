@@ -27,6 +27,7 @@ const VALUE_FLAGS: &[&str] = &[
     "--level",
     "--lesson",
     "--puzzle",
+    "--pgn-check",
 ];
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -51,6 +52,7 @@ pub struct Options {
     pub explain_verbose: bool,
     pub lesson: Option<String>,
     pub puzzle: Option<String>,
+    pub pgn_check: Option<PathBuf>,
 }
 
 impl Options {
@@ -75,6 +77,7 @@ impl Options {
             explain_verbose: false,
             lesson: None,
             puzzle: None,
+            pgn_check: None,
         }
     }
 
@@ -124,6 +127,7 @@ impl Options {
         let text = value.to_string_lossy().into_owned();
         match flag {
             "--load" => self.load = Some(PathBuf::from(value)),
+            "--pgn-check" => self.pgn_check = Some(PathBuf::from(value)),
             "--data-dir" => self.data_dir = Some(PathBuf::from(value)),
             "--save" => self.save = Some(PathBuf::from(value)),
             "--capture" => self.capture = Some(PathBuf::from(value)),
@@ -178,6 +182,9 @@ impl Options {
     }
 
     fn validate_modes(&self, flags: &[String]) -> Result<()> {
+        if self.pgn_check.is_some() && flags.iter().any(|flag| flag != "--pgn-check") {
+            return Err("--pgn-check cannot be combined with other modes/options".into());
+        }
         if self.explain_verbose && self.explain.is_none() {
             return Err("--explain-verbose requires --explain".into());
         }
@@ -191,18 +198,18 @@ impl Options {
             )
         } else if self.review_moves.is_some() {
             (
-                &["--review-moves", "--review-fen", "--data-dir"],
+                &["--review-moves", "--review-fen"],
                 "--review-moves cannot be combined with other inspection, play, editor or rendering options",
             )
         } else if self.lesson.is_some() {
             (
-                &["--lesson", "--data-dir"],
-                "teaching inspection --lesson cannot be combined with other modes or game/editor options",
+                &["--lesson"],
+                "teaching inspection cannot combine modes or game/editor options; --lesson cannot be combined",
             )
         } else if self.puzzle.is_some() {
             (
-                &["--puzzle", "--data-dir"],
-                "teaching inspection --puzzle cannot be combined with other modes or game/editor options",
+                &["--puzzle"],
+                "teaching inspection cannot combine modes or game/editor options; --puzzle cannot be combined",
             )
         } else {
             return Ok(());
@@ -265,9 +272,11 @@ fn print_help() {
         --play chooses the human side against a computer; --seed also seeds its replies.\n\
         --explain <fen> <uci> prints a CPU-only verified explanation.\n\
         --explain-verbose adds developer diagnostics; no other options may accompany --explain.\n\
+        --pgn-check file.pgn validates games and prints final FEN/result without a GPU.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\
         --review-moves \"e2e4 e7e5\" [--review-fen \"FEN\"] prints CPU-only neutral review.\n\
         Review moments use the initial side to move; PGN --review is not available yet.\n\
+        CPU inspection modes are exclusive; no game/editor/rendering or --data-dir options.\n\
         --save writes the current position before capture/window; camera orbit is not saved."
     );
 }

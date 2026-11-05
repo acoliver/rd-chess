@@ -11,6 +11,10 @@ use worldrunner::{
     },
 };
 
+// Opaque panels keep board colours out of browser text and control contrast.
+pub(super) const PANEL_ALPHA: f32 = 1.;
+const PANEL_COLOR: [f32; 4] = [0.025, 0.035, 0.055, PANEL_ALPHA];
+
 pub(super) struct NativeUi {
     pub world: World,
     pub fonts: FontBook,
@@ -115,7 +119,7 @@ impl NativeUi {
                 selected: [0.35, 0.9, 1., 1.],
                 hovered: [0.7, 0.85, 1., 1.],
                 pressed: [1., 0.5, 0.1, 1.],
-                disabled: [0.35, 0.35, 0.35, 1.],
+                disabled: [0.55, 0.55, 0.55, 1.],
                 ..UiStyle::default()
             },
         );
@@ -135,7 +139,7 @@ impl NativeUi {
         .map(|(position, uv)| UiVertex {
             position,
             uv,
-            color: [0.025, 0.035, 0.055, 0.96],
+            color: PANEL_COLOR,
         });
         let geometry = UiGeometry::new(vertices.to_vec(), vec![0, 1, 2, 2, 3, 0])?;
         self.world.add_component(
@@ -146,5 +150,50 @@ impl NativeUi {
             }),
         )?;
         Ok(())
+    }
+}
+
+impl NativeUi {
+    pub fn set_text(
+        &mut self,
+        handle: worldrunner::simulation::ComponentHandle,
+        text: &str,
+    ) -> Result<(), WorldError> {
+        let ComponentDesc::Text(mut run) = self.world.component(handle)?.desc.clone() else {
+            unreachable!("text");
+        };
+        text.clone_into(&mut run.text);
+        self.world.set_component(handle, ComponentDesc::Text(run))
+    }
+    pub fn left_text(
+        &mut self,
+        handle: worldrunner::simulation::ComponentHandle,
+        size: f32,
+    ) -> Result<(), WorldError> {
+        let ComponentDesc::Text(mut run) = self.world.component(handle)?.desc.clone() else {
+            unreachable!("text");
+        };
+        run.font_size = size;
+        run.horizontal = HorizontalAlign::Left;
+        run.vertical = VerticalAlign::Top;
+        self.world.set_component(handle, ComponentDesc::Text(run))
+    }
+    pub fn bottom_rect(
+        &mut self,
+        object: ObjectHandle,
+        inset: [f32; 2],
+        size: [f32; 2],
+    ) -> Result<(), WorldError> {
+        let handle = self.rect_handle(object);
+        self.world.set_component(
+            handle,
+            ComponentDesc::RectTransform(RectTransform {
+                anchor_min: Vec2::new(0., 0.),
+                anchor_max: Vec2::new(1., 0.),
+                pivot: Vec2::new(0.5, 0.),
+                anchored_position: Vec2::new(inset[0], 12.),
+                size_delta: Vec2::from_array(size) + Vec2::new(inset[1], 0.),
+            }),
+        )
     }
 }

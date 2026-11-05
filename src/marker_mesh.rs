@@ -20,3 +20,17 @@ pub(crate) fn marker_mesh() -> crate::Mesh {
     }
     mesh
 }
+
+pub(crate) fn square_mesh() -> crate::Mesh {
+    crate::Mesh {
+        positions: vec![
+            [-480., -480., 0.],
+            [480., -480., 0.],
+            [480., 480., 0.],
+            [-480., 480., 0.],
+        ],
+        normals: vec![[0., 0., 1.]; 4],
+        uvs: vec![[0.5, 0.5]; 4],
+        indices: vec![0, 1, 2, 2, 3, 0],
+    }
+}

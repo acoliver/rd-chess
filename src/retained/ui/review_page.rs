@@ -142,7 +142,16 @@ impl GameUi {
         if let Some(object) = self.review_widgets.message {
             self.review_text(object, &state.review.message)?;
         }
-        for &(object, action) in &self.rows.clone() {
+        let rows: Vec<_> = self
+            .rows
+            .iter()
+            .flat_map(|(list, rows)| {
+                rows.iter()
+                    .copied()
+                    .zip(self.bindings[list].iter().copied())
+            })
+            .collect();
+        for (object, action) in rows {
             if let MenuAction::ReviewSaved(index) = action {
                 let label = &state.review.finished[usize::from(index)];
                 self.native

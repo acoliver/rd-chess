@@ -5,10 +5,16 @@ use crate::{Side, rules::GameStatus};
 pub enum Screen {
     Title,
     ComputerSetup,
+    Lessons,
+    Puzzles,
+    Lesson,
+    Puzzle,
     Slots,
     Settings,
     ReviewGames,
     Review,
+    PgnImport,
+    PgnGames,
     #[default]
     Play,
     InGameMenu,
@@ -31,6 +37,16 @@ pub(super) enum MenuAction {
     Title,
     NewGame,
     ClaimDraw,
+    Lessons,
+    Puzzles,
+    Lesson(usize),
+    PuzzleBand(Option<&'static str>),
+    StudyNext,
+    StudyBack,
+    StudyHint,
+    StudyRetry,
+    StudyExit,
+    Why,
     Continue,
     Slots,
     Settings,
@@ -52,11 +68,20 @@ pub(super) enum MenuAction {
     TryAgain,
     ReviewReturn,
     ReviewExit,
+    ImportPgn,
+    ExportPgn,
+    PgnEntry(usize),
 }
 
 pub(super) const TITLE: &[(&str, MenuAction)] = &[
+    ("Continue", MenuAction::Continue),
     ("Play a friend", MenuAction::Friend),
     ("Play the computer", MenuAction::Computer),
+    ("Lessons", MenuAction::Lessons),
+    ("Puzzles", MenuAction::Puzzles),
+    ("Saved games", MenuAction::Slots),
+    ("Review games", MenuAction::ReviewGames),
+    ("Settings", MenuAction::Settings),
     ("Quit", MenuAction::Quit),
 ];
 pub(super) const PAUSE: &[(&str, MenuAction)] = &[
@@ -119,6 +144,7 @@ impl BoardDriver {
         Ok(())
     }
     pub fn show_title(&mut self) -> Result<(), String> {
+        self.leave_training();
         let storage = self.storage.take();
         let reset = self.restart();
         self.storage = storage;
@@ -152,9 +178,7 @@ impl BoardDriver {
                 .is_some_and(|board| !matches!(board.game().status(), GameStatus::Ongoing { .. }))
     }
     pub(super) fn finish(&mut self, result: String) -> Result<(), String> {
-        if let Some(computer) = &mut self.computer {
-            computer.changed();
-        }
+        self.computer_changed();
         self.menus.result = Some(result);
         self.clear_selection()?;
         self.autosave();
@@ -171,6 +195,9 @@ impl BoardDriver {
             self.leave_review()?;
         }
         self.clear_selection()?;
+        if !matches!(screen, Screen::PgnImport | Screen::PgnGames) {
+            self.pgn.message = None;
+        }
         self.menus.screen = screen;
         self.sync_menu_ui()
     }
@@ -184,9 +211,13 @@ impl BoardDriver {
             settings: self.preferences,
             labels: self.slot_labels(),
             setup: (self.menus.side, self.menus.level),
+            pgn_entries: self.pgn_entries(),
             review: self.review_ui_state(),
         };
+        let study = self.study_ui_state();
         if let Some(ui) = &mut self.ui {
+            ui.synchronize_study(study, state.screen)
+                .map_err(|e| e.to_string())?;
             ui.synchronize(state, self.viewport)
                 .map_err(|e| e.to_string())?;
         }
@@ -195,9 +226,7 @@ impl BoardDriver {
     pub(super) fn menu_action(&mut self, action: MenuAction) -> Result<(), String> {
         match action {
             MenuAction::Friend => {
-                if let Some(computer) = &mut self.computer {
-                    computer.changed();
-                }
+                self.computer_changed();
                 self.computer = None;
                 self.restart()?;
                 self.transition(Screen::Play)?;
@@ -209,6 +238,9 @@ impl BoardDriver {
                 self.menus.level = level;
             }
             MenuAction::Start => self.start_computer_game()?,
+            MenuAction::Back if matches!(self.screen(), Screen::PgnImport | Screen::PgnGames) => {
+                self.pgn_back()?;
+            }
             MenuAction::Back if self.screen() == Screen::Slots => {
                 self.transition(self.menus.parent)?;
             }
@@ -225,9 +257,53 @@ impl BoardDriver {
             }
             MenuAction::Resign => self.resign()?,
             MenuAction::ClaimDraw => self.claim_draw()?,
+            action => self.activity_menu_action(action)?,
+        }
+        Ok(())
+    }
+    fn activity_menu_action(&mut self, action: MenuAction) -> Result<(), String> {
+        match action {
+            MenuAction::Lessons
+            | MenuAction::Puzzles
+            | MenuAction::Lesson(_)
+            | MenuAction::PuzzleBand(_)
+            | MenuAction::StudyNext
+            | MenuAction::StudyBack
+            | MenuAction::StudyHint
+            | MenuAction::StudyRetry
+            | MenuAction::StudyExit
+            | MenuAction::Why => self.training_action(action)?,
+            MenuAction::ImportPgn | MenuAction::ExportPgn | MenuAction::PgnEntry(_) => {
+                self.pgn_menu_action(action)?;
+            }
+            MenuAction::Review
+            | MenuAction::ReviewGames
+            | MenuAction::ReviewSaved(_)
+            | MenuAction::ReviewSeek(_)
+            | MenuAction::ReviewStart
+            | MenuAction::ReviewBack
+            | MenuAction::ReviewForward
+            | MenuAction::ReviewEnd
+            | MenuAction::Moment(_)
+            | MenuAction::WhatChanged
+            | MenuAction::ShowReply
+            | MenuAction::TryAgain
+            | MenuAction::ReviewReturn
+            | MenuAction::ReviewExit => self.review_action(action)?,
             action => self.storage_menu_action(action)?,
         }
         Ok(())
+    }
+    fn leave_training(&mut self) {
+        if let Some(training) = &mut self.training
+            && let Some(orbit) = training.leave()
+        {
+            let camera = self.camera.as_mut().expect("configured camera");
+            camera.orbit = orbit;
+            camera.dirty = true;
+        }
+        self.persist_training_progress();
+        self.reset_camera();
     }
     fn start_computer_game(&mut self) -> Result<(), String> {
         self.restart()?;

@@ -256,10 +256,49 @@ class SmokeCase:
         self.find_window("relaunch window")
         self.wait(self.title_ready, "relaunch title menu")
         self.progress("input: click title Continue")
-        self.xdo("mousemove", "--window", self.window, self.width // 2 - 196, self.height // 2 + 140)
+        self.xdo("mousemove", "--window", self.window, self.width // 2, self.height // 2 - 150)
         self.xdo("click", 1)
         self.wait(lambda: self.matching(moved, 0), "Continue exact pre-relaunch pixels")
         self.records.append("relaunch Continue restores exact board pixels")
+
+    def puzzle_click(self):
+        self.progress("inspect: puzzle 00008 projected solver coordinates")
+        inspect = subprocess.run([str(self.args.binary), "--puzzle", "00008"],
+                                 env=self.headless, check=True, capture_output=True,
+                                 text=True, timeout=CAPTURE_TIMEOUT_SECONDS).stdout
+        line = next(line for line in inspect.splitlines()
+                    if line.startswith("Window clicks (960x720):"))
+        fx, fy, tx, ty = map(int, line.split(":", 1)[1].split())
+        self.xdo("key", "--window", self.window, "Escape", "End", "Return")
+        self.xdo("key", "--window", self.window, "Home", "Down", "Down", "Down", "Down", "Return")
+        browser = self.wait(lambda: self.changed(self.initial), "Puzzles band browser")
+        self.xdo("key", "--window", self.window, "Return")
+        self.wait(lambda: self.changed(browser), "puzzle setup position")
+        before = self.wait(self.puzzle_ready, "opponent setup move presented")
+        self.xdo("mousemove", "--window", self.window, fx, fy)
+        self.xdo("click", 1)
+        self.wait(lambda: difference(before, self.screenshot()) > 0.01,
+                  "known puzzle solver selection")
+        self.xdo("mousemove", "--window", self.window, tx, ty)
+        self.xdo("click", 1)
+
+        def solver_moved():
+            image = self.screenshot()
+            rects = [(x - 5, y - 5, x + 5, y + 5) for x, y in [(fx, fy), (tx, ty)]]
+            return image if all(difference(before.crop(rect), image.crop(rect)) > 3
+                                for rect in rects) else None
+
+        solved_move = self.wait(solver_moved, "00008 e6-e7 accepted with scripted reply")
+        solved_move.save(self.output / f"{self.name}-puzzle-first-move.png")
+        self.records.append("Puzzles: 00008 first solver move by engine-projected clicks")
+
+    def puzzle_ready(self):
+        image = self.screenshot()
+        # Retry turns from disabled grey to white after the setup transaction.
+        center = self.width // 2 + 160
+        retry = image.crop((center - 50, self.height - 52, center + 50, self.height - 20))
+        bright = sum(min(pixel[:3]) > 235 for pixel in retry.getdata())
+        return image if bright >= 8 else None
 
     def changed(self, reference_image):
         image = self.screenshot()
@@ -345,6 +384,8 @@ class SmokeCase:
                 self.initial_state()
                 if self.view == "overhead" and not self.load:
                     self.play_and_undo(log)
+                if self.interaction == "title":
+                    self.puzzle_click()
                 if self.interaction == "camera":
                     self.camera_controls()
                 return self.finish()

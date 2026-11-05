@@ -84,7 +84,7 @@ fn required_gpu_review_replay_matches_independent_initial_board() {
         .windowless(&mut driver)
         .expect("Metal/lavapipe required");
     let result = capture_frame(&mut run, &queue, &inbox).unwrap();
-    click(&inputs, [400., 440.]);
+    click(&inputs, [250., 455.]);
     let review = capture_frame(&mut run, &queue, &inbox).unwrap();
     save(&review);
     assert_ne!(

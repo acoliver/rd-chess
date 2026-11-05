@@ -56,7 +56,7 @@ fn result_panel_opens_review_and_escape_restores_the_finished_record() {
     finished(&mut driver);
     let original = driver.board().unwrap().game().clone();
     let result = driver.status_text();
-    click(&mut driver, [400., 440.]);
+    click(&mut driver, [250., 455.]);
     assert_eq!(format!("{:?}", driver.screen()), "Review");
     assert!(driver.status_text().contains("Analysing move 1 of 4"));
     key(&mut driver, "escape");
@@ -74,7 +74,7 @@ fn saved_review_browser_preserves_every_store_byte_and_result() {
     let payload = serde_json::to_vec(&driver.saved_payload(1).unwrap()).unwrap();
     let before = store_bytes(root.path());
     driver.show_title().unwrap();
-    click(&mut driver, [400., 398.]);
+    click(&mut driver, [400., 378.]);
     assert_eq!(driver.screen(), chess3d::retained::Screen::ReviewGames);
     click(&mut driver, [400., 240.]);
     assert_eq!(driver.screen(), chess3d::retained::Screen::Review);
@@ -110,7 +110,7 @@ fn resignation_and_terminal_draws_offer_review() {
         let mut driver = BoardDriver::with_board(board);
         driver.configure(&options).unwrap();
         let result = driver.status_text();
-        click(&mut driver, [400., 440.]);
+        click(&mut driver, [250., 455.]);
         assert_eq!(driver.screen(), chess3d::retained::Screen::Review);
         key(&mut driver, "escape");
         assert_eq!(driver.status_text(), result);
@@ -122,7 +122,7 @@ fn resignation_and_terminal_draws_offer_review() {
     }
     let result = driver.status_text();
     assert!(result.contains("resigned"));
-    click(&mut driver, [400., 440.]);
+    click(&mut driver, [250., 455.]);
     assert_eq!(driver.screen(), chess3d::retained::Screen::Review);
     key(&mut driver, "escape");
     assert_eq!(driver.status_text(), result);

@@ -402,6 +402,7 @@ class SmokeControlsTests(unittest.TestCase):
         with patch.object(self.smoke.subprocess, "Popen", side_effect=launch), \
                 patch.object(self.smoke.subprocess, "run", side_effect=run) as calls, \
                 patch.object(self.smoke, "close_request") as close, \
+                patch.object(self.smoke.SmokeCase, "puzzle_click") as puzzle_click, \
                 patch.object(self.smoke.Image, "open", side_effect=[expected, reference_moved]), \
                 patch.object(self.smoke.ImageGrab, "grab", side_effect=[
                     title, initial, highlights, moved, relaunched_title, inexact_resume, resumed, inexact_undo, undone]), \
@@ -414,6 +415,63 @@ class SmokeControlsTests(unittest.TestCase):
                                  resumed=resumed, initial=initial, inexact_undo=inexact_undo, undone=undone,
                                  comparisons=comparisons, progress=progress)
         self.assert_title_relaunch(result, launches, calls, close, images)
+        puzzle_click.assert_called_once_with()
+
+    def test_puzzle_click_waits_for_setup_and_checks_both_solver_squares(self):
+        progress = Mock(name="progress")
+        progress.name = "title-to-friend"
+        case = self.smoke.SmokeCase(self.args, {},
+                                   {"view": "overhead", "load": None, "interaction": "title"},
+                                   str(self.root), progress)
+        case.window = "2"
+        case.initial = relaunch_image(None, "initial")
+        case.records = []
+        frames = [relaunch_image(None, label) for label in ("browser", "setup", "ready", "selected", "moved")]
+        for frame in frames:
+            frame.crop.return_value = frame
+        frames[2].getdata.return_value = [(255, 255, 255)] * 8
+        case.screenshot = Mock(side_effect=frames)
+        case.xdo = Mock()
+        labels = []
+
+        def wait(predicate, label):
+            labels.append(label)
+            result = predicate()
+            self.assertTrue(result, label)
+            return result
+
+        case.wait = wait
+        with patch.object(self.smoke.subprocess, "run", return_value=SimpleNamespace(
+                stdout="Window clicks (960x720): 510 240 510 180\n")), \
+                patch.object(self.smoke, "difference", return_value=4) as differences:
+            case.puzzle_click()
+        self.assertEqual(labels, ["Puzzles band browser", "puzzle setup position",
+                                  "opponent setup move presented", "known puzzle solver selection",
+                                  "00008 e6-e7 accepted with scripted reply"])
+        self.assertIn(call("mousemove", "--window", "2", 510, 240), case.xdo.call_args_list)
+        self.assertIn(call("mousemove", "--window", "2", 510, 180), case.xdo.call_args_list)
+        for point in [(505, 235, 515, 245), (505, 175, 515, 185)]:
+            self.assertIn(call(point), frames[2].crop.call_args_list)
+            self.assertIn(call(point), frames[4].crop.call_args_list)
+        self.assertEqual(differences.call_count, 5)
+        self.assertIn("Puzzles: 00008 first solver move by engine-projected clicks", case.records)
+
+    def test_puzzle_readiness_waits_for_enabled_retry_pixels(self):
+        progress = Mock(name="progress")
+        progress.name = "title-to-friend"
+        case = self.smoke.SmokeCase(self.args, {},
+                                   {"view": "overhead", "load": None, "interaction": "title"},
+                                   str(self.root), progress)
+        image = Mock()
+        retry = image.crop.return_value
+        case.screenshot = Mock(return_value=image)
+        retry.getdata.return_value = [(195, 195, 195)] * 100
+        self.assertIsNone(case.puzzle_ready())
+        retry.getdata.return_value = [(255, 255, 255)] * 7
+        self.assertIsNone(case.puzzle_ready())
+        retry.getdata.return_value = [(255, 255, 255)] * 8
+        self.assertIs(case.puzzle_ready(), image)
+        image.crop.assert_called_with((590, 668, 690, 700))
 
     def assert_title_relaunch(self, result, launches, calls, close, images):
         self.assertEqual(len(launches), 2)
@@ -429,7 +487,7 @@ class SmokeControlsTests(unittest.TestCase):
         images.first.terminate.assert_not_called()
         images.second.terminate.assert_not_called()
         commands = [invocation.args[0] for invocation in calls.call_args_list]
-        self.assertIn([str(self.args.xdotool), "mousemove", "--window", "2", "284", "500"], commands)
+        self.assertIn([str(self.args.xdotool), "mousemove", "--window", "2", "480", "210"], commands)
         self.assertIn(call(images.moved, images.inexact_resume), images.comparisons.call_args_list)
         self.assertIn(call(images.moved, images.resumed), images.comparisons.call_args_list)
         self.assertIn(call(images.initial, images.inexact_undo), images.comparisons.call_args_list)

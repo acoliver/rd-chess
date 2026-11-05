@@ -23,6 +23,7 @@ pub struct RetainedBoard {
     seed: u64,
     scene: RenderScene,
     identities: BTreeMap<String, PieceObjects>,
+    initial_identities: BTreeMap<String, PieceObjects>,
     objects: BTreeMap<ObjectId, SceneObject>,
 }
 
@@ -40,7 +41,7 @@ impl RetainedBoard {
             .collect();
         let mut next = 4;
         let mut reserved = objects.len() as u64;
-        let identities = position
+        let identities: BTreeMap<_, _> = position
             .pieces
             .iter()
             .map(|piece| {
@@ -63,6 +64,7 @@ impl RetainedBoard {
             game,
             seed,
             scene,
+            initial_identities: identities.clone(),
             identities,
             objects,
         })
@@ -102,6 +104,7 @@ impl RetainedBoard {
 
     pub fn restart(&mut self) -> Vec<SceneObjectEdit> {
         self.game = self.initial.clone();
+        self.identities = self.initial_identities.clone();
         self.synchronize()
     }
 
@@ -114,6 +117,31 @@ impl RetainedBoard {
             self.game.undo()?;
         }
         Ok(self.synchronize())
+    }
+
+    pub(super) fn set_position(&mut self, game: ChessState) -> Vec<SceneObjectEdit> {
+        self.identities = game
+            .to_position(self.seed)
+            .pieces
+            .iter()
+            .enumerate()
+            .map(|(index, piece)| {
+                let body = ObjectId(4 + index as u64 * 2);
+                (
+                    piece.id.clone(),
+                    PieceObjects {
+                        body,
+                        eye: ObjectId(body.0 + 1),
+                    },
+                )
+            })
+            .collect();
+        self.synchronize_game(game)
+    }
+
+    pub(super) fn synchronize_game(&mut self, game: ChessState) -> Vec<SceneObjectEdit> {
+        self.game = game;
+        self.synchronize()
     }
 
     fn synchronize(&mut self) -> Vec<SceneObjectEdit> {
@@ -157,12 +185,15 @@ mod interaction;
 mod markers;
 mod menus;
 pub mod persistence;
+mod pgn_files;
+mod pgn_menus;
 mod picking;
 mod pump;
 mod review_screen;
 mod save_menus;
 mod saves;
 mod status;
+mod training;
 mod ui;
 mod watchdog;
 pub use computer::ComputerGame;
@@ -170,3 +201,4 @@ pub use driver::{BoardDriver, CaptureInbox, InputInbox, TransactionQueue};
 pub use host::{capture_frame, viewer_options};
 pub use menus::Screen;
 pub use pump::ProgressPump;
+pub use training::training_move_pixels;

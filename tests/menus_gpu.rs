@@ -74,7 +74,7 @@ fn required_gpu_title_and_pause_have_visible_native_focus_and_stable_pixels() {
         capture_frame(&mut run, &queue, &inbox).unwrap().pixels
     );
     assert!(
-        focused_tint(&title, [230, 230, 570, 270]) > 60,
+        focused_tint(&title, [230, 130, 570, 170]) > 60,
         "first title item is tinted"
     );
     key(&inputs, "enter");

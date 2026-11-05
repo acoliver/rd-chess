@@ -1,10 +1,12 @@
 //! Chess-owned payloads over the engine's transactional application store.
+mod progress;
 mod settings;
 mod storage;
 use crate::{
     Side,
     rules::{ChessState, GameStatus},
 };
+pub use progress::ProgressError;
 use serde::{Deserialize, Serialize};
 pub use settings::GameSettings;
 pub(super) use storage::Storage;

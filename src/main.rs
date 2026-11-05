@@ -42,14 +42,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     let Some(options) = cli::Options::parse()? else {
         return Ok(());
     };
-    if let Some(moves) = &options.review_moves {
-        return review_cli::run(moves, options.review_fen.as_deref());
-    }
     if let Some((fen, uci)) = &options.explain {
         return print_explanation(fen, uci, options.explain_verbose);
     }
     if teaching_cli::inspect(&options)? {
         return Ok(());
+    }
+    if let Some(moves) = &options.review_moves {
+        return review_cli::run(moves, options.review_fen.as_deref());
+    }
+    if let Some(path) = &options.pgn_check {
+        return check_pgn(path).map_err(|error| error.to_string().into());
     }
     let position = position(&options)?;
     if let Some(path) = &options.save {
@@ -63,6 +66,34 @@ fn main() -> Result<(), Box<dyn Error>> {
             position.pieces.len(),
             position.seed,
             position.style
+        );
+    }
+    Ok(())
+}
+
+fn check_pgn(path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    use chess3d::rules::pgn::{MAX_INPUT_BYTES, PgnError, PgnErrorKind, parse};
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)?
+        .take(u64::try_from(MAX_INPUT_BYTES).expect("byte limit fits u64") + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > MAX_INPUT_BYTES {
+        return Err(PgnError {
+            game: 1,
+            ply: 1,
+            token: "<input>".into(),
+            kind: PgnErrorKind::InputLimit,
+        }
+        .into());
+    }
+    let games = parse(std::str::from_utf8(&bytes)?)?;
+    for (index, game) in games.iter().enumerate() {
+        println!(
+            "Game {}: {} {}",
+            index + 1,
+            game.state().to_fen(),
+            game.result
         );
     }
     Ok(())
@@ -324,6 +355,7 @@ mod game_start_tests {
             explain_verbose: false,
             lesson: None,
             puzzle: None,
+            pgn_check: None,
         };
         let make_driver = || {
             chess3d::retained::BoardDriver::with_board(

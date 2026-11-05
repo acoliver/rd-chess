@@ -27,9 +27,9 @@ fn build_render_scene(
 ) -> Result<worldrunner::scene::plan::RenderScene, SceneBuildError> {
     use worldrunner::scene::plan::{
         MaterialHandle, MeshHandle, RenderScene, SceneAlphaMode, SceneAmbient, SceneAntiAlias,
-        SceneCamera, SceneColor, SceneColorGrading, SceneDirection, SceneEffects,
-        SceneEffectsParts, SceneGeometry, SceneMaterial, SceneMaterialParts, SceneObject,
-        SceneParts, SceneResources, SceneShadowCascades, SceneSky, SceneSun, TextureHandle,
+        SceneColor, SceneColorGrading, SceneDirection, SceneEffects, SceneEffectsParts,
+        SceneGeometry, SceneMaterial, SceneMaterialParts, SceneObject, SceneParts, SceneResources,
+        SceneShadowCascades, SceneSky, SceneSun, TextureHandle,
     };
     position.validate()?;
     let mut meshes = Vec::new();
@@ -42,6 +42,7 @@ fn build_render_scene(
     meshes.push(scene_mesh(&stretch_detail(knight_eye_mesh())));
     meshes.push(scene_mesh(&board_inlay_mesh()));
     meshes.push(scene_mesh(&crate::marker_mesh::marker_mesh()));
+    meshes.push(scene_mesh(&crate::marker_mesh::square_mesh()));
     let textures = [
         texture(512, 512, board_albedo(position.seed, 512)),
         texture(
@@ -66,8 +67,9 @@ fn build_render_scene(
             marble_albedo(position.seed ^ 0xf4a0, 256, [31, 63, 59]),
         ),
         texture(1, 1, vec![174, 139, 78, 255]),
+        texture(1, 1, vec![25, 185, 205, 255]),
     ];
-    let materials = [0u32, 1, 2, 3, 4, 5, 6]
+    let materials = [0u32, 1, 2, 3, 4, 5, 6, 7]
         .into_iter()
         .map(|i| {
             SceneMaterial::new(SceneMaterialParts {
@@ -114,11 +116,7 @@ fn build_render_scene(
     for piece in &position.pieces {
         objects.extend(piece_objects(piece, include_board));
     }
-    let camera = SceneCamera {
-        vertical_fov_millidegrees: 43_000,
-        near_plane_millimeters: 100,
-        far_plane_millimeters: 100_000,
-    };
+    let camera = crate::presentation::scene_camera();
     let effects = SceneEffects::new(SceneEffectsParts {
         water: None,
         sky: SceneSky::ProceduralHemisphere {

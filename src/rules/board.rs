@@ -73,23 +73,27 @@ impl Core {
     }
 
     pub fn attacked(&self, target: u8, by: Side) -> bool {
-        [-1, 1]
-            .iter()
-            .any(|file| self.has_attacker(target, -pawn_step(by) + file, by, PieceKind::Pawn))
-            || KNIGHT_STEPS
-                .iter()
-                .any(|&step| self.has_attacker(target, step, by, PieceKind::Knight))
-            || KING_STEPS
-                .iter()
-                .any(|&step| self.has_attacker(target, step, by, PieceKind::King))
-            || self.ray_attacked(target, by, &DIAGONALS, PieceKind::Bishop)
+        self.has_attacker(
+            &super::attacks::PAWNS[side_index(opposite(by))][usize::from(target)],
+            by,
+            PieceKind::Pawn,
+        ) || self.has_attacker(
+            &super::attacks::KNIGHTS[usize::from(target)],
+            by,
+            PieceKind::Knight,
+        ) || self.has_attacker(
+            &super::attacks::KINGS[usize::from(target)],
+            by,
+            PieceKind::King,
+        ) || self.ray_attacked(target, by, &DIAGONALS, PieceKind::Bishop)
             || self.ray_attacked(target, by, &ORTHOGONALS, PieceKind::Rook)
     }
 
-    fn has_attacker(&self, target: u8, step: i16, by: Side, kind: PieceKind) -> bool {
-        offset(target, step)
-            .and_then(|location| self.at(location))
-            .is_some_and(|man| man.side == by && man.kind == kind)
+    fn has_attacker(&self, targets: &super::attacks::Targets, by: Side, kind: PieceKind) -> bool {
+        targets.iter().any(|location| {
+            self.at(location)
+                .is_some_and(|man| man.side == by && man.kind == kind)
+        })
     }
 
     fn ray_attacked(&self, target: u8, by: Side, steps: &[i16], kind: PieceKind) -> bool {
@@ -116,8 +120,13 @@ impl Core {
                 .is_some_and(|man| man.kind == PieceKind::Pawn)
     }
 
-    /// Internal copy-make for generated moves only. Clocks/history live outside Core.
+    /// Internal copy-make for king/EP safety and perft. Clocks/history live outside Core.
     pub fn after(mut self, chess_move: LegalMove) -> Self {
+        self.make(chess_move);
+        self
+    }
+
+    pub fn make(&mut self, chess_move: LegalMove) {
         let mut man = self.at(chess_move.from).expect("generated mover exists");
         if self.is_en_passant(chess_move) {
             let victim = offset(chess_move.to, -pawn_step(man.side)).expect("ep victim on board");
@@ -140,18 +149,11 @@ impl Core {
         self.board[usize::from(chess_move.from)] = None;
         self.board[usize::from(chess_move.to)] = Some(man);
         self.side = opposite(self.side);
-        self
     }
 
     fn move_castling_rook(&mut self, chess_move: LegalMove) {
-        if chess_move.from.abs_diff(chess_move.to) != 2 {
+        let Some((rook_from, rook_to)) = super::transition::castling_rook(chess_move) else {
             return;
-        }
-        let rank_start = chess_move.from & 0x70;
-        let (rook_from, rook_to) = if chess_move.to > chess_move.from {
-            (rank_start + 7, rank_start + 5)
-        } else {
-            (rank_start, rank_start + 3)
         };
         self.board[usize::from(rook_to)] = self.board[usize::from(rook_from)].take();
     }

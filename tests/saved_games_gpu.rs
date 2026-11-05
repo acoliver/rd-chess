@@ -48,7 +48,7 @@ fn required_gpu_continue_after_three_moves_restores_exact_pixels() {
     let mut run = host(&next).windowless(&mut next).unwrap();
     capture_frame(&mut run, &queue, &inbox).unwrap();
     inputs.borrow_mut().extend([
-        RetainedInput::PointerMoved([204., 440.]),
+        RetainedInput::PointerMoved([400., 150.]),
         RetainedInput::Button {
             button: MouseButton::Left,
             pressed: true,

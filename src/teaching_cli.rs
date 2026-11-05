@@ -52,6 +52,8 @@ pub fn inspect(options: &crate::cli::Options) -> Result<bool, Box<dyn Error>> {
             moves[1..].join(" "),
             chess3d::teaching::PUZZLE_SOURCE
         );
+        #[cfg(feature = "viewer")]
+        print_clicks(moves[1])?;
         return Ok(true);
     }
     Ok(false)
@@ -67,4 +69,17 @@ fn print_lines(nodes: &[MoveNode], prefix: &[String]) {
             print_lines(&node.next, &line);
         }
     }
+}
+
+#[cfg(feature = "viewer")]
+fn print_clicks(uci: &str) -> Result<(), Box<dyn Error>> {
+    let points = chess3d::retained::training_move_pixels(uci, [960, 720])?;
+    println!(
+        "Window clicks (960x720): {} {} {} {}",
+        points[0][0].round(),
+        points[0][1].round(),
+        points[1][0].round(),
+        points[1][1].round()
+    );
+    Ok(())
 }

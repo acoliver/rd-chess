@@ -1,6 +1,11 @@
 mod pages;
 mod review_page;
 pub(super) use review_page::ReviewUiState;
+#[cfg(test)]
+mod readability_tests;
+mod study;
+pub(super) use study::StudyState;
+mod pgn_pages;
 mod storage_pages;
 mod widgets;
 use super::menus::{self, MenuAction, Screen};
@@ -26,16 +31,20 @@ pub(super) struct UiState {
     pub settings: super::persistence::GameSettings,
     pub labels: [String; 3],
     pub setup: (usize, u8),
+    pub pgn_entries: Vec<String>,
     pub review: ReviewUiState,
 }
 pub(super) struct GameUi {
     native: NativeUi,
     review_widgets: review_page::ReviewWidgets,
+    study: Option<study::StudyWidgets>,
+    study_state: Option<(Option<StudyState>, Screen)>,
+    rows: BTreeMap<ObjectHandle, Vec<ObjectHandle>>,
+    pgn: pgn_pages::PgnControls,
     status: ComponentHandle,
     dialog: ObjectHandle,
     claim: ObjectHandle,
     undo: Option<ObjectHandle>,
-    rows: Vec<(ObjectHandle, MenuAction)>,
     settings_summary: Option<ObjectHandle>,
     setup_summary: Option<ObjectHandle>,
     pages: Vec<(Screen, ObjectHandle)>,
@@ -54,11 +63,14 @@ impl GameUi {
         let mut ui = Self {
             native,
             review_widgets: review_page::ReviewWidgets::default(),
+            study: None,
+            study_state: None,
+            rows: BTreeMap::new(),
+            pgn: pgn_pages::PgnControls::default(),
             status,
             dialog,
             claim,
             undo: None,
-            rows: Vec::new(),
             settings_summary: None,
             setup_summary: None,
             pages: Vec::new(),
@@ -69,6 +81,7 @@ impl GameUi {
             dirty: true,
         };
         ui.build_pages()?;
+        ui.build_study()?;
         Ok(ui)
     }
     pub fn synchronize(&mut self, state: UiState, viewport: [u32; 2]) -> Result<(), WorldError> {
@@ -80,6 +93,7 @@ impl GameUi {
             .as_ref()
             .is_none_or(|old| old.screen != state.screen);
         self.sync_storage_controls(&state)?;
+        self.sync_pgn_controls(&state)?;
         self.sync_review_controls(&state)?;
         for &(screen, object) in &self.pages {
             self.native
@@ -162,7 +176,7 @@ impl GameUi {
         match action {
             UiAction::Activated { object } if object == self.claim => Some(MenuAction::ClaimDraw),
             UiAction::Selected { list, index } => Some(self.bindings[&list][index]),
-            _ => None,
+            action => self.study_action(action),
         }
     }
     pub fn overlay(

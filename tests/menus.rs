@@ -55,7 +55,7 @@ fn click(driver: &mut BoardDriver, point: [f64; 2]) -> bool {
 }
 fn command(driver: &mut BoardDriver, index: usize) {
     let last = match driver.screen() {
-        Screen::Title => 2,
+        Screen::Title => 7,
         Screen::InGameMenu => 4,
         Screen::GameOver => 1,
         _ => panic!("command menu required"),
@@ -83,7 +83,7 @@ fn title_keyboard_navigates_without_activating_and_starts_friend() {
 fn title_pointer_and_setup_choose_black_and_scrolled_level_eight() {
     let mut driver = fixture(chess3d::rules::INITIAL_FEN);
     driver.show_title().unwrap();
-    assert!(click(&mut driver, [400., 310.]));
+    assert!(click(&mut driver, [400., 202.]));
     assert_eq!(driver.screen(), Screen::ComputerSetup);
     key(&mut driver, "arrowdown");
     key(&mut driver, "enter");
@@ -233,7 +233,7 @@ fn setup_back_escape_quit_and_seeded_random_side() {
     }
     let mut driver = fixture(chess3d::rules::INITIAL_FEN);
     driver.show_title().unwrap();
-    command(&mut driver, 2);
+    command(&mut driver, 7);
     assert!(driver.exit_requested());
 }
 

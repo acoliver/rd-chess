@@ -90,7 +90,39 @@ impl BoardDriver {
         if let Some(status) = self.review_status() {
             return status;
         }
-        if let Some(error) = self.storage.as_ref().and_then(|s| s.error.as_ref()) {
+        let error = self.storage.as_ref().and_then(|s| s.error.as_ref());
+        let pgn = self.pgn.message.clone().or_else(|| {
+            matches!(
+                self.screen(),
+                super::Screen::PgnImport | super::Screen::PgnGames
+            )
+            .then(|| self.pgn_location_text())
+        });
+        if let Some(message) = pgn {
+            return error.map_or_else(
+                || message.clone(),
+                |error| {
+                    format!(
+                        "{message}
+Storage error: {error}"
+                    )
+                },
+            );
+        }
+        if let Some(error) = error {
+            return format!("Storage error: {error}");
+        }
+        if matches!(
+            self.screen(),
+            super::Screen::Title
+                | super::Screen::ComputerSetup
+                | super::Screen::Settings
+                | super::Screen::Lessons
+                | super::Screen::Puzzles
+        ) {
+            return String::new();
+        }
+        if let Some(error) = self.progress_error() {
             return format!("Storage error: {error}");
         }
         if let Some(result) = &self.menus.result {
@@ -199,7 +231,10 @@ impl BoardDriver {
                 pressed,
             } => {
                 let click_allowed = (self.retry_active() || !self.computer_turn())
-                    && (self.screen() == super::Screen::Play || self.retry_active())
+                    && (self.screen() == super::Screen::Play
+                        || self.training_screen()
+                        || self.retry_active())
+                    && !self.training_blocked()
                     && !self.presenting
                     && self.pending.borrow().is_empty()
                     && hit.is_none_or(|picked| picked.generation == self.generation);
@@ -287,6 +322,9 @@ impl BoardDriver {
         if self.retry_active() {
             return self.review_move(chess_move);
         }
+        if self.training_screen() {
+            return self.submit_training_move(chess_move);
+        }
         let edits = self
             .board
             .as_mut()
@@ -298,9 +336,9 @@ impl BoardDriver {
 
     pub(super) fn enqueue_move(&mut self, mut edits: Vec<SceneObjectEdit>) -> Result<(), String> {
         self.review = None;
-        if let Some(computer) = &mut self.computer {
-            computer.changed();
-        }
+        self.clear_explanation();
+        self.pgn.message = None;
+        self.computer_changed();
         self.clear_selection()?;
         edits.extend(self.markers.clear());
         self.pending.borrow_mut().push_back(edits);
@@ -318,7 +356,7 @@ impl BoardDriver {
         Ok(())
     }
 
-    fn key_input(&mut self, key: &str, pressed: bool, repeat: bool) -> Result<bool, String> {
+    fn route_key(&mut self, key: &str, pressed: bool, repeat: bool) -> Result<bool, String> {
         if let Some(ui_key) = ui_key(key)
             && let Some(ui) = &mut self.ui
             && !self.viewport.contains(&0)
@@ -330,19 +368,33 @@ impl BoardDriver {
                 &response.actions,
                 matches!(ui_key, UiKey::Enter | UiKey::Space),
             )?;
-            if response.consumed {
-                return Ok(true);
-            }
+            return Ok(response.consumed);
+        }
+        Ok(false)
+    }
+    fn key_input(&mut self, key: &str, pressed: bool, repeat: bool) -> Result<bool, String> {
+        if self.route_key(key, pressed, repeat)? {
+            return Ok(true);
         }
         if !pressed || repeat {
             return Ok(false);
         }
-        if self.screen() != super::Screen::Play && key != "escape" {
+        let undo_finished =
+            self.screen() == super::Screen::GameOver && matches!(key, "u" | "backspace");
+        if self.screen() != super::Screen::Play && key != "escape" && !undo_finished {
             return Ok(true);
         }
         match key {
             "escape" if self.promotion_pending() || self.selected().is_some() => {
                 self.clear_selection()?;
+            }
+            "escape"
+                if matches!(
+                    self.screen(),
+                    super::Screen::PgnImport | super::Screen::PgnGames
+                ) =>
+            {
+                self.pgn_back()?;
             }
             "escape" if self.board.is_some() => {
                 let screen = match self.screen() {
@@ -350,7 +402,16 @@ impl BoardDriver {
                     super::Screen::InGameMenu => super::Screen::Play,
                     super::Screen::ComputerSetup
                     | super::Screen::Settings
-                    | super::Screen::ReviewGames => super::Screen::Title,
+                    | super::Screen::ReviewGames
+                    | super::Screen::Lessons
+                    | super::Screen::Puzzles => {
+                        self.show_title()?;
+                        return Ok(true);
+                    }
+                    super::Screen::Lesson | super::Screen::Puzzle => {
+                        self.training_action(super::menus::MenuAction::StudyExit)?;
+                        return Ok(true);
+                    }
                     super::Screen::Slots => self.menus.parent,
                     super::Screen::Review => self.review.as_ref().expect("session").parent,
                     screen => screen,

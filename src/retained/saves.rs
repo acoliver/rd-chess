@@ -17,6 +17,9 @@ impl BoardDriver {
             Err(error) => storage.error = Some(error),
         }
         storage.refresh();
+        if let Some(training) = &mut self.training {
+            training.progress = storage.progress.clone();
+        }
         self.storage = Some(storage);
     }
     pub fn can_continue(&self) -> bool {
@@ -95,7 +98,7 @@ impl BoardDriver {
         self.storage_result(result)
     }
     pub(super) fn autosave(&mut self) {
-        if self.storage.is_some() {
+        if self.storage.is_some() && !self.training_screen() {
             let result = self.write_game("current");
             let _ = self.storage_result(result);
         }
@@ -138,17 +141,18 @@ impl BoardDriver {
     }
     pub(super) fn restore_game(&mut self, payload: GamePayload) -> Result<(), String> {
         let game = payload.replay()?;
+        self.pgn.message = None;
         let initial =
             crate::rules::ChessState::from_fen(&payload.initial_fen).map_err(|e| e.to_string())?;
         let mut board = RetainedBoard::new(initial, payload.seed).map_err(|e| e.to_string())?;
         board.game = game;
         board.synchronize();
-        if let Some(computer) = &mut self.computer {
-            computer.changed();
-        }
+        self.computer_changed();
         self.computer = None;
+        self.clear_explanation();
         self.clear_selection()?;
         let mut edits = self.markers.clear();
+        edits.extend(self.squares.clear());
         if let Some(old) = &self.board {
             edits.extend(
                 old.objects()
@@ -176,6 +180,8 @@ impl BoardDriver {
             .max()
             .expect("saved kings")
             + 1;
+        self.markers.base = self.markers.base.max(68);
+        self.squares.base = self.markers.base + 64;
         self.board = Some(board);
         self.pending.borrow_mut().push_back(edits);
         self.menus.result = payload.result;

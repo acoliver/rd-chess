@@ -147,7 +147,7 @@ impl PuzzleRunner {
     }
 
     pub fn with_progress(puzzle: Puzzle, progress: Progress) -> Result<Self> {
-        let task = TaskRunner::new(puzzle.task()?)?;
+        let task = TaskRunner::with_board(puzzle.task()?, puzzle.after_setup()?)?;
         Ok(Self {
             puzzle,
             task,
@@ -182,7 +182,7 @@ impl PuzzleRunner {
     }
 
     pub fn retry(&mut self) -> Result<()> {
-        self.task = TaskRunner::new(self.puzzle.task()?)?;
+        self.task = TaskRunner::with_board(self.puzzle.task()?, self.puzzle.after_setup()?)?;
         Ok(())
     }
 }
