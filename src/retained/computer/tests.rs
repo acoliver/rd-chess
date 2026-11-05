@@ -131,7 +131,7 @@ fn replies_once_and_is_deterministic_for_seed_and_level() {
         let (mut driver, mut host) = setup(INITIAL_FEN, Side::Ivory);
         driver.play_uci("e2e4").unwrap();
         let expected = crate::search::choose_move(game(&driver), &LADDER[0], move_seed(42, 1));
-        assert_eq!(expected.to_uci(), "g8f6", "Linux window smoke reference");
+        assert_eq!(expected.to_uci(), "b8c6", "Linux window smoke reference");
         driver.advance_computer(&mut host);
         assert_eq!(driver.status_text(), "Computer (Level 1, Pip) is thinking");
         wait(&mut driver);

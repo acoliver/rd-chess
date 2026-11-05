@@ -161,7 +161,7 @@ impl BoardDriver {
                     "Move {}: {}. {}",
                     m.ply,
                     m.label,
-                    crate::teaching::explain(m).learner
+                    crate::teaching::explain::explain_moment(m).learner
                 )
             })
             .collect();

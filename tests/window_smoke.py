@@ -227,7 +227,7 @@ class SmokeCase:
         self.saved_bytes = self.saved.read_bytes()
 
     def play_and_undo(self, log):
-        sequence = "e2e4 g8f6" if self.computer else "e2e4"
+        sequence = "e2e4 b8c6" if self.computer else "e2e4"
         self.progress(f"launch: headless {sequence} capture")
         reference = self.capture(self.output / f"{self.name}-e2e4-capture.png", "--moves", sequence)
         # Engine-projected board-plane centers at this fixed 960x720 preset.

@@ -33,7 +33,7 @@ impl BoardDriver {
             MenuAction::Moment(index) => {
                 let session = self.review.as_mut().expect("session");
                 let moment = session.report.moments[index].clone();
-                session.message = crate::teaching::explain(&moment).learner;
+                session.message = crate::teaching::explain::explain_moment(&moment).learner;
                 let ply = moment.ply;
                 session.selected = Some(moment);
                 self.seek_review(ply)?;
@@ -68,7 +68,7 @@ impl BoardDriver {
     fn explain_review(&mut self) {
         let session = self.review.as_mut().expect("session");
         if let Some(moment) = &session.selected {
-            session.message = crate::teaching::explain(moment).detail;
+            session.message = crate::teaching::explain::explain_moment(moment).detail;
         }
     }
     fn retry_review(&mut self) -> Result<(), String> {
@@ -88,7 +88,10 @@ impl BoardDriver {
         }
         let moment = session.selected.as_ref().expect("practice moment");
         if chess_move != moment.better {
-            session.message = format!("Try again. {}", crate::teaching::explain(moment).detail);
+            session.message = format!(
+                "Try again. {}",
+                crate::teaching::explain::explain_moment(moment).detail
+            );
             return self.clear_selection();
         }
         let mut state = moment.position_before.clone();

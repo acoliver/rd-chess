@@ -30,6 +30,32 @@ pub fn choose_move_cancellable(
     seed: u64,
     cancelled: &dyn Fn() -> bool,
 ) -> Option<LegalMove> {
+    decide(state, profile, seed, cancelled).map(|decision| decision.chess_move)
+}
+
+/// Search work for the actual policy choice, not a separate analysis run.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MoveDecision {
+    pub chess_move: LegalMove,
+    /// Visited search nodes; excludes finite policy preprocessing and fallback.
+    pub nodes: u64,
+    pub completed_depth: u8,
+}
+
+pub fn choose_move_measured(
+    state: &ChessState,
+    profile: &OpponentProfile,
+    seed: u64,
+) -> MoveDecision {
+    decide(state, profile, seed, &|| false).expect("uncancelled policy has a legal move")
+}
+
+fn decide(
+    state: &ChessState,
+    profile: &OpponentProfile,
+    seed: u64,
+    cancelled: &dyn Fn() -> bool,
+) -> Option<MoveDecision> {
     let legal = state.legal_moves();
     assert!(!legal.is_empty(), "choose_move requires a legal move");
     let mut safe = Vec::new();
@@ -63,14 +89,16 @@ pub fn choose_move_cancellable(
     candidates.retain(|candidate| allowed.contains(&candidate.pv[0]));
     candidates.sort_by_key(|candidate| Reverse(candidate.score.value(state.side_to_move())));
     let mut random = seed;
-    Some(
-        candidates
+    Some(MoveDecision {
+        chess_move: candidates
             .iter()
             .take(profile.candidates.max(1))
             .max_by_key(|candidate| policy_value(state, candidate, profile, &mut random))
             .expect("at least one allowed candidate")
             .pv[0],
-    )
+        nodes: analysis.nodes,
+        completed_depth: analysis.completed_depth,
+    })
 }
 
 fn queen_safe(state: &ChessState, chess_move: LegalMove) -> bool {

@@ -1,3 +1,20 @@
+#[test]
+fn status_from_current_legal_list_matches_public_outcomes() {
+    for fen in [
+        INITIAL_FEN,
+        "7k/6Q1/6K1/8/8/8/8/8 b - - 150 80",
+        "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1",
+        "4k3/8/8/8/8/8/8/4K3 w - - 0 1",
+        "4k3/8/8/8/8/8/8/R3K3 w - - 100 80",
+    ] {
+        let state = ChessState::from_fen(fen).unwrap();
+        assert_eq!(
+            state.status_with_legal(&state.legal_moves()),
+            state.status()
+        );
+    }
+}
+
 use super::tests::{has_move, play};
 use super::*;
 

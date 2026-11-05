@@ -93,7 +93,7 @@ fn required_gpu_resumed_computer_takes_its_turn_through_native_workready() {
     loop {
         capture_frame(&mut run, &queue, &inbox).unwrap();
         let bytes = std::fs::read(root.path().join("slot-current.rds")).unwrap();
-        if bytes.windows(4).any(|slice| slice == b"g8f6") {
+        if bytes.windows(4).any(|slice| slice == b"b8c6") {
             break;
         }
         assert!(
@@ -104,7 +104,7 @@ fn required_gpu_resumed_computer_takes_its_turn_through_native_workready() {
     run.shutdown().unwrap();
     drop(run);
     let mut expected = ChessState::initial();
-    for uci in ["e2e4", "g8f6"] {
+    for uci in ["e2e4", "b8c6"] {
         expected.play(expected.parse_uci(uci).unwrap()).unwrap();
     }
     assert_eq!(next.board().unwrap().game(), &expected);

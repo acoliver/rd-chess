@@ -64,6 +64,227 @@ fn review_arguments_and_records_fail_before_writing() {
 }
 
 #[test]
+fn every_value_flag_is_recognized_before_requiring_its_value() {
+    for flag in [
+        "--load",
+        "--data-dir",
+        "--save",
+        "--capture",
+        "--view",
+        "--width",
+        "--height",
+        "--seed",
+        "--moves",
+        "--play",
+        "--level",
+        "--lesson",
+        "--puzzle",
+    ] {
+        assert_failure(&cli().arg(flag).output().unwrap(), "requires a value");
+    }
+}
+
+#[test]
+fn data_directory_and_position_flags_parse_together_without_gpu() {
+    let directory = tempfile::tempdir().unwrap();
+    let data = directory.path().join("application-data");
+    let save = directory.path().join("position.json");
+    let result = cli()
+        .arg("--data-dir")
+        .arg(&data)
+        .arg("--save")
+        .arg(&save)
+        .args([
+            "--moves", "e2e4", "--view", "overhead", "--width", "800", "--height", "600", "--seed",
+            "42",
+        ])
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let mut game = chess3d::rules::ChessState::initial();
+    game.play(game.parse_uci("e2e4").unwrap()).unwrap();
+    assert_eq!(Position::load(&save).unwrap(), game.to_position(42));
+    assert!(
+        !data.exists(),
+        "CPU inspection must not open the game store"
+    );
+}
+
+#[test]
+fn teaching_modes_are_mutually_exclusive_and_all_appear_in_help() {
+    let fen = "r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1";
+    for mode in ["--lesson", "--puzzle"] {
+        let id = if mode == "--lesson" {
+            "tactics.fork"
+        } else {
+            "00008"
+        };
+        for args in [
+            vec![mode, id, "--explain", fen, "b5c7"],
+            vec!["--explain", fen, "b5c7", mode, id],
+        ] {
+            assert_failure(
+                &cli().args(args).output().unwrap(),
+                "--explain cannot be combined",
+            );
+        }
+        assert_failure(
+            &cli()
+                .args([mode, id, "--explain-verbose"])
+                .output()
+                .unwrap(),
+            "--explain-verbose requires --explain",
+        );
+        assert_failure(&cli().arg(mode).output().unwrap(), "requires a value");
+    }
+    let help = cli().arg("--help").output().unwrap();
+    assert!(help.status.success());
+    let help = String::from_utf8_lossy(&help.stdout);
+    for flag in ["--lesson", "--puzzle", "--explain", "--explain-verbose"] {
+        assert!(help.contains(flag), "{help}");
+    }
+}
+
+#[test]
+fn explanation_diagnostics_require_the_verbose_flag() {
+    let fen = "r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1";
+    let plain = cli().args(["--explain", fen, "b5c7"]).output().unwrap();
+    assert!(plain.status.success(), "{plain:?}");
+    let plain = String::from_utf8(plain.stdout).unwrap();
+    assert!(plain.contains("wins a rook in this line."), "{plain}");
+    assert!(plain.contains("Evidence: Nc7+ Kf8 Nxa8"), "{plain}");
+    assert!(!plain.contains("centipawn"), "{plain}");
+    for args in [
+        vec!["--explain", fen, "b5c7", "--explain-verbose"],
+        vec!["--explain-verbose", "--explain", fen, "b5c7"],
+    ] {
+        let verbose = cli().args(args).output().unwrap();
+        assert!(verbose.status.success(), "{verbose:?}");
+        let verbose = String::from_utf8(verbose.stdout).unwrap();
+        assert!(verbose.starts_with(&plain), "{verbose}");
+        assert!(verbose.contains("Analysis limits:"), "{verbose}");
+        assert!(
+            verbose.contains("957/100000 nodes; verified depth 3"),
+            "{verbose}"
+        );
+        assert!(
+            verbose.contains("Exchange facts cover legal captures"),
+            "{verbose}"
+        );
+    }
+    for (args, message) in [
+        (
+            vec!["--explain-verbose"],
+            "--explain-verbose requires --explain",
+        ),
+        (
+            vec![
+                "--explain",
+                fen,
+                "b5c7",
+                "--explain-verbose",
+                "--explain-verbose",
+            ],
+            "may only be specified once",
+        ),
+        (
+            vec!["--explain", fen, "b5c7", "--explain-verbose", "--window"],
+            "--explain cannot be combined",
+        ),
+    ] {
+        assert_failure(&cli().args(args).output().unwrap(), message);
+    }
+    let help = cli().arg("--help").output().unwrap();
+    assert!(String::from_utf8_lossy(&help.stdout).contains("--explain-verbose"));
+}
+
+#[test]
+fn quiet_move_comparisons_name_alternatives_and_keep_both_lines() {
+    let opening = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    let output = cli().args(["--explain", opening, "g1f3"]).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        text.contains("No tactical issue found within the analysis limits."),
+        "{text}"
+    );
+    assert!(text.contains("Line after Nf3: Nf3"), "{text}");
+    assert!(
+        !text.contains("search prefers") && !text.contains("scores better"),
+        "{text}"
+    );
+    let fen = "3r3k/8/8/8/8/8/8/3Q2NK w - - 0 1";
+    let output = cli().args(["--explain", fen, "g1f3"]).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        text.contains("The search prefers Qxd8+: this line scores better in the current search."),
+        "{text}"
+    );
+    assert!(text.contains("Line after Qxd8+: Qxd8+"), "{text}");
+    assert!(text.contains("Line after Nf3: Nf3"), "{text}");
+    assert!(!text.contains("\nLine:"), "{text}");
+}
+
+#[test]
+fn explanations_are_cpu_only_and_validate_both_arguments() {
+    let fen = "7k/8/5KQ1/8/8/8/8/8 w - - 0 1";
+    let output = cli().args(["--explain", fen, "g6g7"]).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(text.contains("Qg7# is checkmate."), "{text}");
+    assert!(text.contains("Line after Qg7#: Qg7#"), "{text}");
+    assert!(!text.contains("nodes") && !text.contains("depth"), "{text}");
+    assert!(!text.contains("Exchange facts cover"), "{text}");
+    for (args, message) in [
+        (vec!["--explain", fen], "--explain requires FEN and UCI"),
+        (vec!["--explain", "invalid", "g6g7"], "FEN"),
+        (vec!["--explain", fen, "g6g9"], "move notation"),
+        (
+            vec!["--explain", fen, "g6g7", "--window"],
+            "--explain cannot be combined",
+        ),
+    ] {
+        assert_failure(&cli().args(args).output().unwrap(), message);
+    }
+}
+
+#[test]
+fn teaching_cli_inspects_lessons_and_setup_positions_without_gpu() {
+    let result = cli()
+        .args(["--lesson", "rules.first-moves"])
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let text = String::from_utf8_lossy(&result.stdout);
+    assert!(text.contains("Pawns, knights and kings"));
+    assert!(text.contains("e2e4"));
+    let pack = chess3d::teaching::PuzzlePack::bundled().unwrap();
+    let puzzle = &pack.puzzles()[0];
+    let result = cli().args(["--puzzle", &puzzle.id]).output().unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let text = String::from_utf8_lossy(&result.stdout);
+    assert!(text.contains(&puzzle.after_setup().unwrap().to_fen()));
+    assert!(text.contains("Solution:"));
+    for args in [
+        vec!["--lesson", "unknown"],
+        vec!["--puzzle", "unknown"],
+        vec!["--lesson", "rules.first-moves", "--puzzle", &puzzle.id],
+    ] {
+        assert!(!cli().args(args).output().unwrap().status.success());
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("untouched.json");
+    let result = cli()
+        .args(["--lesson", "rules.first-moves", "--save"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert_failure(&result, "teaching inspection");
+    assert!(!path.exists());
+}
+
+#[test]
 fn computer_arguments_are_validated_without_launching_a_window() {
     for (args, message) in [
         (vec!["--play", "green"], "--play must be white or black"),

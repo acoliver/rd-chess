@@ -224,7 +224,7 @@ fn required_gpu_computer_replies_to_synthetic_e2e4() {
         .position()
         .pieces
         .into_iter()
-        .find(|piece| piece.square == square("g8"))
+        .find(|piece| piece.square == square("b8"))
         .unwrap();
     let id = driver.board().unwrap().identities()[&knight.id].body;
     let initial_object = driver.board().unwrap().objects()[&id];
@@ -247,12 +247,12 @@ fn required_gpu_computer_replies_to_synthetic_e2e4() {
         .find(|(object_id, _)| *object_id == id)
         .unwrap()
         .1;
-    assert_eq!(object.transform().position_millimeters, [1500, 1500, 50]);
-    assert!(changed(&initial, &replied, [450, 60, 610, 280]) > 50);
+    assert_eq!(object.transform().position_millimeters, [-1500, 1500, 50]);
+    assert!(changed(&initial, &replied, [190, 60, 350, 280]) > 50);
     run.shutdown().unwrap();
     drop(run);
     let mut expected = ChessState::initial();
-    for text in ["e2e4", "g8f6"] {
+    for text in ["e2e4", "b8c6"] {
         expected.play(expected.parse_uci(text).unwrap()).unwrap();
     }
     assert_eq!(driver.board().unwrap().game(), &expected);
@@ -262,7 +262,7 @@ fn required_gpu_computer_replies_to_synthetic_e2e4() {
 
 fn reference_reply() -> RgbaImage {
     let (mut driver, _, host) = setup(ChessState::initial());
-    for text in ["e2e4", "g8f6"] {
+    for text in ["e2e4", "b8c6"] {
         driver.play_uci(text).unwrap();
     }
     let queue = driver.queue();

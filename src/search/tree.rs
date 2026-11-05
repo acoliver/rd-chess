@@ -76,7 +76,11 @@ impl<'a> Context<'a> {
     }
 
     pub fn terminal(state: &ChessState, ply: u16) -> Option<Score> {
-        match state.status() {
+        Self::terminal_score(state.status(), ply)
+    }
+
+    fn terminal_score(status: GameStatus, ply: u16) -> Option<Score> {
+        match status {
             GameStatus::Checkmate { winner } => Some(Score::Mate { winner, plies: ply }),
             GameStatus::Draw(_) => Some(Score::Centipawns(0)),
             GameStatus::Ongoing { claims, .. } if claims.fifty_move || claims.threefold => {
@@ -186,7 +190,8 @@ impl<'a> Context<'a> {
 
     fn node(&mut self, state: &mut ChessState, frame: Frame) -> Option<Line> {
         self.visit()?;
-        if let Some(score) = Self::terminal(state, frame.ply) {
+        let moves = state.legal_moves();
+        if let Some(score) = Self::terminal_score(state.status_with_legal(&moves), frame.ply) {
             return Some(Line {
                 score,
                 pv: Vec::new(),
@@ -209,14 +214,19 @@ impl<'a> Context<'a> {
         {
             return Some(line);
         }
-        let line = self.expand(state, frame)?;
+        let line = self.expand(state, frame, moves)?;
         if frame.depth > 0 {
             self.store(state, frame, &line);
         }
         Some(line)
     }
 
-    fn expand(&mut self, state: &mut ChessState, frame: Frame) -> Option<Line> {
+    fn expand(
+        &mut self,
+        state: &mut ChessState,
+        frame: Frame,
+        mut moves: Vec<LegalMove>,
+    ) -> Option<Line> {
         let side = state.side_to_move();
         let quiet = frame.depth == 0 && !state.in_check();
         let mut best = quiet.then(|| Line {
@@ -230,7 +240,6 @@ impl<'a> Context<'a> {
                 return best;
             }
         }
-        let mut moves = state.legal_moves();
         if quiet {
             moves.retain(|&chess_move| tactical(state, chess_move));
         }

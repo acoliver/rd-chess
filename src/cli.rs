@@ -1,5 +1,34 @@
 use std::{error::Error, path::PathBuf};
 
+fn explanation_args(
+    args: &mut impl Iterator<Item = std::ffi::OsString>,
+) -> Result<(String, String)> {
+    let fen = args.next().ok_or("--explain requires FEN and UCI")?;
+    let uci = args.next().ok_or("--explain requires FEN and UCI")?;
+    Ok((
+        fen.into_string().map_err(|_| "FEN must be UTF-8")?,
+        uci.into_string().map_err(|_| "UCI must be UTF-8")?,
+    ))
+}
+
+const VALUE_FLAGS: &[&str] = &[
+    "--load",
+    "--data-dir",
+    "--save",
+    "--capture",
+    "--view",
+    "--width",
+    "--height",
+    "--seed",
+    "--moves",
+    "--review-moves",
+    "--review-fen",
+    "--play",
+    "--level",
+    "--lesson",
+    "--puzzle",
+];
+
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 pub struct Options {
@@ -18,11 +47,15 @@ pub struct Options {
     pub review_fen: Option<String>,
     pub play: Option<chess3d::Side>,
     pub level: Option<u8>,
+    pub explain: Option<(String, String)>,
+    pub explain_verbose: bool,
+    pub lesson: Option<String>,
+    pub puzzle: Option<String>,
 }
 
 impl Options {
-    pub fn parse() -> Result<Option<Self>> {
-        let mut options = Self {
+    fn initial() -> Self {
+        Self {
             load: None,
             data_dir: None,
             save: None,
@@ -38,7 +71,15 @@ impl Options {
             review_fen: None,
             play: None,
             level: None,
-        };
+            explain: None,
+            explain_verbose: false,
+            lesson: None,
+            puzzle: None,
+        }
+    }
+
+    pub fn parse() -> Result<Option<Self>> {
+        let mut options = Self::initial();
         let mut args = std::env::args_os().skip(1);
         while let Some(arg) = args.next() {
             let flag = arg.to_string_lossy();
@@ -46,27 +87,22 @@ impl Options {
                 print_help();
                 return Ok(None);
             }
+            if flag == "--explain" {
+                options.explain = Some(explanation_args(&mut args)?);
+                continue;
+            }
+            if flag == "--explain-verbose" {
+                if options.explain_verbose {
+                    return Err("--explain-verbose may only be specified once".into());
+                }
+                options.explain_verbose = true;
+                continue;
+            }
             if flag == "--window" {
                 options.window = true;
                 continue;
             }
-            if ![
-                "--load",
-                "--data-dir",
-                "--save",
-                "--capture",
-                "--view",
-                "--width",
-                "--height",
-                "--seed",
-                "--moves",
-                "--review-moves",
-                "--review-fen",
-                "--play",
-                "--level",
-            ]
-            .contains(&flag.as_ref())
-            {
+            if !VALUE_FLAGS.contains(&flag.as_ref()) {
                 return Err(format!("unknown argument {flag}; use --help").into());
             }
             let value = args
@@ -95,6 +131,8 @@ impl Options {
             "--moves" => self.moves = Some(text),
             "--review-moves" => self.review_moves = Some(text),
             "--review-fen" => self.review_fen = Some(text),
+            "--lesson" => self.lesson = Some(text),
+            "--puzzle" => self.puzzle = Some(text),
             "--play" => {
                 self.play = Some(match text.as_str() {
                     "white" => chess3d::Side::Ivory,
@@ -157,6 +195,17 @@ impl Options {
 
     fn validate(&self) -> Result<()> {
         self.validate_review()?;
+        if self.explain_verbose && self.explain.is_none() {
+            return Err("--explain-verbose requires --explain".into());
+        }
+        if self.explain.is_some()
+            && std::env::args_os().len() != 4 + usize::from(self.explain_verbose)
+        {
+            return Err(
+                "--explain cannot be combined with other arguments except --explain-verbose".into(),
+            );
+        }
+        self.validate_teaching()?;
         self.validate_computer()?;
         if self.window && self.capture.is_some() {
             return Err("--capture and --window cannot be combined; run them separately".into());
@@ -193,6 +242,36 @@ impl Options {
         }
         Ok(())
     }
+    fn validate_teaching(&self) -> Result<()> {
+        if self.lesson.is_none() && self.puzzle.is_none() {
+            return Ok(());
+        }
+        if [
+            self.lesson.is_some(),
+            self.puzzle.is_some(),
+            self.review_moves.is_some(),
+        ]
+        .into_iter()
+        .filter(|present| *present)
+        .count()
+            > 1
+        {
+            return Err("choose --lesson, --puzzle or --review-moves, not more than one".into());
+        }
+        if self.window
+            || self.capture.is_some()
+            || self.load.is_some()
+            || self.save.is_some()
+            || self.moves.is_some()
+            || self.play.is_some()
+            || self.level.is_some()
+            || self.seed.is_some()
+            || self.view != "hero"
+        {
+            return Err("teaching inspection cannot combine with game/editor options".into());
+        }
+        Ok(())
+    }
 }
 
 fn print_help() {
@@ -200,11 +279,14 @@ fn print_help() {
         "chess3d [--load position.json] [--save position.json] [--moves \"e2e4 e7e5\"]\n\
         [--capture image.png | --window] [--view hero|overhead|lineup]\n\
         [--width px --height px] [--seed n] [--play white|black --level 1..8]\n\
+        [--lesson ID | --puzzle ID] (CPU-only teaching inspection)\n\
         Window and retained move capture require: cargo run -p chess3d --features viewer --\n\
         Play: left click select/move, U/Backspace undo, R restart, Escape cancel/menu (editor: exit).\n\
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\
         --data-dir PATH overrides the application save/settings directory.\n\
         --play chooses the human side against a computer; --seed also seeds its replies.\n\
+        --explain <fen> <uci> prints a CPU-only verified explanation.\n\
+        --explain-verbose adds developer diagnostics; no other options may accompany --explain.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\
         --review-moves \"e2e4 e7e5\" [--review-fen \"FEN\"] prints CPU-only neutral review.\n\
         Review moments use the initial side to move; PGN --review is not available yet.\n\

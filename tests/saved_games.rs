@@ -16,6 +16,53 @@ fn driver(root: &std::path::Path) -> BoardDriver {
 }
 
 #[test]
+fn saved_levels_restore_ladder_identity_independently_of_new_game_defaults() {
+    for (index, profile) in chess3d::search::LADDER.iter().enumerate() {
+        let level = u8::try_from(index + 1).unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let mut first = driver(root.path());
+        first
+            .set_computer(ComputerGame::new(Side::Ivory, level, 42).unwrap())
+            .unwrap();
+        first.play_uci("e2e4").unwrap();
+        first.save_game(1).unwrap();
+        let payload = first.saved_payload(1).unwrap();
+        assert_eq!(
+            payload.mode,
+            SavedMode::Computer {
+                human: Side::Ivory,
+                level
+            }
+        );
+        assert_eq!(payload.replay().unwrap(), *first.board().unwrap().game());
+        first.show_title().unwrap();
+        first
+            .set_settings(GameSettings {
+                level: 8,
+                side: 1,
+                ..GameSettings::default()
+            })
+            .unwrap();
+        let mut next = driver(root.path());
+        next.continue_game().unwrap();
+        let config = next.computer_game().unwrap();
+        assert_eq!(
+            (config.human(), config.level(), config.seed()),
+            (Side::Ivory, level, 42)
+        );
+        assert!(next.status_text().contains(profile.name));
+        assert_eq!(next.board().unwrap().game(), &payload.replay().unwrap());
+        next.undo().unwrap();
+        assert_eq!(next.board().unwrap().game(), &ChessState::initial());
+        next.load_game(1).unwrap();
+        assert_eq!(next.computer_game().unwrap().level(), level);
+        assert!(next.status_text().contains(profile.name));
+        assert_eq!(next.settings().level, 8);
+        assert_eq!(next.settings().side, 1);
+    }
+}
+
+#[test]
 fn replay_preserves_castling_en_passant_counters_and_repetition() {
     for moves in [
         "e2e4 e7e5 g1f3 b8c6 f1e2 g8f6 e1g1 d7d5",
