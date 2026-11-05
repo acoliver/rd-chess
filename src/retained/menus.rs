@@ -136,9 +136,7 @@ impl BoardDriver {
                 .is_some_and(|board| !matches!(board.game().status(), GameStatus::Ongoing { .. }))
     }
     pub(super) fn finish(&mut self, result: String) -> Result<(), String> {
-        if let Some(computer) = &mut self.computer {
-            computer.changed();
-        }
+        self.computer_changed();
         self.menus.result = Some(result);
         self.clear_selection()?;
         self.autosave();
@@ -175,9 +173,7 @@ impl BoardDriver {
     pub(super) fn menu_action(&mut self, action: MenuAction) -> Result<(), String> {
         match action {
             MenuAction::Friend => {
-                if let Some(computer) = &mut self.computer {
-                    computer.changed();
-                }
+                self.computer_changed();
                 self.computer = None;
                 self.restart()?;
                 self.transition(Screen::Play)?;

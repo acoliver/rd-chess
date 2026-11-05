@@ -2,6 +2,23 @@ use std::{error::Error, path::PathBuf};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
+const VALUE_FLAGS: &[&str] = &[
+    "--load",
+    "--data-dir",
+    "--save",
+    "--capture",
+    "--view",
+    "--width",
+    "--height",
+    "--seed",
+    "--moves",
+    "--review-moves",
+    "--review-fen",
+    "--play",
+    "--level",
+    "--pgn-check",
+];
+
 pub struct Options {
     pub load: Option<PathBuf>,
     pub data_dir: Option<PathBuf>,
@@ -18,6 +35,7 @@ pub struct Options {
     pub review_fen: Option<String>,
     pub play: Option<chess3d::Side>,
     pub level: Option<u8>,
+    pub pgn_check: Option<PathBuf>,
 }
 
 impl Options {
@@ -38,7 +56,10 @@ impl Options {
             review_fen: None,
             play: None,
             level: None,
+            pgn_check: None,
         };
+        let mut other_options = false;
+        let mut non_review_options = false;
         let mut args = std::env::args_os().skip(1);
         while let Some(arg) = args.next() {
             let flag = arg.to_string_lossy();
@@ -46,33 +67,25 @@ impl Options {
                 print_help();
                 return Ok(None);
             }
+            other_options |= flag != "--pgn-check";
+            non_review_options |= !matches!(flag.as_ref(), "--review-moves" | "--review-fen");
             if flag == "--window" {
                 options.window = true;
                 continue;
             }
-            if ![
-                "--load",
-                "--data-dir",
-                "--save",
-                "--capture",
-                "--view",
-                "--width",
-                "--height",
-                "--seed",
-                "--moves",
-                "--review-moves",
-                "--review-fen",
-                "--play",
-                "--level",
-            ]
-            .contains(&flag.as_ref())
-            {
+            if !VALUE_FLAGS.contains(&flag.as_ref()) {
                 return Err(format!("unknown argument {flag}; use --help").into());
             }
             let value = args
                 .next()
                 .ok_or_else(|| format!("{flag} requires a value"))?;
             options.set_value(&flag, value)?;
+        }
+        if options.pgn_check.is_some() && other_options {
+            return Err("--pgn-check cannot be combined with other modes/options".into());
+        }
+        if options.review_moves.is_some() && non_review_options {
+            return Err("--review-moves cannot be combined with other modes/options".into());
         }
         options.validate()?;
         Ok(Some(options))
@@ -82,6 +95,7 @@ impl Options {
         let text = value.to_string_lossy().into_owned();
         match flag {
             "--load" => self.load = Some(PathBuf::from(value)),
+            "--pgn-check" => self.pgn_check = Some(PathBuf::from(value)),
             "--data-dir" => self.data_dir = Some(PathBuf::from(value)),
             "--save" => self.save = Some(PathBuf::from(value)),
             "--capture" => self.capture = Some(PathBuf::from(value)),
@@ -137,21 +151,6 @@ impl Options {
         if self.review_fen.is_some() && self.review_moves.is_none() {
             return Err("--review-fen requires --review-moves".into());
         }
-        if self.review_moves.is_some()
-            && (self.moves.is_some()
-                || self.play.is_some()
-                || self.level.is_some()
-                || self.window
-                || self.capture.is_some()
-                || self.load.is_some()
-                || self.save.is_some()
-                || self.seed.is_some()
-                || self.view != "hero")
-        {
-            return Err(
-                "--review-moves cannot be combined with play, editor or rendering options".into(),
-            );
-        }
         Ok(())
     }
 
@@ -205,9 +204,11 @@ fn print_help() {
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\
         --data-dir PATH overrides the application save/settings directory.\n\
         --play chooses the human side against a computer; --seed also seeds its replies.\n\
+        --pgn-check file.pgn validates games and prints final FEN/result without a GPU.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\
         --review-moves \"e2e4 e7e5\" [--review-fen \"FEN\"] prints CPU-only neutral review.\n\
         Review moments use the initial side to move; PGN --review is not available yet.\n\
+        PGN check and review are separate modes; neither accepts game/editor/rendering or --data-dir options.\n\
         --save writes the current position before capture/window; camera orbit is not saved."
     );
 }

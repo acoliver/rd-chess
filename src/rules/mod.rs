@@ -26,6 +26,7 @@ mod hash;
 mod movegen;
 mod notation;
 mod outcome;
+pub mod pgn;
 mod validation;
 
 pub use fen::FenError;
@@ -275,3 +276,6 @@ mod notation_tests;
 mod outcome_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod pgn_tests;
