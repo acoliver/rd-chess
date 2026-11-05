@@ -34,6 +34,24 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def kill_group(process):
+    """Kill a command's whole process group, including children that outlive it.
+
+    macOS refuses killpg with EPERM while the group's only member is the unreaped
+    leader. Reaping the leader leaves either surviving children, which the second
+    killpg reaches, or an empty group, which reports ProcessLookupError.
+    """
+    for attempt in range(2):
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+            return
+        except ProcessLookupError:
+            return
+        except PermissionError:
+            if attempt or process.poll() is None:
+                raise
+
+
 def repository_info(path, *, cargo_checkout=False):
     """Record uncommitted migrations truthfully, including an unborn game HEAD."""
     def git(*args):
@@ -148,10 +166,7 @@ class Acceptance:
             if process is not None:
                 # Kill the whole command tree, including children retaining a pipe
                 # after the direct child exits; never leave timed-out Cargo/GPU work.
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                kill_group(process)
                 process.wait(timeout=5)
                 receipt["returncode"] = process.returncode
             receipt["seconds"] = time.monotonic() - start

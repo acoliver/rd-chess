@@ -3,8 +3,10 @@
 import hashlib
 import os
 import struct
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import zlib
 from pathlib import Path
@@ -12,7 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from chess3d_image import compare, decode_png, image_stats, validate_image
-from verify_chess3d import Acceptance
+from verify_chess3d import Acceptance, kill_group
 
 
 def chunk(kind, data):
@@ -268,6 +270,31 @@ class HarnessTests(unittest.TestCase):
                 harness.command("noisy", [sys.executable, "-c",
                                          "import os; os.write(1, b'x' * 65536)"])
         self.assertLessEqual((self.args.output / "noisy.log").stat().st_size, 2048)
+
+    def test_group_kill_accepts_an_unreaped_exited_leader(self):
+        # macOS reports EPERM, not ESRCH, for a group whose only member is a zombie.
+        process = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+        os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOWAIT)
+        kill_group(process)
+        self.assertEqual(process.wait(timeout=5), 0)
+
+    def test_exited_command_leaves_no_child_in_its_group(self):
+        harness = Acceptance(self.args)
+        pid_file = self.args.output / "child.pid"
+        script = ("import subprocess, sys; "
+                  "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], "
+                  "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); "
+                  f"open({str(pid_file)!r}, 'w').write(str(child.pid))")
+        harness.command("orphaning", [sys.executable, "-c", script])
+        child = int(pid_file.read_text())
+        for _ in range(50):
+            try:
+                os.kill(child, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.1)
+        else:
+            self.fail(f"child {child} outlived its command")
 
     def test_command_log_cannot_escape_output_directory(self):
         harness = Acceptance(self.args)
