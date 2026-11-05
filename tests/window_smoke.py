@@ -10,6 +10,7 @@ import argparse
 from collections import deque
 import ctypes as c
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -198,9 +199,31 @@ class SmokeCase:
 
     def title_ready(self):
         image = self.screenshot()
-        outside = (0, 0, 80, self.height)
+        # Title/browsers hide the board status. Compare only retained scene pixels.
+        outside = self.title_board_region()
         return image if (difference(self.expected.crop(outside), image.crop(outside)) <= 0.1
+                         and difference(self.expected.crop(self.title_layout["panel"]),
+                                        image.crop(self.title_layout["panel"])) > 2
                          and difference(self.expected, image) > 2) else None
+
+    def inspect_title(self):
+        result = subprocess.run([str(self.args.binary), "--inspect-title",
+                                 "--width", str(self.width), "--height", str(self.height)],
+                                env=self.headless, check=True, capture_output=True,
+                                text=True, timeout=CAPTURE_TIMEOUT_SECONDS)
+        self.title_layout = json.loads(result.stdout)
+
+    def title_board_region(self):
+        left = math.floor(self.title_layout["panel"][0])
+        bottom = math.ceil(self.title_layout["status"][3])
+        assert 0 < left <= self.width and 0 <= bottom < self.height, "no unobscured board strip"
+        return (0, bottom, left, self.height)
+
+    def click_title_entry(self, label):
+        left, top, right, bottom = self.title_layout["entries"][label]
+        self.xdo("mousemove", "--window", self.window,
+                 round((left + right) / 2), round((top + bottom) / 2))
+        self.xdo("click", 1)
 
     def initial_state(self):
         self.records = []
@@ -256,8 +279,7 @@ class SmokeCase:
         self.find_window("relaunch window")
         self.wait(self.title_ready, "relaunch title menu")
         self.progress("input: click title Continue")
-        self.xdo("mousemove", "--window", self.window, self.width // 2, self.height // 2 - 150)
-        self.xdo("click", 1)
+        self.click_title_entry("Continue")
         self.wait(lambda: self.matching(moved, 0), "Continue exact pre-relaunch pixels")
         self.records.append("relaunch Continue restores exact board pixels")
 
@@ -270,7 +292,8 @@ class SmokeCase:
                     if line.startswith("Window clicks (960x720):"))
         fx, fy, tx, ty = map(int, line.split(":", 1)[1].split())
         self.xdo("key", "--window", self.window, "Escape", "End", "Return")
-        self.xdo("key", "--window", self.window, "Home", "Down", "Down", "Down", "Down", "Return")
+        self.wait(self.title_ready, "title before Puzzles")
+        self.click_title_entry("Puzzles")
         browser = self.wait(lambda: self.changed(self.initial), "Puzzles band browser")
         self.xdo("key", "--window", self.window, "Return")
         self.wait(lambda: self.changed(browser), "puzzle setup position")
@@ -369,6 +392,8 @@ class SmokeCase:
                 "colors": len(self.colors), "controls": self.records, "exit": 0}
 
     def run(self):
+        if self.interaction == "title":
+            self.inspect_title()
         self.progress("launch: headless reference capture")
         self.expected = self.capture(self.output / f"{self.name}-capture.png")
         with (self.output / f"{self.name}.log").open("w") as log:

@@ -1,3 +1,5 @@
+mod inspection;
+pub use inspection::title_layout;
 mod pages;
 #[cfg(test)]
 mod readability_tests;
