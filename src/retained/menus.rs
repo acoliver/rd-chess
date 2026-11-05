@@ -7,6 +7,8 @@ pub enum Screen {
     ComputerSetup,
     Slots,
     Settings,
+    PgnImport,
+    PgnGames,
     #[default]
     Play,
     InGameMenu,
@@ -36,6 +38,9 @@ pub(super) enum MenuAction {
     Load(u8),
     Markers(bool),
     Overhead(bool),
+    ImportPgn,
+    ExportPgn,
+    PgnEntry(usize),
 }
 
 pub(super) const TITLE: &[(&str, MenuAction)] = &[
@@ -150,6 +155,9 @@ impl BoardDriver {
     }
     pub(super) fn transition(&mut self, screen: Screen) -> Result<(), String> {
         self.clear_selection()?;
+        if !matches!(screen, Screen::PgnImport | Screen::PgnGames) {
+            self.pgn.message = None;
+        }
         self.menus.screen = screen;
         self.sync_menu_ui()
     }
@@ -163,6 +171,7 @@ impl BoardDriver {
             settings: self.preferences,
             labels: self.slot_labels(),
             setup: (self.menus.side, self.menus.level),
+            pgn_entries: self.pgn_entries(),
         };
         if let Some(ui) = &mut self.ui {
             ui.synchronize(state, self.viewport)
@@ -185,6 +194,9 @@ impl BoardDriver {
                 self.menus.level = level;
             }
             MenuAction::Start => self.start_computer_game()?,
+            MenuAction::Back if matches!(self.screen(), Screen::PgnImport | Screen::PgnGames) => {
+                self.pgn_back()?;
+            }
             MenuAction::Back if self.screen() == Screen::Slots => {
                 self.transition(self.menus.parent)?;
             }
@@ -201,6 +213,9 @@ impl BoardDriver {
             }
             MenuAction::Resign => self.resign()?,
             MenuAction::ClaimDraw => self.claim_draw()?,
+            MenuAction::ImportPgn | MenuAction::ExportPgn | MenuAction::PgnEntry(_) => {
+                self.pgn_menu_action(action)?;
+            }
             action => self.storage_menu_action(action)?,
         }
         Ok(())

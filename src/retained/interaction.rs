@@ -87,7 +87,26 @@ impl BoardDriver {
             .collect()
     }
     pub fn status_text(&self) -> String {
-        if let Some(error) = self.storage.as_ref().and_then(|s| s.error.as_ref()) {
+        let error = self.storage.as_ref().and_then(|s| s.error.as_ref());
+        let pgn = self.pgn.message.clone().or_else(|| {
+            matches!(
+                self.screen(),
+                super::Screen::PgnImport | super::Screen::PgnGames
+            )
+            .then(|| self.pgn_location_text())
+        });
+        if let Some(message) = pgn {
+            return error.map_or_else(
+                || message.clone(),
+                |error| {
+                    format!(
+                        "{message}
+Storage error: {error}"
+                    )
+                },
+            );
+        }
+        if let Some(error) = error {
             return format!("Storage error: {error}");
         }
         if let Some(result) = &self.menus.result {
@@ -290,6 +309,7 @@ impl BoardDriver {
     }
 
     pub(super) fn enqueue_move(&mut self, mut edits: Vec<SceneObjectEdit>) -> Result<(), String> {
+        self.pgn.message = None;
         self.computer_changed();
         self.clear_selection()?;
         edits.extend(self.markers.clear());
@@ -327,12 +347,22 @@ impl BoardDriver {
         if !pressed || repeat {
             return Ok(false);
         }
-        if self.screen() != super::Screen::Play && key != "escape" {
+        let undo_finished =
+            self.screen() == super::Screen::GameOver && matches!(key, "u" | "backspace");
+        if self.screen() != super::Screen::Play && key != "escape" && !undo_finished {
             return Ok(true);
         }
         match key {
             "escape" if self.promotion_pending() || self.selected().is_some() => {
                 self.clear_selection()?;
+            }
+            "escape"
+                if matches!(
+                    self.screen(),
+                    super::Screen::PgnImport | super::Screen::PgnGames
+                ) =>
+            {
+                self.pgn_back()?;
             }
             "escape" if self.board.is_some() => {
                 let screen = match self.screen() {

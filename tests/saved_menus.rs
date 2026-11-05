@@ -108,7 +108,7 @@ fn title_and_pause_offer_manual_save_load_with_generated_labels() {
     let mut driver = fixture(root.path());
     driver.play_uci("e2e4").unwrap();
     key(&mut driver, "escape");
-    click(&mut driver, [400., 455.]);
+    click(&mut driver, [250., 455.]);
     assert_eq!(driver.screen(), Screen::Slots);
     for y in [160., 272., 384.] {
         click(&mut driver, [250., y]);

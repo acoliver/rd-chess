@@ -13,6 +13,7 @@ pub(crate) const LIMITS: StoreLimits = StoreLimits {
 };
 pub(crate) struct Storage {
     store: ApplicationStore,
+    pub root: PathBuf,
     pub current: Option<GamePayload>,
     pub labels: [String; 3],
     pub error: Option<String>,
@@ -20,7 +21,8 @@ pub(crate) struct Storage {
 impl Storage {
     pub fn open(root: PathBuf) -> Self {
         Self {
-            store: ApplicationStore::new(root, LIMITS).expect("fixed positive limits"),
+            store: ApplicationStore::new(root.clone(), LIMITS).expect("fixed positive limits"),
+            root,
             current: None,
             labels: std::array::from_fn(|_| "Empty".into()),
             error: None,
