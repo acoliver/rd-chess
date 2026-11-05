@@ -8,6 +8,7 @@ use std::path::PathBuf;
 #[cfg(not(feature = "viewer"))]
 use worldrunner::scene::gpu;
 mod cli;
+mod review_cli;
 mod teaching_cli;
 
 fn print_explanation(fen: &str, uci: &str, verbose: bool) -> Result<(), Box<dyn Error>> {
@@ -46,6 +47,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     if teaching_cli::inspect(&options)? {
         return Ok(());
+    }
+    if let Some(moves) = &options.review_moves {
+        return review_cli::run(moves, options.review_fen.as_deref());
     }
     if let Some(path) = &options.pgn_check {
         return check_pgn(path).map_err(|error| error.to_string().into());
@@ -343,6 +347,8 @@ mod game_start_tests {
             height: 600,
             seed: Some(42),
             moves: Some("e2e4".into()),
+            review_moves: None,
+            review_fen: None,
             play: None,
             level: None,
             explain: None,

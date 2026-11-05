@@ -21,6 +21,8 @@ const VALUE_FLAGS: &[&str] = &[
     "--height",
     "--seed",
     "--moves",
+    "--review-moves",
+    "--review-fen",
     "--play",
     "--level",
     "--lesson",
@@ -42,6 +44,8 @@ pub struct Options {
     pub height: u32,
     pub seed: Option<u64>,
     pub moves: Option<String>,
+    pub review_moves: Option<String>,
+    pub review_fen: Option<String>,
     pub play: Option<chess3d::Side>,
     pub level: Option<u8>,
     pub explain: Option<(String, String)>,
@@ -65,6 +69,8 @@ impl Options {
             height: 960,
             seed: None,
             moves: None,
+            review_moves: None,
+            review_fen: None,
             play: None,
             level: None,
             explain: None,
@@ -77,16 +83,19 @@ impl Options {
 
     pub fn parse() -> Result<Option<Self>> {
         let mut options = Self::initial();
-        let mut other_options = false;
+        let mut flags = Vec::new();
         let mut args = std::env::args_os().skip(1);
         while let Some(arg) = args.next() {
             let flag = arg.to_string_lossy();
+            flags.push(flag.to_string());
             if flag == "--help" {
                 print_help();
                 return Ok(None);
             }
-            other_options |= flag != "--pgn-check";
             if flag == "--explain" {
+                if options.explain.is_some() {
+                    return Err("--explain cannot be combined with another --explain".into());
+                }
                 options.explain = Some(explanation_args(&mut args)?);
                 continue;
             }
@@ -109,9 +118,7 @@ impl Options {
                 .ok_or_else(|| format!("{flag} requires a value"))?;
             options.set_value(&flag, value)?;
         }
-        if options.pgn_check.is_some() && other_options {
-            return Err("--pgn-check cannot be combined with other modes/options".into());
-        }
+        options.validate_modes(&flags)?;
         options.validate()?;
         Ok(Some(options))
     }
@@ -132,6 +139,8 @@ impl Options {
             "--height" => self.height = text.parse()?,
             "--seed" => self.seed = Some(text.parse()?),
             "--moves" => self.moves = Some(text),
+            "--review-moves" => self.review_moves = Some(text),
+            "--review-fen" => self.review_fen = Some(text),
             "--lesson" => self.lesson = Some(text),
             "--puzzle" => self.puzzle = Some(text),
             "--play" => {
@@ -172,18 +181,46 @@ impl Options {
         Ok(())
     }
 
-    fn validate(&self) -> Result<()> {
+    fn validate_modes(&self, flags: &[String]) -> Result<()> {
+        if self.pgn_check.is_some() && flags.iter().any(|flag| flag != "--pgn-check") {
+            return Err("--pgn-check cannot be combined with other modes/options".into());
+        }
         if self.explain_verbose && self.explain.is_none() {
             return Err("--explain-verbose requires --explain".into());
         }
-        if self.explain.is_some()
-            && std::env::args_os().len() != 4 + usize::from(self.explain_verbose)
-        {
-            return Err(
-                "--explain cannot be combined with other arguments except --explain-verbose".into(),
-            );
+        if self.review_fen.is_some() && self.review_moves.is_none() {
+            return Err("--review-fen requires --review-moves".into());
         }
-        self.validate_teaching()?;
+        let (allowed, message): (&[&str], &str) = if self.explain.is_some() {
+            (
+                &["--explain", "--explain-verbose"],
+                "--explain cannot be combined with other arguments except --explain-verbose",
+            )
+        } else if self.review_moves.is_some() {
+            (
+                &["--review-moves", "--review-fen"],
+                "--review-moves cannot be combined with other inspection, play, editor or rendering options",
+            )
+        } else if self.lesson.is_some() {
+            (
+                &["--lesson"],
+                "teaching inspection cannot combine modes or game/editor options; --lesson cannot be combined",
+            )
+        } else if self.puzzle.is_some() {
+            (
+                &["--puzzle"],
+                "teaching inspection cannot combine modes or game/editor options; --puzzle cannot be combined",
+            )
+        } else {
+            return Ok(());
+        };
+        if flags.iter().any(|flag| !allowed.contains(&flag.as_str())) {
+            return Err(message.into());
+        }
+        Ok(())
+    }
+
+    fn validate(&self) -> Result<()> {
         self.validate_computer()?;
         if self.window && self.capture.is_some() {
             return Err("--capture and --window cannot be combined; run them separately".into());
@@ -220,18 +257,6 @@ impl Options {
         }
         Ok(())
     }
-    fn validate_teaching(&self) -> Result<()> {
-        if self.lesson.is_none() && self.puzzle.is_none() {
-            return Ok(());
-        }
-        if self.lesson.is_some() && self.puzzle.is_some() {
-            return Err("choose --lesson or --puzzle, not both".into());
-        }
-        if std::env::args_os().len() != 3 {
-            return Err("teaching inspection cannot combine with game/editor options".into());
-        }
-        Ok(())
-    }
 }
 
 fn print_help() {
@@ -239,7 +264,7 @@ fn print_help() {
         "chess3d [--load position.json] [--save position.json] [--moves \"e2e4 e7e5\"]\n\
         [--capture image.png | --window] [--view hero|overhead|lineup]\n\
         [--width px --height px] [--seed n] [--play white|black --level 1..8]\n\
-        [--lesson ID | --puzzle ID] (CPU-only teaching inspection)\n\
+        [--lesson ID | --puzzle ID] (CPU-only teaching inspection; exclusive with review/explain)\n\
         Window and retained move capture require: cargo run -p chess3d --features viewer --\n\
         Play: left click select/move, U/Backspace undo, R restart, Escape cancel/menu (editor: exit).\n\
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\
@@ -249,6 +274,9 @@ fn print_help() {
         --explain-verbose adds developer diagnostics; no other options may accompany --explain.\n\
         --pgn-check file.pgn validates games and prints final FEN/result without a GPU.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\
+        --review-moves \"e2e4 e7e5\" [--review-fen \"FEN\"] prints CPU-only neutral review.\n\
+        Review moments use the initial side to move; PGN --review is not available yet.\n\
+        CPU inspection modes are exclusive; no game/editor/rendering or --data-dir options.\n\
         --save writes the current position before capture/window; camera orbit is not saved."
     );
 }
