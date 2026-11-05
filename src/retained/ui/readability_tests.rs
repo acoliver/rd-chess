@@ -5,6 +5,7 @@ fn study_state(next: bool) -> StudyState {
         lessons: Vec::new(),
         bands: std::array::from_fn(|_| String::new()),
         panel: String::new(),
+        emphasis: Vec::new(),
         controls: [true, next, true, true, true],
         why: false,
     }

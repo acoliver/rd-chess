@@ -18,7 +18,9 @@ pub(super) struct Training {
     pub progress: Progress,
     session: Option<Session>,
     pub panel: String,
+    pub emphasis: Vec<String>,
     feedback: String,
+    feedback_moves: Vec<String>,
     hint: String,
     highlights: BTreeSet<Square>,
     puzzle_cursor: usize,
@@ -51,7 +53,9 @@ impl Training {
             progress: Progress::default(),
             session: None,
             panel: String::new(),
+            emphasis: Vec::new(),
             feedback: String::new(),
+            feedback_moves: Vec::new(),
             hint: String::new(),
             highlights: BTreeSet::new(),
             puzzle_cursor: 0,
@@ -77,6 +81,7 @@ impl Training {
     }
     fn clear_feedback(&mut self) {
         self.feedback.clear();
+        self.feedback_moves.clear();
         self.hint.clear();
     }
     fn accepts_input(&self) -> bool {

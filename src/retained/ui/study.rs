@@ -1,3 +1,4 @@
+#![deny(clippy::too_many_lines, clippy::too_many_arguments)]
 use super::{GameUi, MenuAction, Screen};
 use worldrunner::{
     simulation::{ComponentHandle, ObjectHandle, WorldError},
@@ -9,6 +10,7 @@ pub(in crate::retained) struct StudyState {
     pub lessons: Vec<(String, bool)>,
     pub bands: [String; 4],
     pub panel: String,
+    pub emphasis: Vec<String>,
     pub controls: [bool; 5],
     pub why: bool,
 }
@@ -28,9 +30,7 @@ impl GameUi {
         let panel = self.native.rect(self.native.root, [760., 180.], [0., 0.])?;
         self.native.bottom_rect(panel, [0., -24.], [0., 180.])?;
         self.native.background(panel, [760., 180.])?;
-        let text = self.native.text(panel, "", [728., 124.], [0., 22.])?;
-        let text = self.native.text_handle(text);
-        self.native.left_text(text, 16.)?;
+        let text = study_text(&mut self.native, panel)?;
         let commands = self.native.rect(panel, [760., 36.], [0., -64.])?;
         self.native.stack(commands, UiAxis::Horizontal, 8);
         let actions = [
@@ -132,6 +132,7 @@ impl GameUi {
         }
         if let Some(state) = &state {
             self.synchronize_why(state.why, screen)?;
+            self.synchronize_study_paragraph(state, screen)?;
         }
         let widgets = self.study.as_ref().expect("study widgets");
         if let Some(state) = &state {
@@ -149,7 +150,6 @@ impl GameUi {
                 self.native
                     .set_text(self.native.text_handle(object), label)?;
             }
-            self.native.set_text(widgets.text, &state.panel)?;
             for (&object, enabled) in widgets.controls.iter().zip(state.controls) {
                 self.native
                     .router
@@ -175,6 +175,34 @@ impl GameUi {
         }
         self.study_state = Some((state, screen));
         self.dirty = true;
+        Ok(())
+    }
+    fn synchronize_study_paragraph(
+        &mut self,
+        state: &StudyState,
+        screen: Screen,
+    ) -> Result<(), WorldError> {
+        let heading_end = if matches!(screen, Screen::Lesson | Screen::Puzzle) {
+            state.panel.find('\n').unwrap_or(state.panel.len())
+        } else {
+            0
+        };
+        self.paragraph(
+            self.study.as_ref().expect("study widgets").text,
+            &state.panel,
+            &state.emphasis,
+            heading_end,
+            super::paragraphs::Flow::Fixed,
+        )
+    }
+    pub(super) fn fit_study_background(
+        &mut self,
+        layout: &worldrunner::ui::UiLayout,
+    ) -> Result<(), WorldError> {
+        let panel = self.study.as_ref().expect("study widgets").panel;
+        if let Some(rect) = layout.rect(panel) {
+            self.native.resize_background(rect)?;
+        }
         Ok(())
     }
     fn synchronize_why(&mut self, available: bool, screen: Screen) -> Result<(), WorldError> {
@@ -206,4 +234,25 @@ impl GameUi {
             _ => None,
         }
     }
+}
+
+fn study_text(
+    native: &mut super::NativeUi,
+    panel: ObjectHandle,
+) -> Result<ComponentHandle, WorldError> {
+    use worldrunner::{simulation::ComponentDesc, ui::RectTransform};
+    let object = native.text(panel, "", [728., 124.], [0., 22.])?;
+    native.world.set_component(
+        native.rect_handle(object),
+        ComponentDesc::RectTransform(RectTransform {
+            anchor_min: glam::Vec2::new(0., 0.5),
+            anchor_max: glam::Vec2::new(1., 0.5),
+            size_delta: glam::Vec2::new(-32., 124.),
+            anchored_position: glam::Vec2::new(0., 22.),
+            ..RectTransform::default()
+        }),
+    )?;
+    let text = native.text_handle(object);
+    native.left_text(text, 16.)?;
+    Ok(text)
 }

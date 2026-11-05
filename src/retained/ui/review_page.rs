@@ -10,6 +10,7 @@ pub(in crate::retained) struct ReviewUiState {
     pub moves: Vec<String>,
     pub moments: Vec<String>,
     pub message: String,
+    pub emphasis: Vec<String>,
     pub related_lesson: bool,
     pub finished: [Option<String>; 4],
 }
@@ -145,11 +146,24 @@ impl GameUi {
             let label = state.review.moments.get(index);
             self.native.world.set_active(object, label.is_some())?;
             if let Some(label) = label {
-                self.review_text(object, label)?;
+                let heading_end = label.find(". ").map_or(0, |end| end + 1);
+                self.paragraph(
+                    self.native.text_handle(object),
+                    label,
+                    &state.review.emphasis,
+                    heading_end,
+                    super::paragraphs::Flow::Scroll,
+                )?;
             }
         }
         if let Some(object) = self.review_widgets.message {
-            self.review_text(object, &state.review.message)?;
+            self.paragraph(
+                self.native.text_handle(object),
+                &state.review.message,
+                &state.review.emphasis,
+                0,
+                super::paragraphs::Flow::Scroll,
+            )?;
         }
         let rows: Vec<_> = self
             .rows
@@ -183,19 +197,13 @@ impl GameUi {
         Ok(())
     }
     fn review_text(&mut self, object: ObjectHandle, text: &str) -> Result<(), WorldError> {
-        let text = wrap(text, 25);
-        let lines = u16::try_from(text.lines().count()).expect("bounded review text");
-        let handle = self.native.rect_handle(object);
-        let ComponentDesc::RectTransform(mut rect) =
-            self.native.world.component(handle)?.desc.clone()
-        else {
-            unreachable!()
-        };
-        rect.size_delta.y = f32::from(lines.max(1)) * 24.;
-        self.native
-            .world
-            .set_component(handle, ComponentDesc::RectTransform(rect))?;
-        self.replace_text(object, &text)
+        self.paragraph(
+            self.native.text_handle(object),
+            text,
+            &[],
+            0,
+            super::paragraphs::Flow::Scroll,
+        )
     }
     fn sync_review_moves(&mut self, labels: &[String]) -> Result<(), WorldError> {
         let list = self.review_widgets.moves.expect("review move list");
@@ -225,21 +233,4 @@ impl GameUi {
         }
         Ok(())
     }
-}
-fn wrap(text: &str, width: usize) -> String {
-    let mut lines = Vec::new();
-    for paragraph in text.lines() {
-        let mut line = String::new();
-        for word in paragraph.split_whitespace() {
-            if !line.is_empty() && line.len() + word.len() + 1 > width {
-                lines.push(std::mem::take(&mut line));
-            }
-            if !line.is_empty() {
-                line.push(' ');
-            }
-            line.push_str(word);
-        }
-        lines.push(line);
-    }
-    lines.join("\n")
 }

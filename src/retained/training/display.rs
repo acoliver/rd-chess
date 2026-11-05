@@ -1,3 +1,4 @@
+#![deny(clippy::too_many_lines, clippy::too_many_arguments)]
 use super::super::{Screen, ui::StudyState};
 use super::{BoardDriver, Session, Setup, Square, Step, TaskStatus};
 
@@ -47,6 +48,7 @@ impl BoardDriver {
             lessons,
             bands,
             panel: training.panel.clone(),
+            emphasis: training.emphasis.clone(),
             controls: controls(training),
             why: training.reply.is_some()
                 && matches!(
@@ -54,6 +56,26 @@ impl BoardDriver {
                     Screen::Play | Screen::InGameMenu | Screen::GameOver
                 ),
         })
+    }
+    fn study_emphasis(&self) -> Vec<String> {
+        let training = self.training.as_ref().expect("training");
+        let positions = self
+            .board()
+            .map(super::super::RetainedBoard::game)
+            .into_iter()
+            .chain(training.reply.as_ref().map(|(state, _)| state));
+        let mut moves = training.feedback_moves.clone();
+        for position in positions {
+            moves.extend(
+                position
+                    .legal_moves()
+                    .into_iter()
+                    .map(|mv| position.to_san(mv).expect("legal teaching move")),
+            );
+        }
+        moves.sort();
+        moves.dedup();
+        moves
     }
     pub(in crate::retained) fn refresh_training_panel(&mut self) {
         let training = self.training.as_mut().expect("training");
@@ -114,6 +136,8 @@ impl BoardDriver {
         .filter(|text| !text.is_empty())
         .collect::<Vec<_>>()
         .join("\n");
+        let emphasis = self.study_emphasis();
+        self.training.as_mut().expect("training").emphasis = emphasis;
     }
     pub(in crate::retained) fn clear_explanation(&mut self) {
         if let Some(training) = &mut self.training {
@@ -136,7 +160,13 @@ impl BoardDriver {
         let explanation =
             crate::teaching::explain_reply(state, *mv, crate::teaching::Budget::default())
                 .map_err(|e| e.to_string())?;
-        training.panel = explanation.sentences.join("\n");
+        let san = state.to_san(*mv).map_err(|e| e.to_string())?;
+        training.panel = format!("Why {san}?\n{}", explanation.sentences.join("\n"));
+        training.emphasis = state
+            .legal_moves()
+            .into_iter()
+            .map(|mv| state.to_san(mv).expect("legal reply alternative"))
+            .collect();
         Ok(())
     }
 }

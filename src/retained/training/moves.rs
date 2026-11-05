@@ -1,3 +1,4 @@
+#![deny(clippy::too_many_lines, clippy::too_many_arguments)]
 use super::{BoardDriver, ChessState, LegalMove, Session, TaskStatus};
 
 impl BoardDriver {
@@ -7,6 +8,11 @@ impl BoardDriver {
     ) -> Result<(), String> {
         let before = self.board.as_ref().expect("board").game().clone();
         let training = self.training.as_mut().expect("training");
+        training.feedback_moves = before
+            .legal_moves()
+            .into_iter()
+            .map(|mv| before.to_san(mv).expect("legal teaching move"))
+            .collect();
         let (status, game, puzzle) = match training.session.as_mut().expect("session") {
             Session::Lesson { runner, .. } => {
                 runner.submit(&mv.to_uci()).map_err(|e| e.to_string())?;

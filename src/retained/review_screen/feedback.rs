@@ -11,6 +11,16 @@ pub(super) struct SelectedMoment {
 
 pub(super) type Feedback = BTreeMap<usize, MomentExplanation>;
 
+pub(super) fn emphasis(moment: &TeachableMoment) -> Vec<String> {
+    let state = &moment.position_before;
+    let mut moves = vec![
+        state.to_san(moment.played).expect("review move"),
+        state.to_san(moment.better).expect("review alternative"),
+    ];
+    moves.extend(moment.refutation.san.iter().cloned());
+    moves
+}
+
 pub(super) fn update(moments: &[TeachableMoment], feedback: &mut Feedback) {
     feedback.retain(|ply, _| moments.iter().any(|moment| moment.ply == *ply));
     let course = Course::bundled().expect("bundled course is validated");

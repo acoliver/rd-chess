@@ -1,3 +1,4 @@
+#![deny(clippy::too_many_lines, clippy::too_many_arguments)]
 use glam::Vec2;
 use std::sync::Arc;
 use worldrunner::{
@@ -129,28 +130,60 @@ impl NativeUi {
         object: ObjectHandle,
         size: [f32; 2],
     ) -> Result<(), WorldError> {
-        let [x, y] = size.map(|v| v * 0.5);
-        let vertices = [
-            ([-x, -y, 0.], [0., 0.]),
-            ([x, -y, 0.], [1., 0.]),
-            ([x, y, 0.], [1., 1.]),
-            ([-x, y, 0.], [0., 1.]),
-        ]
-        .map(|(position, uv)| UiVertex {
-            position,
-            uv,
-            color: PANEL_COLOR,
-        });
-        let geometry = UiGeometry::new(vertices.to_vec(), vec![0, 1, 2, 2, 3, 0])?;
+        let ComponentDesc::RectTransform(rect) =
+            self.world.component(self.rect_handle(object))?.desc
+        else {
+            unreachable!("background rectangle");
+        };
         self.world.add_component(
             object,
             ComponentDesc::CanvasRenderer(CanvasRenderer {
-                geometry: Some(Arc::new(geometry)),
+                geometry: Some(panel_geometry(size.into(), rect.pivot)?),
                 ..CanvasRenderer::default()
             }),
         )?;
         Ok(())
     }
+    pub(super) fn resize_background(
+        &mut self,
+        rect: &worldrunner::ui::RectLayout,
+    ) -> Result<(), WorldError> {
+        let component = self
+            .world
+            .published_components()
+            .find(|component| {
+                component.object == rect.object
+                    && matches!(component.desc, ComponentDesc::CanvasRenderer(_))
+            })
+            .expect("panel background");
+        let handle = component.handle;
+        let ComponentDesc::CanvasRenderer(mut renderer) = component.desc.clone() else {
+            unreachable!()
+        };
+        renderer.geometry = Some(panel_geometry(rect.size, rect.pivot)?);
+        self.world
+            .set_component(handle, ComponentDesc::CanvasRenderer(renderer))
+    }
+}
+
+fn panel_geometry(size: Vec2, pivot: Vec2) -> Result<Arc<UiGeometry>, WorldError> {
+    let min = -size * pivot;
+    let max = size * (Vec2::ONE - pivot);
+    let vertices = [
+        ([min.x, min.y, 0.], [0., 0.]),
+        ([max.x, min.y, 0.], [1., 0.]),
+        ([max.x, max.y, 0.], [1., 1.]),
+        ([min.x, max.y, 0.], [0., 1.]),
+    ]
+    .map(|(position, uv)| UiVertex {
+        position,
+        uv,
+        color: PANEL_COLOR,
+    });
+    Ok(Arc::new(UiGeometry::new(
+        vertices.to_vec(),
+        vec![0, 1, 2, 2, 3, 0],
+    )?))
 }
 
 impl NativeUi {

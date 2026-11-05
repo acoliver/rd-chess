@@ -100,6 +100,23 @@ impl ReviewSession {
             moves,
         })
     }
+    fn move_labels(&self) -> Vec<String> {
+        self.moves
+            .iter()
+            .enumerate()
+            .map(|(index, text)| {
+                let marker = if index + 1 == self.cursor { "> " } else { "" };
+                let label = self.report.plies.get(index).map_or(String::new(), |ply| {
+                    if ply.label == crate::review::Label::Unclear {
+                        " - unclear: analysis cannot judge this move".into()
+                    } else {
+                        format!(" - {}", ply.label)
+                    }
+                });
+                format!("{marker}{text}{label}")
+            })
+            .collect()
+    }
     fn submit(&mut self) -> Result<(), String> {
         let Some(mut review) = self.core.take() else {
             return Ok(());
@@ -145,26 +162,7 @@ impl BoardDriver {
             return state;
         }
         let session = self.review.as_ref().expect("session");
-        state.moves = session
-            .moves
-            .iter()
-            .enumerate()
-            .map(|(index, text)| {
-                let marker = if index + 1 == session.cursor {
-                    "> "
-                } else {
-                    ""
-                };
-                let label = session.report.plies.get(index).map_or(String::new(), |p| {
-                    if p.label == crate::review::Label::Unclear {
-                        " - unclear: analysis cannot judge this move".into()
-                    } else {
-                        format!(" - {}", p.label)
-                    }
-                });
-                format!("{marker}{text}{label}")
-            })
-            .collect();
+        state.moves = session.move_labels();
         state.moments = session
             .report
             .moments
@@ -175,6 +173,13 @@ impl BoardDriver {
                     m.ply, m.label, session.feedback[&m.ply].learner
                 )
             })
+            .collect();
+        state.emphasis = session
+            .report
+            .moments
+            .iter()
+            .chain(session.selected.iter().map(|selected| &selected.moment))
+            .flat_map(feedback::emphasis)
             .collect();
         state.message.clone_from(&session.message);
         state.related_lesson = self.related_review_lesson().is_some();

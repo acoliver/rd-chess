@@ -1,6 +1,10 @@
+#![deny(clippy::too_many_lines, clippy::too_many_arguments)]
 mod inspection;
+#[cfg(test)]
+mod paragraph_tests;
 pub use inspection::title_layout;
 mod pages;
+mod paragraphs;
 mod review_page;
 pub(super) use review_page::ReviewUiState;
 #[cfg(test)]
@@ -38,6 +42,7 @@ pub(super) struct UiState {
 }
 pub(super) struct GameUi {
     native: NativeUi,
+    paragraphs: paragraphs::Paragraphs,
     review_widgets: review_page::ReviewWidgets,
     study: Option<study::StudyWidgets>,
     study_state: Option<(Option<StudyState>, Screen)>,
@@ -64,6 +69,7 @@ impl GameUi {
         let dialog = promotion_dialog(&mut native)?;
         let mut ui = Self {
             native,
+            paragraphs: BTreeMap::new(),
             review_widgets: review_page::ReviewWidgets::default(),
             study: None,
             study_state: None,
@@ -205,6 +211,7 @@ impl GameUi {
             .world
             .set_component(self.status, ComponentDesc::Text(run))
             .map_err(|e| e.to_string())?;
+        self.fit_paragraphs(size).map_err(|e| e.to_string())?;
         let layout = self
             .native
             .world

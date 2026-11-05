@@ -9,8 +9,10 @@ fn loading_a_saved_game_clears_the_previous_reply_explanation() {
     let mv = before.parse_uci("e2e4").unwrap();
     driver.training.as_mut().unwrap().reply = Some((before, mv));
     driver.explain_computer_reply().unwrap();
-    assert!(driver.study_ui_state().unwrap().why);
-    assert!(!driver.panel_text().is_empty());
+    let study = driver.study_ui_state().unwrap();
+    assert!(study.why);
+    assert!(study.emphasis.iter().any(|san| san == "e4"));
+    assert!(driver.panel_text().starts_with("Why e4?"));
     driver.load_game(1).unwrap();
     assert!(!driver.study_ui_state().unwrap().why);
     assert!(driver.panel_text().is_empty());

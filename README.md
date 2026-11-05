@@ -560,6 +560,24 @@ Corrupt progress produces a typed error without disabling game saves or Continue
 See the course documentation below for controls, storage limits and teaching-screen
 verification.
 
+Lesson steps, task feedback, hints, Why? and review explanations use the engine's
+styled paragraph flow. Lesson headings are gold and SAN move names from the rules
+state or review evidence are cyan; plain prose keeps its normal colour. Authored
+newlines and blank paragraphs survive wrapping. The engine measures text at the
+resolved panel width, rather than inserting character-count line breaks.
+
+Review moments and details retain their existing wheel scrolling and size the
+scroll content from the engine's full text height. The study/Why? panel has no
+text scrolling or paging control. When its measured content exceeds the fixed
+height, it shows the fitting prefix followed by `...` and prints a truncation
+notice to stderr. Resizing measures the complete source again, so a wider panel
+can restore omitted text. The engine has no automatic ellipsis and accepts no
+U+2026 ellipsis character, so the game uses three ASCII periods. Engine spans
+provide colour only, without bold, italic or mixed font sizes within a paragraph.
+CPU tests cover ordered spans, authored breaks, line and glyph bounds, resize
+recovery and scrolling to the final review line at 800x600 and 1200x900. Metal
+reading and rendering checks remain separate.
+
 Native menu and study panels use a shared alpha of 1.0 so the board cannot show
 through the text background. Locked lessons retain their `[locked]` marker and
 use a lighter grey tint. Disabled Next reads `Next [off]`; enabled Next reads

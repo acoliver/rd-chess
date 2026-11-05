@@ -44,6 +44,9 @@ fn moment_feedback_is_cached_and_links_the_authored_lesson() {
     assert!(feedback.learner.contains("tactics.hanging"));
     assert!(feedback.learner.contains("Count attackers and defenders"));
     assert!(feedback.learner.contains("open from Lessons"));
+    let emphasis = driver.review_ui_state().emphasis;
+    assert!(emphasis.iter().any(|san| san == "Qd4"));
+    assert!(emphasis.iter().any(|san| san == "Rxd4"));
     let cached = session.feedback.clone();
     click(&mut driver, [620., 286.]);
     assert!(driver.review_ui_state().message.contains("tactics.hanging"));
