@@ -21,6 +21,14 @@ impl GameUi {
                 ("Settings", MenuAction::Settings),
             ],
         )?;
+        self.choice_row(title, -98., &[("Review games", MenuAction::ReviewGames)])?;
+        let over = self
+            .pages
+            .iter()
+            .find(|p| p.0 == Screen::GameOver)
+            .expect("game over")
+            .1;
+        self.choice_row(over, -140., &[("Review", MenuAction::Review)])?;
         let pause = self
             .pages
             .iter()
@@ -162,7 +170,11 @@ impl GameUi {
         }
         Ok(())
     }
-    fn replace_text(&mut self, object: ObjectHandle, text: &str) -> Result<(), WorldError> {
+    pub(super) fn replace_text(
+        &mut self,
+        object: ObjectHandle,
+        text: &str,
+    ) -> Result<(), WorldError> {
         let handle = self.native.text_handle(object);
         let ComponentDesc::Text(mut run) = self.native.world.component(handle)?.desc.clone() else {
             unreachable!()

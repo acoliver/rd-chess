@@ -7,6 +7,8 @@ pub enum Screen {
     ComputerSetup,
     Slots,
     Settings,
+    ReviewGames,
+    Review,
     #[default]
     Play,
     InGameMenu,
@@ -36,6 +38,20 @@ pub(super) enum MenuAction {
     Load(u8),
     Markers(bool),
     Overhead(bool),
+    Review,
+    ReviewGames,
+    ReviewSaved(u8),
+    ReviewSeek(usize),
+    ReviewStart,
+    ReviewBack,
+    ReviewForward,
+    ReviewEnd,
+    Moment(usize),
+    WhatChanged,
+    ShowReply,
+    TryAgain,
+    ReviewReturn,
+    ReviewExit,
 }
 
 pub(super) const TITLE: &[(&str, MenuAction)] = &[
@@ -151,6 +167,9 @@ impl BoardDriver {
         Ok(())
     }
     pub(super) fn transition(&mut self, screen: Screen) -> Result<(), String> {
+        if self.screen() == Screen::Review && screen != Screen::Review {
+            self.leave_review()?;
+        }
         self.clear_selection()?;
         self.menus.screen = screen;
         self.sync_menu_ui()
@@ -165,6 +184,7 @@ impl BoardDriver {
             settings: self.preferences,
             labels: self.slot_labels(),
             setup: (self.menus.side, self.menus.level),
+            review: self.review_ui_state(),
         };
         if let Some(ui) = &mut self.ui {
             ui.synchronize(state, self.viewport)

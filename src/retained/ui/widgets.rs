@@ -120,7 +120,11 @@ impl NativeUi {
             },
         );
     }
-    fn background(&mut self, object: ObjectHandle, size: [f32; 2]) -> Result<(), WorldError> {
+    pub(super) fn background(
+        &mut self,
+        object: ObjectHandle,
+        size: [f32; 2],
+    ) -> Result<(), WorldError> {
         let [x, y] = size.map(|v| v * 0.5);
         let vertices = [
             ([-x, -y, 0.], [0., 0.]),

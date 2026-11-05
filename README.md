@@ -486,7 +486,38 @@ The table covers both sides; CLI teachable moments belong to the initial side to
 move (white by default, black for a black-to-move FEN). The library accepts either
 player independently. `--review-fen` requires `--review-moves`. Review cannot be
 combined with game/editor/rendering actions. PGN `--review <file.pgn>` is not
-implemented. There is no review UI, work-queue integration or lesson linking yet.
+implemented. In the window, Review on the result panel opens the native review
+screen. Review games on the title lists finished current/manual saves. A saved
+result or a terminal replayed position distinguishes finished games; there is no
+separate finished flag or automatic archive beyond current and three manual slots.
+Two-player records do not identify a learner, so review selects the initial side
+to move. Computer records retain the human side.
+
+The complete scrollable SAN list and Start/Back/Next/End replay controls remain
+available while neutral analysis runs. Each retained tick submits at most one
+one-ply `Review::advance` job to an engine CPU work queue. WorkReady returns the
+partial report; input callbacks do not search or wait for workers. Leaving pauses
+before the next ply. An in-flight ply completes atomically, as required by the
+review core, and its report is retained for re-entry to the same open game.
+Replay uses a separate overhead framing beside the panel and restores the play
+camera on exit. Unclear rows explicitly say that analysis cannot judge the move.
+
+Select one of up to three teachable moments to read its label and learner sentence
+from `teaching::explain`, then choose What changed?, Show the reply or Try again.
+The explanation names the recorded move, searched alternative and legal reply;
+it does not infer a tactical motif from a score difference. Show the reply steps
+through the verified continuation on retained ticks and returns to the selected
+recorded position. Try again accepts the searched better move and lets other
+legal attempts retry. Return to line or leaving restores the recorded line.
+Neither replay nor practice autosaves or rewrites the result. Regression tests
+compare the entire application-store files byte for byte after those operations.
+
+This branch had no teaching module or course data. The review sentence formatter
+is supplied here, but lesson tags and a lesson player remain absent, so no related
+lesson link is shown. Annotations are retained in memory for the same open game;
+they are not persisted as part of the version-1 saved-game format. The existing
+engine timer limitation described above also applies to reply playback: it uses
+monotonic deadlines on retained ticks, not a scheduled timer service.
 
 Analysis version 1 uses balanced evaluation, no personality, noise, policy queen
 filter or wall-clock deadline. Each fresh search has **240,000 nodes**, twice the

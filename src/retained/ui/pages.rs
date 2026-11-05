@@ -15,6 +15,7 @@ impl GameUi {
         self.command_page(Screen::InGameMenu, "Game menu", menus::PAUSE)?;
         self.command_page(Screen::GameOver, "Game over", menus::OVER)?;
         self.storage_pages()?;
+        self.review_pages()?;
         Ok(())
     }
     fn command_page(

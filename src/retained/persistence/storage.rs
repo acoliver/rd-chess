@@ -15,6 +15,7 @@ pub(crate) struct Storage {
     store: ApplicationStore,
     pub current: Option<GamePayload>,
     pub labels: [String; 3],
+    pub finished: [Option<GamePayload>; 4],
     pub error: Option<String>,
 }
 impl Storage {
@@ -23,6 +24,7 @@ impl Storage {
             store: ApplicationStore::new(root, LIMITS).expect("fixed positive limits"),
             current: None,
             labels: std::array::from_fn(|_| "Empty".into()),
+            finished: std::array::from_fn(|_| None),
             error: None,
         }
     }
@@ -62,6 +64,7 @@ impl Storage {
             .map_err(|e| e.to_string())
     }
     pub fn refresh(&mut self) {
+        self.refresh_finished();
         self.current = None;
         match self.read("current") {
             Ok(Some(payload)) => match payload.resumable() {
@@ -83,6 +86,23 @@ impl Storage {
                 }
             }
             Err(error) => self.error = Some(error.to_string()),
+        }
+    }
+    fn refresh_finished(&mut self) {
+        for (index, name) in ["current", "slot-1", "slot-2", "slot-3"]
+            .into_iter()
+            .enumerate()
+        {
+            self.finished[index] = None;
+            match self.read(name) {
+                Ok(Some(payload)) => match payload.resumable() {
+                    Ok(false) => self.finished[index] = Some(payload),
+                    Ok(true) => (),
+                    Err(error) => self.error = Some(error),
+                },
+                Ok(None) => (),
+                Err(error) => self.error = Some(error),
+            }
         }
     }
     pub fn settings(&self) -> Result<GameSettings, String> {

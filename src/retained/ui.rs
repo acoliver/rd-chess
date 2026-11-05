@@ -1,4 +1,6 @@
 mod pages;
+mod review_page;
+pub(super) use review_page::ReviewUiState;
 mod storage_pages;
 mod widgets;
 use super::menus::{self, MenuAction, Screen};
@@ -24,9 +26,11 @@ pub(super) struct UiState {
     pub settings: super::persistence::GameSettings,
     pub labels: [String; 3],
     pub setup: (usize, u8),
+    pub review: ReviewUiState,
 }
 pub(super) struct GameUi {
     native: NativeUi,
+    review_widgets: review_page::ReviewWidgets,
     status: ComponentHandle,
     dialog: ObjectHandle,
     claim: ObjectHandle,
@@ -49,6 +53,7 @@ impl GameUi {
         let dialog = promotion_dialog(&mut native)?;
         let mut ui = Self {
             native,
+            review_widgets: review_page::ReviewWidgets::default(),
             status,
             dialog,
             claim,
@@ -75,6 +80,7 @@ impl GameUi {
             .as_ref()
             .is_none_or(|old| old.screen != state.screen);
         self.sync_storage_controls(&state)?;
+        self.sync_review_controls(&state)?;
         for &(screen, object) in &self.pages {
             self.native
                 .world

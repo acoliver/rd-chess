@@ -136,7 +136,7 @@ impl BoardDriver {
         }
         result
     }
-    fn restore_game(&mut self, payload: GamePayload) -> Result<(), String> {
+    pub(super) fn restore_game(&mut self, payload: GamePayload) -> Result<(), String> {
         let game = payload.replay()?;
         let initial =
             crate::rules::ChessState::from_fen(&payload.initial_fen).map_err(|e| e.to_string())?;

@@ -282,6 +282,8 @@ mod game_start_tests {
             height: 600,
             seed: Some(42),
             moves: Some("e2e4".into()),
+            review_moves: None,
+            review_fen: None,
             play: None,
             level: None,
         };

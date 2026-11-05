@@ -273,6 +273,7 @@ pub mod review;
 pub mod rules;
 mod scene;
 pub mod search;
+pub mod teaching;
 mod textures;
 pub use geometry::{Mesh, board_mesh, piece_meshes};
 pub use presentation::{CameraPreset, shadow_settings};

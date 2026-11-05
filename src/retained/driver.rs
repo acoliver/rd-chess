@@ -24,6 +24,7 @@ pub struct BoardDriver {
     pub(super) menus: super::menus::Menus,
     pub(super) computer: Option<super::computer::Computer>,
     pub(super) storage: Option<super::persistence::Storage>,
+    pub(super) review: Option<super::review_screen::ReviewSession>,
     pub(super) preferences: super::persistence::GameSettings,
     pub(super) resources: Option<RetainedUpdate>,
     pub(super) pending: TransactionQueue,
@@ -236,6 +237,7 @@ impl RetainedDriver for BoardDriver {
             host.request_exit();
         } else {
             self.advance_computer(host);
+            self.advance_review(host)?;
         }
         let result = self.publish(host);
         self.generation = host.accepted_generation();
@@ -248,7 +250,10 @@ impl RetainedDriver for BoardDriver {
         event: &RetainedEvent,
     ) -> Result<(), String> {
         match event {
-            RetainedEvent::WorkReady => self.drain_computer()?,
+            RetainedEvent::WorkReady => {
+                self.drain_computer()?;
+                self.drain_review();
+            }
             RetainedEvent::Presented { .. } => {
                 let generation = host
                     .statistics()

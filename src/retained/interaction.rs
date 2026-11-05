@@ -87,6 +87,9 @@ impl BoardDriver {
             .collect()
     }
     pub fn status_text(&self) -> String {
+        if let Some(status) = self.review_status() {
+            return status;
+        }
         if let Some(error) = self.storage.as_ref().and_then(|s| s.error.as_ref()) {
             return format!("Storage error: {error}");
         }
@@ -195,7 +198,8 @@ impl BoardDriver {
                 button: PointerButton::Left,
                 pressed,
             } => {
-                let click_allowed = !self.computer_turn()
+                let click_allowed = (self.retry_active() || !self.computer_turn())
+                    && (self.screen() == super::Screen::Play || self.retry_active())
                     && !self.presenting
                     && self.pending.borrow().is_empty()
                     && hit.is_none_or(|picked| picked.generation == self.generation);
@@ -223,7 +227,7 @@ impl BoardDriver {
         let Some(board) = &self.board else {
             return Ok(());
         };
-        if self.game_ended() {
+        if self.game_ended() && !self.retry_active() {
             return Ok(());
         }
         let Some(square) = square else {
@@ -280,6 +284,9 @@ impl BoardDriver {
     }
 
     pub(super) fn commit_move(&mut self, chess_move: LegalMove) -> Result<(), String> {
+        if self.retry_active() {
+            return self.review_move(chess_move);
+        }
         let edits = self
             .board
             .as_mut()
@@ -290,6 +297,7 @@ impl BoardDriver {
     }
 
     pub(super) fn enqueue_move(&mut self, mut edits: Vec<SceneObjectEdit>) -> Result<(), String> {
+        self.review = None;
         if let Some(computer) = &mut self.computer {
             computer.changed();
         }
@@ -340,8 +348,11 @@ impl BoardDriver {
                 let screen = match self.screen() {
                     super::Screen::Play => super::Screen::InGameMenu,
                     super::Screen::InGameMenu => super::Screen::Play,
-                    super::Screen::ComputerSetup | super::Screen::Settings => super::Screen::Title,
+                    super::Screen::ComputerSetup
+                    | super::Screen::Settings
+                    | super::Screen::ReviewGames => super::Screen::Title,
                     super::Screen::Slots => self.menus.parent,
+                    super::Screen::Review => self.review.as_ref().expect("session").parent,
                     screen => screen,
                 };
                 self.transition(screen)?;

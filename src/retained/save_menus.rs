@@ -31,7 +31,7 @@ impl BoardDriver {
                 }
                 let _ = self.set_settings(settings);
             }
-            _ => unreachable!("non-storage menu action"),
+            action => self.review_action(action)?,
         }
         self.sync_menu_ui()
     }
