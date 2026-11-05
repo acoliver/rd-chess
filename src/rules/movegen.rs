@@ -1,11 +1,11 @@
-use super::board::{
-    DIAGONALS, KING_STEPS, KNIGHT_STEPS, ORTHOGONALS, home_rank, offset, pawn_step,
-};
+use super::attacks::{KINGS, KNIGHTS, Targets};
+use super::board::{DIAGONALS, KING_STEPS, ORTHOGONALS, home_rank, offset, pawn_step};
 use super::{Core, LegalMove, Man, PieceKind, PromotionPiece};
 
 impl Core {
-    pub fn legal_moves(&self) -> Vec<LegalMove> {
-        let mut candidates = Vec::with_capacity(64);
+    #[cfg(test)]
+    pub(super) fn reference_legal_moves(&self) -> Vec<LegalMove> {
+        let mut candidates = Vec::new();
         for (from, man) in self.men().filter(|(_, man)| man.side == self.side) {
             self.piece_moves(from, man, &mut candidates);
         }
@@ -13,21 +13,46 @@ impl Core {
         candidates
     }
 
+    pub fn legal_moves(&self) -> Vec<LegalMove> {
+        let mut candidates = Vec::with_capacity(64);
+        for (from, man) in self.men().filter(|(_, man)| man.side == self.side) {
+            self.piece_moves(from, man, &mut candidates);
+        }
+        let safety = super::safety::Safety::new(self);
+        candidates.retain(|&chess_move| safety.permits(self, chess_move));
+        candidates
+    }
+
     fn piece_moves(&self, from: u8, man: Man, output: &mut Vec<LegalMove>) {
         match man.kind {
             PieceKind::Pawn => self.pawn_moves(from, output),
-            PieceKind::Knight => self.ray_moves(from, &KNIGHT_STEPS, false, output),
-            PieceKind::Bishop => self.ray_moves(from, &DIAGONALS, true, output),
-            PieceKind::Rook => self.ray_moves(from, &ORTHOGONALS, true, output),
-            PieceKind::Queen => self.ray_moves(from, &KING_STEPS, true, output),
+            PieceKind::Knight => self.jump_moves(from, &KNIGHTS[usize::from(from)], output),
+            PieceKind::Bishop => self.ray_moves(from, &DIAGONALS, output),
+            PieceKind::Rook => self.ray_moves(from, &ORTHOGONALS, output),
+            PieceKind::Queen => self.ray_moves(from, &KING_STEPS, output),
             PieceKind::King => {
-                self.ray_moves(from, &KING_STEPS, false, output);
+                self.jump_moves(from, &KINGS[usize::from(from)], output);
                 self.castles(from, output);
             }
         }
     }
 
-    fn ray_moves(&self, from: u8, steps: &[i16], sliding: bool, output: &mut Vec<LegalMove>) {
+    fn jump_moves(&self, from: u8, targets: &Targets, output: &mut Vec<LegalMove>) {
+        for to in targets.iter() {
+            if self
+                .at(to)
+                .is_none_or(|man| man.side != self.side && man.kind != PieceKind::King)
+            {
+                output.push(LegalMove {
+                    from,
+                    to,
+                    promotion: None,
+                });
+            }
+        }
+    }
+
+    fn ray_moves(&self, from: u8, steps: &[i16], output: &mut Vec<LegalMove>) {
         for &step in steps {
             let mut cursor = offset(from, step);
             while let Some(to) = cursor {
@@ -41,7 +66,7 @@ impl Core {
                     to,
                     promotion: None,
                 });
-                if !sliding || occupant.is_some() {
+                if occupant.is_some() {
                     break;
                 }
                 cursor = offset(to, step);

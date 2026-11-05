@@ -28,7 +28,7 @@ mod tree;
 // A generated move failing legality is a search/rules bug, not cancellation.
 // Counter exhaustion is supported FEN input and cannot be advanced by the core.
 fn play_generated(state: &mut ChessState, chess_move: LegalMove) -> Option<()> {
-    match state.play(chess_move) {
+    match state.play_generated(chess_move) {
         Ok(()) => Some(()),
         Err(crate::rules::MoveError::CounterOverflow) => None,
         Err(error) => panic!("generated search move rejected: {error}"),
@@ -110,6 +110,48 @@ impl Search {
         self.analyze_progress(state, limits, cancel, |_| {})
     }
 
+    /// Analyze one legal root with the same evaluator and node accounting as
+    /// `analyze`. Scores and mate distances still refer to the supplied position.
+    /// This supplies an exact played-move comparison without opponent policy.
+    pub fn analyze_move(
+        &mut self,
+        state: &ChessState,
+        chess_move: LegalMove,
+        limits: Limits,
+        cancel: &AtomicBool,
+    ) -> Result<Analysis, crate::rules::MoveError> {
+        if !state.legal_moves().contains(&chess_move) {
+            return Err(crate::rules::MoveError::IllegalMove);
+        }
+        let mut result = self.analyze_moves(
+            state,
+            limits,
+            &|| cancel.load(std::sync::atomic::Ordering::Relaxed),
+            &[chess_move],
+        );
+        if result.completed_depth == 0 && !result.pv.is_empty() {
+            let mut child = state.clone();
+            child.play(chess_move)?;
+            let fallback = self.analyze(
+                &child,
+                Limits {
+                    nodes: 0,
+                    depth: Some(0),
+                },
+                cancel,
+            );
+            result.score = match fallback.score {
+                Score::Mate { winner, plies } => Score::Mate {
+                    winner,
+                    plies: plies + 1,
+                },
+                cp @ Score::Centipawns(_) => cp.reversed(),
+            };
+            result.pv = vec![chess_move];
+        }
+        Ok(result)
+    }
+
     /// Progress is published only for complete iterations. The callback may set
     /// the cancellation flag; the last published iteration is still returned.
     pub fn analyze_progress(
@@ -175,3 +217,6 @@ impl Search {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod regression;
