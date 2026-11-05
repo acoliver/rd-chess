@@ -11,6 +11,8 @@ use crate::rules::{ChessState, LegalMove, MoveError};
 use crate::{PieceKind, Side, Square};
 
 mod board;
+mod classification;
+pub use classification::Motif;
 mod direct;
 mod exchange;
 mod material;

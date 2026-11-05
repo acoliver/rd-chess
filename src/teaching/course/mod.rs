@@ -2,6 +2,7 @@
 //! This module has no viewer, search worker, renderer or persistence service.
 #![deny(clippy::too_many_lines, clippy::too_many_arguments)]
 
+use super::explain::Motif;
 use crate::{Side, rules::ChessState};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -70,6 +71,12 @@ impl Course {
         &self.lessons
     }
 
+    pub fn related_lesson(&self, motif: Motif) -> Option<&Lesson> {
+        self.lessons
+            .iter()
+            .find(|lesson| lesson.motifs.contains(&motif))
+    }
+
     pub fn lesson(&self, id: &str) -> Option<&Lesson> {
         self.lessons.iter().find(|lesson| lesson.id == id)
     }
@@ -81,6 +88,8 @@ pub struct Lesson {
     pub id: String,
     pub title: String,
     pub requires: Vec<String>,
+    #[serde(default)]
+    pub motifs: Vec<Motif>,
     pub steps: Vec<Step>,
 }
 

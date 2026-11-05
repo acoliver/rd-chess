@@ -105,6 +105,10 @@ impl Lesson {
             !self.steps.is_empty() && self.steps.len() <= 64,
             "lesson step count",
         )?;
+        let mut motifs = BTreeSet::new();
+        for motif in &self.motifs {
+            require(motifs.insert(motif), "duplicate motif")?;
+        }
         let mut requires = BTreeSet::new();
         for prerequisite in &self.requires {
             identifier(prerequisite)?;

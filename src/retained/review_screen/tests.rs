@@ -1,3 +1,56 @@
+#[test]
+fn selected_feedback_survives_shortlist_eviction_during_analysis() {
+    let (mut driver, mut host) = setup();
+    open(&mut driver);
+    analyze(&mut driver, &mut host);
+    click(&mut driver, [620., 286.]);
+    let moment = driver
+        .review
+        .as_ref()
+        .unwrap()
+        .selected
+        .as_ref()
+        .unwrap()
+        .moment
+        .clone();
+    let session = driver.review.as_mut().unwrap();
+    session.report.moments.clear();
+    super::feedback::update(&session.report.moments, &mut session.feedback);
+    driver
+        .handle_review_action(super::MenuAction::WhatChanged)
+        .unwrap();
+    assert!(driver.review_ui_state().message.contains("tactics.hanging"));
+    driver
+        .handle_review_action(super::MenuAction::TryAgain)
+        .unwrap();
+    driver.try_review_move(moment.played).unwrap();
+    assert!(driver.review_ui_state().message.contains("Try again"));
+    driver
+        .handle_review_action(super::MenuAction::ShowReply)
+        .unwrap();
+}
+
+#[test]
+fn moment_feedback_is_cached_and_links_the_authored_lesson() {
+    let (mut driver, mut host) = setup();
+    open(&mut driver);
+    analyze(&mut driver, &mut host);
+    let session = driver.review.as_ref().unwrap();
+    assert_eq!(session.feedback.len(), 1);
+    let feedback = session.feedback.values().next().unwrap();
+    assert!(feedback.learner.contains("queen"));
+    assert!(feedback.learner.contains("tactics.hanging"));
+    assert!(feedback.learner.contains("Count attackers and defenders"));
+    assert!(feedback.learner.contains("open from Lessons"));
+    let cached = session.feedback.clone();
+    click(&mut driver, [620., 286.]);
+    assert!(driver.review_ui_state().message.contains("tactics.hanging"));
+    assert_eq!(driver.review.as_ref().unwrap().feedback, cached);
+    key(&mut driver, "escape");
+    open(&mut driver);
+    assert_eq!(driver.review.as_ref().unwrap().feedback, cached);
+}
+
 use super::*;
 use crate::{
     CameraPreset, Side,

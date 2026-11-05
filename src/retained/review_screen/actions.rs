@@ -33,9 +33,12 @@ impl BoardDriver {
             MenuAction::Moment(index) => {
                 let session = self.review.as_mut().expect("session");
                 let moment = session.report.moments[index].clone();
-                session.message = crate::teaching::explain::explain_moment(&moment).learner;
+                session.message = session.feedback[&moment.ply].learner.clone();
                 let ply = moment.ply;
-                session.selected = Some(moment);
+                session.selected = Some(super::feedback::SelectedMoment {
+                    explanation: session.feedback[&moment.ply].clone(),
+                    moment,
+                });
                 self.seek_review(ply)?;
             }
             MenuAction::WhatChanged => self.explain_review(),
@@ -67,16 +70,16 @@ impl BoardDriver {
     }
     fn explain_review(&mut self) {
         let session = self.review.as_mut().expect("session");
-        if let Some(moment) = &session.selected {
-            session.message = crate::teaching::explain::explain_moment(moment).detail;
+        if let Some(selected) = &session.selected {
+            session.message = selected.explanation.detail.clone();
         }
     }
     fn retry_review(&mut self) -> Result<(), String> {
         let session = self.review.as_mut().expect("session");
-        let Some(moment) = &session.selected else {
+        let Some(selected) = &session.selected else {
             return Ok(());
         };
-        let position = moment.position_before.clone();
+        let position = selected.moment.position_before.clone();
         session.mode = ReviewMode::Retry;
         session.message = "Try a better move. Return to line leaves the record unchanged.".into();
         self.display_review_position(position)
@@ -86,12 +89,10 @@ impl BoardDriver {
         if !matches!(session.mode, ReviewMode::Retry) {
             return Err("not practising a review move".into());
         }
-        let moment = session.selected.as_ref().expect("practice moment");
+        let selected = session.selected.as_ref().expect("practice moment");
+        let moment = &selected.moment;
         if chess_move != moment.better {
-            session.message = format!(
-                "Try again. {}",
-                crate::teaching::explain::explain_moment(moment).detail
-            );
+            session.message = format!("Try again. {}", selected.explanation.detail);
             return self.clear_selection();
         }
         let mut state = moment.position_before.clone();
@@ -103,9 +104,10 @@ impl BoardDriver {
     }
     fn show_review_reply(&mut self) -> Result<(), String> {
         let session = self.review.as_mut().expect("session");
-        let Some(moment) = &session.selected else {
+        let Some(selected) = &session.selected else {
             return Ok(());
         };
+        let moment = &selected.moment;
         let mut state = moment.position_before.clone();
         state.play(moment.played).map_err(|e| e.to_string())?;
         let mut positions = vec![state.clone()];

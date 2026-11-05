@@ -21,7 +21,7 @@ pub(super) fn select(state: &ChessState, mut facts: Vec<Fact>) -> Vec<Fact> {
     selected
 }
 
-fn precedence(kind: &FactKind) -> u8 {
+pub(super) fn precedence(kind: &FactKind) -> u8 {
     match kind {
         FactKind::Checkmate { .. } | FactKind::MateThreat | FactKind::MissedMate { .. } => 0,
         FactKind::Fork { .. }

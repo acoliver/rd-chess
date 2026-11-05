@@ -8,15 +8,20 @@ in `../puzzles/README.md`.
 
 The course covers movement, check, supported queen mate, rook ladder mate,
 back-rank mate, hanging pieces, counting attackers and defenders, forks, pins,
-skewers, opening principles and mixed practice. It is a first course, not a
-complete rules reference or proof of playing strength. Specific-line tasks name
+skewers, opening principles and mixed practice. Pawn promotion and discovered
+attacks/checks have short explanations in first moves and mixed practice.
+It is a first course, not a complete rules reference or proof of playing strength. Specific-line tasks name
 the requested exercise rather than declaring every other legal move bad.
 
 ## Format and validation
 
 The top-level object has `version` and `lessons`. Each lesson has `id`, `title`,
-`requires` (prerequisite IDs) and ordered `steps`. Prerequisites are guidance for
-a future browser, not access locks; runners allow starting any validated lesson.
+`requires` (prerequisite IDs), optional typed `motifs`, and ordered `steps`.
+Motif tags use the `teaching::explain::Motif` names in snake_case. Unknown or
+duplicate tags fail validation. `Course::related_lesson` selects the first lesson
+with the requested tag in authored order; absent tags return no lesson. Review
+uses this mapping instead of guessing a lesson from its title or a score.
+Prerequisites are guidance for a future browser, not access locks; runners allow starting any validated lesson.
 
 A step has `kind: "explain"`, `text` and optional `annotations`, or
 `kind: "task"` with these fields:

@@ -80,14 +80,19 @@ impl Options {
 
     pub fn parse() -> Result<Option<Self>> {
         let mut options = Self::initial();
+        let mut flags = Vec::new();
         let mut args = std::env::args_os().skip(1);
         while let Some(arg) = args.next() {
             let flag = arg.to_string_lossy();
+            flags.push(flag.to_string());
             if flag == "--help" {
                 print_help();
                 return Ok(None);
             }
             if flag == "--explain" {
+                if options.explain.is_some() {
+                    return Err("--explain cannot be combined with another --explain".into());
+                }
                 options.explain = Some(explanation_args(&mut args)?);
                 continue;
             }
@@ -110,6 +115,7 @@ impl Options {
                 .ok_or_else(|| format!("{flag} requires a value"))?;
             options.set_value(&flag, value)?;
         }
+        options.validate_modes(&flags)?;
         options.validate()?;
         Ok(Some(options))
     }
@@ -171,41 +177,43 @@ impl Options {
         Ok(())
     }
 
-    fn validate_review(&self) -> Result<()> {
+    fn validate_modes(&self, flags: &[String]) -> Result<()> {
+        if self.explain_verbose && self.explain.is_none() {
+            return Err("--explain-verbose requires --explain".into());
+        }
         if self.review_fen.is_some() && self.review_moves.is_none() {
             return Err("--review-fen requires --review-moves".into());
         }
-        if self.review_moves.is_some()
-            && (self.moves.is_some()
-                || self.play.is_some()
-                || self.level.is_some()
-                || self.window
-                || self.capture.is_some()
-                || self.load.is_some()
-                || self.save.is_some()
-                || self.seed.is_some()
-                || self.view != "hero")
-        {
-            return Err(
-                "--review-moves cannot be combined with play, editor or rendering options".into(),
-            );
+        let (allowed, message): (&[&str], &str) = if self.explain.is_some() {
+            (
+                &["--explain", "--explain-verbose"],
+                "--explain cannot be combined with other arguments except --explain-verbose",
+            )
+        } else if self.review_moves.is_some() {
+            (
+                &["--review-moves", "--review-fen", "--data-dir"],
+                "--review-moves cannot be combined with other inspection, play, editor or rendering options",
+            )
+        } else if self.lesson.is_some() {
+            (
+                &["--lesson", "--data-dir"],
+                "teaching inspection --lesson cannot be combined with other modes or game/editor options",
+            )
+        } else if self.puzzle.is_some() {
+            (
+                &["--puzzle", "--data-dir"],
+                "teaching inspection --puzzle cannot be combined with other modes or game/editor options",
+            )
+        } else {
+            return Ok(());
+        };
+        if flags.iter().any(|flag| !allowed.contains(&flag.as_str())) {
+            return Err(message.into());
         }
         Ok(())
     }
 
     fn validate(&self) -> Result<()> {
-        self.validate_review()?;
-        if self.explain_verbose && self.explain.is_none() {
-            return Err("--explain-verbose requires --explain".into());
-        }
-        if self.explain.is_some()
-            && std::env::args_os().len() != 4 + usize::from(self.explain_verbose)
-        {
-            return Err(
-                "--explain cannot be combined with other arguments except --explain-verbose".into(),
-            );
-        }
-        self.validate_teaching()?;
         self.validate_computer()?;
         if self.window && self.capture.is_some() {
             return Err("--capture and --window cannot be combined; run them separately".into());
@@ -242,36 +250,6 @@ impl Options {
         }
         Ok(())
     }
-    fn validate_teaching(&self) -> Result<()> {
-        if self.lesson.is_none() && self.puzzle.is_none() {
-            return Ok(());
-        }
-        if [
-            self.lesson.is_some(),
-            self.puzzle.is_some(),
-            self.review_moves.is_some(),
-        ]
-        .into_iter()
-        .filter(|present| *present)
-        .count()
-            > 1
-        {
-            return Err("choose --lesson, --puzzle or --review-moves, not more than one".into());
-        }
-        if self.window
-            || self.capture.is_some()
-            || self.load.is_some()
-            || self.save.is_some()
-            || self.moves.is_some()
-            || self.play.is_some()
-            || self.level.is_some()
-            || self.seed.is_some()
-            || self.view != "hero"
-        {
-            return Err("teaching inspection cannot combine with game/editor options".into());
-        }
-        Ok(())
-    }
 }
 
 fn print_help() {
@@ -279,7 +257,7 @@ fn print_help() {
         "chess3d [--load position.json] [--save position.json] [--moves \"e2e4 e7e5\"]\n\
         [--capture image.png | --window] [--view hero|overhead|lineup]\n\
         [--width px --height px] [--seed n] [--play white|black --level 1..8]\n\
-        [--lesson ID | --puzzle ID] (CPU-only teaching inspection)\n\
+        [--lesson ID | --puzzle ID] (CPU-only teaching inspection; exclusive with review/explain)\n\
         Window and retained move capture require: cargo run -p chess3d --features viewer --\n\
         Play: left click select/move, U/Backspace undo, R restart, Escape cancel/menu (editor: exit).\n\
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\

@@ -487,8 +487,10 @@ cargo run --locked -j4 -- --review-moves "d1d4 a4d4" \
 The table covers both sides; CLI teachable moments belong to the initial side to
 move (white by default, black for a black-to-move FEN). The library accepts either
 player independently. `--review-fen` requires `--review-moves`. Review cannot be
-combined with game/editor/rendering actions. PGN `--review <file.pgn>` is not
-implemented. In the window, Review on the result panel opens the native review
+combined with game/editor/rendering actions or `--explain`, `--lesson`, or `--puzzle`.
+The four CPU inspection modes are mutually exclusive; explicitly supplied
+rendering defaults such as `--view hero` are still rendering options.
+PGN `--review <file.pgn>` is not implemented. In the window, Review on the result panel opens the native review
 screen. Review games on the title lists finished current/manual saves. A saved
 result or a terminal replayed position distinguishes finished games; there is no
 separate finished flag or automatic archive beyond current and three manual slots.
@@ -514,9 +516,22 @@ legal attempts retry. Return to line or leaving restores the recorded line.
 Neither replay nor practice autosaves or rewrites the result. Regression tests
 compare the entire application-store files byte for byte after those operations.
 
-This branch had no teaching module or course data. The review sentence formatter
-is supplied here, but lesson tags and a lesson player remain absent, so no related
-lesson link is shown. Annotations are retained in memory for the same open game;
+Review feedback uses the existing `teaching::explain::explain_move` and
+`explain_reply` analysis, including its fact precedence and pieces-and-pawns prose.
+Explanations and related lessons are computed on the existing CPU review worker
+and cached with each retained moment, so reading or selecting a row does not run
+search on the UI thread. Each newly retained moment adds two explanation budgets
+of at most 100,000 nodes, separate from the review searches. Unclear or uncaused feedback keeps the wording
+"searched continuation, not a proof of a tactical cause."
+
+Typed motif tags in the course select the related lesson. The review shows its
+title and ID with "open from Lessons". This branch has the CPU `LessonRunner`,
+but no on-screen lesson player; the link therefore does not launch a new player.
+All classified motifs have authored course tags. Promotion links to first moves;
+discovered attacks and checks link to the mixed-practice explanation. A course
+without a matching tag produces no guessed lesson link.
+
+Annotations are retained in memory for the same open game;
 they are not persisted as part of the version-1 saved-game format. The existing
 engine timer limitation described above also applies to reply playback: it uses
 monotonic deadlines on retained ticks, not a scheduled timer service.

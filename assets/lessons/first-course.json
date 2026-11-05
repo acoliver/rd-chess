@@ -3,12 +3,13 @@
   "lessons": [
     {
       "id": "rules.first-moves",
+      "motifs": ["promotion"],
       "title": "Pawns, knights and kings",
       "requires": [],
       "steps": [
         {
           "kind": "explain",
-          "text": "Files run from a to h; ranks run from 1 to 8. White starts on ranks 1 and 2. A pawn moves forward into an empty square and captures one square diagonally. On its first move it may advance two empty squares.",
+          "text": "Files run from a to h; ranks run from 1 to 8. White starts on ranks 1 and 2. A pawn moves forward into an empty square and captures one square diagonally. On its first move it may advance two empty squares. On reaching the last rank, a pawn must promote to a queen, rook, bishop or knight.",
           "annotations": {
             "squares": [],
             "arrows": []
@@ -105,6 +106,7 @@
     },
     {
       "id": "rules.sliding",
+      "motifs": [],
       "title": "Rooks, bishops and queens",
       "requires": ["rules.first-moves"],
       "steps": [
@@ -174,6 +176,7 @@
     },
     {
       "id": "rules.check",
+      "motifs": ["check"],
       "title": "Get out of check",
       "requires": ["rules.sliding"],
       "steps": [
@@ -221,6 +224,7 @@
     },
     {
       "id": "mates.queen",
+      "motifs": ["mate"],
       "title": "Support the queen",
       "requires": ["rules.check"],
       "steps": [
@@ -256,6 +260,7 @@
     },
     {
       "id": "mates.ladder",
+      "motifs": [],
       "title": "Walk the rooks up the board",
       "requires": ["mates.queen"],
       "steps": [
@@ -301,6 +306,7 @@
     },
     {
       "id": "mates.back-rank",
+      "motifs": ["back_rank", "mate_threat"],
       "title": "Notice a trapped king",
       "requires": ["mates.ladder"],
       "steps": [
@@ -334,6 +340,7 @@
     },
     {
       "id": "tactics.hanging",
+      "motifs": ["hanging_piece", "exchange"],
       "title": "Count attackers and defenders",
       "requires": ["rules.check"],
       "steps": [
@@ -405,6 +412,7 @@
     },
     {
       "id": "tactics.fork",
+      "motifs": ["fork"],
       "title": "Attack two targets",
       "requires": ["tactics.hanging"],
       "steps": [
@@ -450,6 +458,7 @@
     },
     {
       "id": "tactics.pin",
+      "motifs": ["pin"],
       "title": "Use a piece that cannot move",
       "requires": ["tactics.fork"],
       "steps": [
@@ -490,6 +499,7 @@
     },
     {
       "id": "tactics.skewer",
+      "motifs": ["skewer"],
       "title": "Force the front piece away",
       "requires": ["tactics.pin"],
       "steps": [
@@ -533,6 +543,7 @@
     },
     {
       "id": "openings.reasons",
+      "motifs": ["castling"],
       "title": "Centre, development and king safety",
       "requires": ["rules.check", "tactics.hanging"],
       "steps": [
@@ -626,12 +637,13 @@
     },
     {
       "id": "practice.together",
+      "motifs": ["material_threat", "discovered_attack", "discovered_check"],
       "title": "Look before you move",
       "requires": ["mates.back-rank", "tactics.skewer", "openings.reasons"],
       "steps": [
         {
           "kind": "explain",
-          "text": "Use a short scan: is your king safe, what does the opponent threaten, and do you have a check or capture? Test the reply before choosing a move. These positions change the squares from earlier lessons.",
+          "text": "Use a short scan: is your king safe, what does the opponent threaten, and do you have a check or capture? Test the reply before choosing a move. A discovered attack moves one piece out of the way so a rook, bishop or queen behind it attacks a target. If that target is the king, it is a discovered check. Check what both pieces attack after the move. These positions change the squares from earlier lessons.",
           "annotations": {
             "squares": [],
             "arrows": []

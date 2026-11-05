@@ -18,6 +18,7 @@ use std::{
 use worldrunner::scene::viewer::{RetainedHost, WorkQueue, WorkSubmitError, WorkTicket};
 
 mod actions;
+mod feedback;
 #[cfg(test)]
 mod tests;
 
@@ -28,12 +29,13 @@ pub(super) struct ReviewSession {
     pub parent: Screen,
     pub core: Option<Review>,
     pub report: ReviewReport,
+    feedback: feedback::Feedback,
     pub progress: Progress,
     queue: Option<WorkQueue<Completion>>,
     pending: Option<WorkTicket<Completion>>,
     stop: Arc<AtomicBool>,
     pub cursor: usize,
-    pub selected: Option<crate::review::TeachableMoment>,
+    selected: Option<feedback::SelectedMoment>,
     pub mode: ReviewMode,
     pub message: String,
     error: Option<String>,
@@ -50,6 +52,7 @@ pub(super) enum ReviewMode {
 }
 struct Completion {
     review: Review,
+    feedback: feedback::Feedback,
     result: Result<crate::review::ReviewStep, crate::rules::MoveError>,
 }
 impl ReviewSession {
@@ -76,6 +79,7 @@ impl ReviewSession {
         let core = Review::new(initial, legal, player, config).map_err(|e| e.to_string())?;
         Ok(Self {
             report: core.report().clone(),
+            feedback: feedback::Feedback::new(),
             progress: core.progress(),
             core: Some(core),
             cursor: payload.moves.len(),
@@ -98,10 +102,16 @@ impl ReviewSession {
             return Ok(());
         };
         let stop = self.stop.clone();
+        let mut feedback = self.feedback.clone();
         // One queued job owns one bounded ply. The UI never waits for search.
         let ticket = self.queue.as_ref().expect("review queue").submit(move |_| {
             let result = review.advance(&stop);
-            Completion { review, result }
+            feedback::update(&review.report().moments, &mut feedback);
+            Completion {
+                review,
+                feedback,
+                result,
+            }
         });
         match ticket {
             Ok(ticket) => {
@@ -159,9 +169,7 @@ impl BoardDriver {
             .map(|m| {
                 format!(
                     "Move {}: {}. {}",
-                    m.ply,
-                    m.label,
-                    crate::teaching::explain::explain_moment(m).learner
+                    m.ply, m.label, session.feedback[&m.ply].learner
                 )
             })
             .collect();
@@ -281,6 +289,7 @@ No confident teachable moments yet.",
                 Ok(done) => {
                     session.progress = done.review.progress();
                     session.report = done.review.report().clone();
+                    session.feedback = done.feedback;
                     session.core = Some(done.review);
                     if let Err(error) = done.result {
                         session.error = Some(format!("Review error: {error}"));

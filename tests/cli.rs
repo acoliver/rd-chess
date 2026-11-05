@@ -1,3 +1,43 @@
+#[test]
+fn review_explain_lesson_and_puzzle_reject_every_cross_mode_pair() {
+    let modes = [
+        vec!["--review-moves", ""],
+        vec!["--explain", "bad-fen", "e2e4"],
+        vec!["--lesson", "tactics.fork"],
+        vec!["--puzzle", "00008"],
+    ];
+    for (i, first) in modes.iter().enumerate() {
+        for (j, second) in modes.iter().enumerate() {
+            if i != j {
+                let output = cli().args(first).args(second).output().unwrap();
+                assert_failure(&output, "cannot be combined");
+            }
+        }
+    }
+    assert_failure(
+        &cli().args(&modes[1]).args(&modes[1]).output().unwrap(),
+        "--explain cannot be combined",
+    );
+    for mode in [&modes[0], &modes[2], &modes[3]] {
+        for option in [
+            vec!["--width", "1280"],
+            vec!["--height", "960"],
+            vec!["--view", "hero"],
+        ] {
+            let output = cli().args(mode).args(option).output().unwrap();
+            assert!(!output.status.success(), "{output:?}");
+        }
+    }
+    for mode in [&modes[1], &modes[2], &modes[3]] {
+        let output = cli()
+            .args(mode)
+            .args(["--review-fen", "bad"])
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "{output:?}");
+    }
+}
+
 #[cfg(not(debug_assertions))]
 #[test]
 #[ignore = "production budget: run cargo test --release --test cli review_moves_is_cpu_only -- --ignored"]
@@ -75,6 +115,8 @@ fn every_value_flag_is_recognized_before_requiring_its_value() {
         "--height",
         "--seed",
         "--moves",
+        "--review-moves",
+        "--review-fen",
         "--play",
         "--level",
         "--lesson",
