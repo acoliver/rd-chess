@@ -31,11 +31,16 @@ def case_result(name):
             "controls": ["WM_DELETE_WINDOW clean exit"], "exit": 0, "elapsed_seconds": 1.25}
 
 
+def title_layout():
+    return {"panel": [170, 96, 790, 624], "status": [16, 12, 944, 102],
+            "entries": {"Continue": [200, 188, 760, 232], "Puzzles": [200, 396, 760, 440]}}
+
+
 def relaunch_image(outside, label):
     frame = Mock(name=label)
     frame.label = label
     frame.convert.return_value = frame
-    frame.crop.return_value = outside
+    frame.crop.side_effect = lambda rect: frame if rect == title_layout()["panel"] else outside
     frame.getcolors.return_value = [None] * 1001
     return frame
 
@@ -340,6 +345,69 @@ class SmokeControlsTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "Timed out waiting for test wait"):
                 self.smoke.wait_for(lambda: None, "test wait", process=process, progress=progress)
 
+    def exit_case(self, exit_after, status=0):
+        progress = Mock(name="progress")
+        progress.name = "title-to-friend"
+        case = self.smoke.SmokeCase(self.args, {},
+                                   {"view": "overhead", "load": None, "interaction": "title"},
+                                   str(self.root), progress)
+        case.process = Mock(pid=101)
+        self.now = 0
+
+        def wait(timeout):
+            if exit_after > timeout:
+                self.now += timeout
+                raise subprocess.TimeoutExpired("chess3d", timeout)
+            self.now += exit_after
+            return status
+
+        case.process.wait.side_effect = wait
+        case.window = "1"
+        case.find_window = Mock()
+        case.wait = Mock()
+        case.xdo = Mock()
+        case.records = []
+        case.title_layout = title_layout()
+        return case
+
+    def test_clean_exit_can_finish_after_fifteen_seconds(self):
+        case = self.exit_case(45)
+        first = case.process
+        with patch.object(self.smoke, "close_request"), \
+                patch.object(self.smoke.subprocess, "Popen") as launch:
+            case.relaunch(Mock(), Mock())
+        self.assertEqual(self.now, 45)
+        first.wait.assert_called_once_with(timeout=180)
+        launch.assert_called_once()
+        self.assertIn(call("ready: first chess window exit (exit 0)"), case.progress.call_args_list)
+
+    def test_clean_exit_without_progress_fails_at_existing_stall_bound(self):
+        case = self.exit_case(181)
+        with patch.object(self.smoke, "close_request"), \
+                patch.object(self.smoke.subprocess, "Popen") as launch:
+            with self.assertRaises(subprocess.TimeoutExpired) as raised:
+                case.relaunch(Mock(), Mock())
+        self.assertEqual(raised.exception.timeout, self.smoke.STALL_TIMEOUT_SECONDS)
+        self.assertEqual(self.now, 180)
+        launch.assert_not_called()
+        self.assertEqual(case.progress.call_args_list,
+                         [call("close: first chess window"), call("wait: first chess window exit")])
+        case.process.terminate.assert_not_called()
+        case.process.kill.assert_not_called()
+
+    def test_nonzero_exit_fails_immediately_without_relaunch(self):
+        case = self.exit_case(0, 17)
+        case.window = "1"
+        with patch.object(self.smoke, "close_request") as close, \
+                patch.object(self.smoke.subprocess, "Popen") as launch:
+            with self.assertRaises(AssertionError):
+                case.relaunch(Mock(), Mock())
+        close.assert_called_once_with("1")
+        launch.assert_not_called()
+        self.assertEqual(self.now, 0)
+        case.process.wait.assert_called_once_with(timeout=180)
+        self.assertIn(call("ready: first chess window exit (exit 17)"), case.progress.call_args_list)
+
     def test_failed_smoke_kills_window_if_termination_times_out(self):
         process = Mock(pid=101)
         process.poll.return_value = None
@@ -376,7 +444,7 @@ class SmokeControlsTests(unittest.TestCase):
                 Path(command[command.index("--save") + 1]).write_text(
                     json.dumps({"pieces": [None] * 32, "seed": 342}))
                 return first
-            first.wait.assert_called_once_with(timeout=15)
+            first.wait.assert_called_once_with(timeout=180)
             return second
 
         def run(command, **kwargs):
@@ -384,7 +452,7 @@ class SmokeControlsTests(unittest.TestCase):
             if command[0] == str(self.args.binary):
                 self.assertEqual(kwargs["timeout"], 1200)
                 self.assertNotIn("DISPLAY", kwargs["env"])
-                return Mock()
+                return SimpleNamespace(stdout=json.dumps(title_layout()))
             self.assertEqual(kwargs["timeout"], 10)
             if command[1] == "search":
                 return SimpleNamespace(stdout="1" if "101" in command else "2")
@@ -424,10 +492,13 @@ class SmokeControlsTests(unittest.TestCase):
                                    {"view": "overhead", "load": None, "interaction": "title"},
                                    str(self.root), progress)
         case.window = "2"
+        case.title_layout = title_layout()
+        case.title_ready = Mock(return_value=True)
         case.initial = relaunch_image(None, "initial")
         case.records = []
         frames = [relaunch_image(None, label) for label in ("browser", "setup", "ready", "selected", "moved")]
         for frame in frames:
+            frame.crop.side_effect = None
             frame.crop.return_value = frame
         frames[2].getdata.return_value = [(255, 255, 255)] * 8
         case.screenshot = Mock(side_effect=frames)
@@ -445,7 +516,7 @@ class SmokeControlsTests(unittest.TestCase):
                 stdout="Window clicks (960x720): 510 240 510 180\n")), \
                 patch.object(self.smoke, "difference", return_value=4) as differences:
             case.puzzle_click()
-        self.assertEqual(labels, ["Puzzles band browser", "puzzle setup position",
+        self.assertEqual(labels, ["title before Puzzles", "Puzzles band browser", "puzzle setup position",
                                   "opponent setup move presented", "known puzzle solver selection",
                                   "00008 e6-e7 accepted with scripted reply"])
         self.assertIn(call("mousemove", "--window", "2", 510, 240), case.xdo.call_args_list)
@@ -455,6 +526,67 @@ class SmokeControlsTests(unittest.TestCase):
             self.assertIn(call(point), frames[4].crop.call_args_list)
         self.assertEqual(differences.call_count, 5)
         self.assertIn("Puzzles: 00008 first solver move by engine-projected clicks", case.records)
+
+    def title_case(self):
+        progress = Mock(name="progress")
+        progress.name = "title-to-friend"
+        case = self.smoke.SmokeCase(self.args, {"DISPLAY": ":107"},
+                                   {"view": "overhead", "load": None, "interaction": "title"},
+                                   str(self.root), progress)
+        case.title_layout = title_layout()
+        return case
+
+    def test_title_inspection_uses_window_dimensions_without_display_or_game_store(self):
+        case = self.title_case()
+        layout = title_layout()
+        layout["status"][3] = 115.5
+        layout["panel"][0] = 165.5
+        with patch.object(self.smoke.subprocess, "run", return_value=SimpleNamespace(
+                stdout=json.dumps(layout))) as run:
+            case.inspect_title()
+        self.assertEqual(run.call_args.args[0], [str(self.args.binary), "--inspect-title",
+                                                "--width", "960", "--height", "720"])
+        self.assertNotIn("DISPLAY", run.call_args.kwargs["env"])
+        self.assertTrue(run.call_args.kwargs["check"])
+        self.assertEqual(case.title_board_region(), (0, 116, 165, 720))
+
+    def test_title_predicate_excludes_status_but_requires_board_and_menu_at_original_limits(self):
+        case = self.title_case()
+        case.expected = Mock(name="board with status")
+        frame = Mock(name="title without status")
+        case.screenshot = Mock(return_value=frame)
+        for values, accepted in [([0.1, 3, 3], True), ([0.10001], False),
+                                 ([0, 2], False), ([0, 3, 2], False), ([0, 0], False)]:
+            with self.subTest(values=values), patch.object(self.smoke, "difference", side_effect=values):
+                result = case.title_ready()
+                self.assertIs(result, frame if accepted else None)
+        case.expected.crop.assert_any_call((0, 102, 170, 720))
+        frame.crop.assert_any_call((0, 102, 170, 720))
+        case.expected.crop.assert_any_call(title_layout()["panel"])
+        frame.crop.assert_any_call(title_layout()["panel"])
+        self.assertNotIn(call((0, 0, 80, 720)), frame.crop.call_args_list)
+
+    def test_title_region_fails_if_no_board_is_visible(self):
+        case = self.title_case()
+        for panel_left, status_bottom in [(0, 102), (170, 720), (961, 102), (170, -1)]:
+            case.title_layout["panel"][0] = panel_left
+            case.title_layout["status"][3] = status_bottom
+            with self.assertRaisesRegex(AssertionError, "no unobscured board strip"):
+                case.title_board_region()
+
+    def test_title_clicks_follow_resolved_rows_instead_of_row_count_or_offsets(self):
+        case = self.title_case()
+        case.window = "2"
+        case.xdo = Mock()
+        case.title_layout["entries"] = {"Continue": [100, 150, 500, 190],
+                                        "Puzzles": [110, 370, 510, 410]}
+        case.click_title_entry("Continue")
+        case.click_title_entry("Puzzles")
+        self.assertEqual(case.xdo.call_args_list, [
+            call("mousemove", "--window", "2", 300, 170), call("click", 1),
+            call("mousemove", "--window", "2", 310, 390), call("click", 1)])
+        with self.assertRaises(KeyError):
+            case.click_title_entry("Absent")
 
     def test_puzzle_readiness_waits_for_enabled_retry_pixels(self):
         progress = Mock(name="progress")
@@ -483,7 +615,7 @@ class SmokeControlsTests(unittest.TestCase):
             self.assertNotIn("--play", command)
         self.assertIs(launches[0][1]["stdout"], launches[1][1]["stdout"])
         self.assertEqual(close.call_args_list, [call("1"), call("2")])
-        images.second.wait.assert_called_once_with(timeout=15)
+        images.second.wait.assert_called_once_with(timeout=180)
         images.first.terminate.assert_not_called()
         images.second.terminate.assert_not_called()
         commands = [invocation.args[0] for invocation in calls.call_args_list]

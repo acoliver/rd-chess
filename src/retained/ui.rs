@@ -1,3 +1,5 @@
+mod inspection;
+pub use inspection::title_layout;
 mod pages;
 mod review_page;
 pub(super) use review_page::ReviewUiState;

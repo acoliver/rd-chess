@@ -42,6 +42,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let Some(options) = cli::Options::parse()? else {
         return Ok(());
     };
+    #[cfg(feature = "viewer")]
+    if let Some(cli::UiInspection::Title) = options.ui_inspection {
+        println!(
+            "{}",
+            chess3d::retained::title_layout([options.width, options.height])?
+        );
+        return Ok(());
+    }
     if let Some((fen, uci)) = &options.explain {
         return print_explanation(fen, uci, options.explain_verbose);
     }
@@ -340,6 +348,7 @@ mod game_start_tests {
             data_dir: Some(root.path().to_path_buf()),
             save: None,
             capture: None,
+            ui_inspection: None,
             window: true,
             view: "hero".into(),
             view_explicit: false,

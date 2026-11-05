@@ -10,6 +10,7 @@ import argparse
 from collections import deque
 import ctypes as c
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -176,9 +177,12 @@ class SmokeCase:
     def wait(self, predicate, label):
         return wait_for(predicate, label, process=self.process, progress=self.progress)
 
-    def wait_exit(self, timeout, label):
+    def wait_exit(self, label, *, timeout=STALL_TIMEOUT_SECONDS):
+        # Close drains submitted GPU work; use the same stall bound as frame waits.
         self.progress(f"wait: {label}")
-        return self.process.wait(timeout=timeout)
+        status = self.process.wait(timeout=timeout)
+        self.progress(f"ready: {label} (exit {status})")
+        return status
 
     def find_window(self, label):
         self.window = self.wait(lambda: self.xdo("search", "--pid", self.process.pid, "--name",
@@ -198,9 +202,31 @@ class SmokeCase:
 
     def title_ready(self):
         image = self.screenshot()
-        outside = (0, 0, 80, self.height)
+        # Title/browsers hide the board status. Compare only retained scene pixels.
+        outside = self.title_board_region()
         return image if (difference(self.expected.crop(outside), image.crop(outside)) <= 0.1
+                         and difference(self.expected.crop(self.title_layout["panel"]),
+                                        image.crop(self.title_layout["panel"])) > 2
                          and difference(self.expected, image) > 2) else None
+
+    def inspect_title(self):
+        result = subprocess.run([str(self.args.binary), "--inspect-title",
+                                 "--width", str(self.width), "--height", str(self.height)],
+                                env=self.headless, check=True, capture_output=True,
+                                text=True, timeout=CAPTURE_TIMEOUT_SECONDS)
+        self.title_layout = json.loads(result.stdout)
+
+    def title_board_region(self):
+        left = math.floor(self.title_layout["panel"][0])
+        bottom = math.ceil(self.title_layout["status"][3])
+        assert 0 < left <= self.width and 0 <= bottom < self.height, "no unobscured board strip"
+        return (0, bottom, left, self.height)
+
+    def click_title_entry(self, label):
+        left, top, right, bottom = self.title_layout["entries"][label]
+        self.xdo("mousemove", "--window", self.window,
+                 round((left + right) / 2), round((top + bottom) / 2))
+        self.xdo("click", 1)
 
     def initial_state(self):
         self.records = []
@@ -249,15 +275,14 @@ class SmokeCase:
     def relaunch(self, log, moved):
         self.progress("close: first chess window")
         close_request(self.window)
-        assert self.wait_exit(15, "first chess window exit") == 0
+        assert self.wait_exit("first chess window exit") == 0
         self.progress("launch: relaunch chess window with saved data")
         self.process = subprocess.Popen([str(self.args.binary), *self.common, "--window"],
                                         env=self.environment, stdout=log, stderr=log)
         self.find_window("relaunch window")
         self.wait(self.title_ready, "relaunch title menu")
         self.progress("input: click title Continue")
-        self.xdo("mousemove", "--window", self.window, self.width // 2, self.height // 2 - 150)
-        self.xdo("click", 1)
+        self.click_title_entry("Continue")
         self.wait(lambda: self.matching(moved, 0), "Continue exact pre-relaunch pixels")
         self.records.append("relaunch Continue restores exact board pixels")
 
@@ -270,7 +295,8 @@ class SmokeCase:
                     if line.startswith("Window clicks (960x720):"))
         fx, fy, tx, ty = map(int, line.split(":", 1)[1].split())
         self.xdo("key", "--window", self.window, "Escape", "End", "Return")
-        self.xdo("key", "--window", self.window, "Home", "Down", "Down", "Down", "Down", "Return")
+        self.wait(self.title_ready, "title before Puzzles")
+        self.click_title_entry("Puzzles")
         browser = self.wait(lambda: self.changed(self.initial), "Puzzles band browser")
         self.xdo("key", "--window", self.window, "Return")
         self.wait(lambda: self.changed(browser), "puzzle setup position")
@@ -351,17 +377,17 @@ class SmokeCase:
             self.progress("cleanup: terminate chess window")
             self.process.terminate()
             try:
-                self.wait_exit(10, "terminated chess window exit")
+                self.wait_exit("terminated chess window exit", timeout=10)
             except subprocess.TimeoutExpired:
                 self.progress("cleanup: kill chess window")
                 self.process.kill()
-                self.wait_exit(5, "killed chess window exit")
+                self.wait_exit("killed chess window exit", timeout=5)
 
     def finish(self):
         self.progress("close: chess window")
         close_request(self.window)
         self.records.append("WM_DELETE_WINDOW clean exit")
-        assert self.wait_exit(15, "chess window exit") == 0
+        assert self.wait_exit("chess window exit") == 0
         assert self.saved.read_bytes() == self.saved_bytes, "camera controls changed position save"
         return {"case": self.name, "view": self.view, "saved_pieces": len(self.position["pieces"]),
                 "rendered_pieces": 6 if self.view == "lineup" else len(self.position["pieces"]),
@@ -369,6 +395,8 @@ class SmokeCase:
                 "colors": len(self.colors), "controls": self.records, "exit": 0}
 
     def run(self):
+        if self.interaction == "title":
+            self.inspect_title()
         self.progress("launch: headless reference capture")
         self.expected = self.capture(self.output / f"{self.name}-capture.png")
         with (self.output / f"{self.name}.log").open("w") as log:

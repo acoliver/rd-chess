@@ -202,3 +202,4 @@ pub use host::{capture_frame, viewer_options};
 pub use menus::Screen;
 pub use pump::ProgressPump;
 pub use training::training_move_pixels;
+pub use ui::title_layout;

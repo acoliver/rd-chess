@@ -32,11 +32,16 @@ const VALUE_FLAGS: &[&str] = &[
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
+pub enum UiInspection {
+    Title,
+}
+
 pub struct Options {
     pub load: Option<PathBuf>,
     pub data_dir: Option<PathBuf>,
     pub save: Option<PathBuf>,
     pub capture: Option<PathBuf>,
+    pub ui_inspection: Option<UiInspection>,
     pub window: bool,
     pub view: String,
     pub view_explicit: bool,
@@ -62,6 +67,7 @@ impl Options {
             data_dir: None,
             save: None,
             capture: None,
+            ui_inspection: None,
             window: false,
             view: "hero".into(),
             view_explicit: false,
@@ -104,6 +110,10 @@ impl Options {
                     return Err("--explain-verbose may only be specified once".into());
                 }
                 options.explain_verbose = true;
+                continue;
+            }
+            if flag == "--inspect-title" {
+                options.ui_inspection = Some(UiInspection::Title);
                 continue;
             }
             if flag == "--window" {
@@ -182,6 +192,20 @@ impl Options {
     }
 
     fn validate_modes(&self, flags: &[String]) -> Result<()> {
+        if self.ui_inspection.is_some() {
+            if !cfg!(feature = "viewer") {
+                return Err("--inspect-title requires the optional viewer feature".into());
+            }
+            if flags
+                .iter()
+                .any(|flag| !["--inspect-title", "--width", "--height"].contains(&flag.as_str()))
+            {
+                return Err(
+                    "--inspect-title cannot be combined with options except --width and --height"
+                        .into(),
+                );
+            }
+        }
         if self.pgn_check.is_some() && flags.iter().any(|flag| flag != "--pgn-check") {
             return Err("--pgn-check cannot be combined with other modes/options".into());
         }
@@ -265,6 +289,7 @@ fn print_help() {
         [--capture image.png | --window] [--view hero|overhead|lineup]\n\
         [--width px --height px] [--seed n] [--play white|black --level 1..8]\n\
         [--lesson ID | --puzzle ID] (CPU-only teaching inspection; exclusive with review/explain)\n\
+        --inspect-title [--width px --height px] prints resolved UI rectangles without a GPU (viewer).\n\
         Window and retained move capture require: cargo run -p chess3d --features viewer --\n\
         Play: left click select/move, U/Backspace undo, R restart, Escape cancel/menu (editor: exit).\n\
         View: left-drag orbit, wheel zoom, Home reset; editor R/Home reset.\n\
