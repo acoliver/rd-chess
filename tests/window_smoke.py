@@ -177,9 +177,12 @@ class SmokeCase:
     def wait(self, predicate, label):
         return wait_for(predicate, label, process=self.process, progress=self.progress)
 
-    def wait_exit(self, timeout, label):
+    def wait_exit(self, label, *, timeout=STALL_TIMEOUT_SECONDS):
+        # Close drains submitted GPU work; use the same stall bound as frame waits.
         self.progress(f"wait: {label}")
-        return self.process.wait(timeout=timeout)
+        status = self.process.wait(timeout=timeout)
+        self.progress(f"ready: {label} (exit {status})")
+        return status
 
     def find_window(self, label):
         self.window = self.wait(lambda: self.xdo("search", "--pid", self.process.pid, "--name",
@@ -272,7 +275,7 @@ class SmokeCase:
     def relaunch(self, log, moved):
         self.progress("close: first chess window")
         close_request(self.window)
-        assert self.wait_exit(15, "first chess window exit") == 0
+        assert self.wait_exit("first chess window exit") == 0
         self.progress("launch: relaunch chess window with saved data")
         self.process = subprocess.Popen([str(self.args.binary), *self.common, "--window"],
                                         env=self.environment, stdout=log, stderr=log)
@@ -374,17 +377,17 @@ class SmokeCase:
             self.progress("cleanup: terminate chess window")
             self.process.terminate()
             try:
-                self.wait_exit(10, "terminated chess window exit")
+                self.wait_exit("terminated chess window exit", timeout=10)
             except subprocess.TimeoutExpired:
                 self.progress("cleanup: kill chess window")
                 self.process.kill()
-                self.wait_exit(5, "killed chess window exit")
+                self.wait_exit("killed chess window exit", timeout=5)
 
     def finish(self):
         self.progress("close: chess window")
         close_request(self.window)
         self.records.append("WM_DELETE_WINDOW clean exit")
-        assert self.wait_exit(15, "chess window exit") == 0
+        assert self.wait_exit("chess window exit") == 0
         assert self.saved.read_bytes() == self.saved_bytes, "camera controls changed position save"
         return {"case": self.name, "view": self.view, "saved_pieces": len(self.position["pieces"]),
                 "rendered_pieces": 6 if self.view == "lineup" else len(self.position["pieces"]),
