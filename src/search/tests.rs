@@ -1,4 +1,69 @@
 #[test]
+fn restricted_root_matches_exact_full_width_search_and_rejects_illegal_moves() {
+    let state = ChessState::initial();
+    let limits = Limits {
+        nodes: 15_000,
+        depth: Some(2),
+    };
+    let cancel = AtomicBool::new(false);
+    let all = Search::new(4096)
+        .candidates(usize::MAX)
+        .analyze(&state, limits, &cancel);
+    assert_eq!(all.completed_depth, 2);
+    let played = state.parse_uci("a2a3").unwrap();
+    let chosen = Search::new(4096)
+        .analyze_move(&state, played, limits, &cancel)
+        .unwrap();
+    let expected = all
+        .candidates
+        .iter()
+        .find(|candidate| candidate.pv[0] == played)
+        .unwrap();
+    assert_eq!(chosen.completed_depth, 2);
+    assert_eq!(chosen.pv[0], played);
+    assert_eq!(chosen.score, expected.score);
+    let mut after = state.clone();
+    after.play(played).unwrap();
+    assert!(
+        Search::new(0)
+            .analyze_move(&after, played, limits, &cancel)
+            .is_err()
+    );
+}
+
+#[test]
+fn restricted_root_fallback_evaluates_the_played_child_not_an_arbitrary_move() {
+    let state = ChessState::initial();
+    let played = state.parse_uci("a2a3").unwrap();
+    let cancel = AtomicBool::new(false);
+    let result = Search::new(0)
+        .analyze_move(
+            &state,
+            played,
+            Limits {
+                nodes: 1,
+                depth: None,
+            },
+            &cancel,
+        )
+        .unwrap();
+    let mut after = state.clone();
+    after.play(played).unwrap();
+    let child = Search::new(0).analyze(
+        &after,
+        Limits {
+            nodes: 0,
+            depth: None,
+        },
+        &cancel,
+    );
+    assert_eq!(result.score, child.score.reversed());
+    assert_eq!(result.pv, vec![played]);
+    assert_eq!(result.nodes, 1);
+    assert_eq!(result.completed_depth, 0);
+}
+
+#[test]
 fn cancellable_policy_preserves_completed_iteration_and_stops_preprocessing() {
     use std::cell::Cell;
     let state = ChessState::initial();

@@ -2,6 +2,23 @@ use std::{error::Error, path::PathBuf};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
+const VALUE_FLAGS: &[&str] = &[
+    "--load",
+    "--data-dir",
+    "--save",
+    "--capture",
+    "--view",
+    "--width",
+    "--height",
+    "--seed",
+    "--moves",
+    "--review-moves",
+    "--review-fen",
+    "--play",
+    "--level",
+    "--pgn-check",
+];
+
 pub struct Options {
     pub load: Option<PathBuf>,
     pub data_dir: Option<PathBuf>,
@@ -14,6 +31,8 @@ pub struct Options {
     pub height: u32,
     pub seed: Option<u64>,
     pub moves: Option<String>,
+    pub review_moves: Option<String>,
+    pub review_fen: Option<String>,
     pub play: Option<chess3d::Side>,
     pub level: Option<u8>,
     pub pgn_check: Option<PathBuf>,
@@ -33,11 +52,14 @@ impl Options {
             height: 960,
             seed: None,
             moves: None,
+            review_moves: None,
+            review_fen: None,
             play: None,
             level: None,
             pgn_check: None,
         };
         let mut other_options = false;
+        let mut non_review_options = false;
         let mut args = std::env::args_os().skip(1);
         while let Some(arg) = args.next() {
             let flag = arg.to_string_lossy();
@@ -46,26 +68,12 @@ impl Options {
                 return Ok(None);
             }
             other_options |= flag != "--pgn-check";
+            non_review_options |= !matches!(flag.as_ref(), "--review-moves" | "--review-fen");
             if flag == "--window" {
                 options.window = true;
                 continue;
             }
-            if ![
-                "--load",
-                "--data-dir",
-                "--save",
-                "--capture",
-                "--view",
-                "--width",
-                "--height",
-                "--seed",
-                "--moves",
-                "--play",
-                "--level",
-                "--pgn-check",
-            ]
-            .contains(&flag.as_ref())
-            {
+            if !VALUE_FLAGS.contains(&flag.as_ref()) {
                 return Err(format!("unknown argument {flag}; use --help").into());
             }
             let value = args
@@ -75,6 +83,9 @@ impl Options {
         }
         if options.pgn_check.is_some() && other_options {
             return Err("--pgn-check cannot be combined with other modes/options".into());
+        }
+        if options.review_moves.is_some() && non_review_options {
+            return Err("--review-moves cannot be combined with other modes/options".into());
         }
         options.validate()?;
         Ok(Some(options))
@@ -96,6 +107,8 @@ impl Options {
             "--height" => self.height = text.parse()?,
             "--seed" => self.seed = Some(text.parse()?),
             "--moves" => self.moves = Some(text),
+            "--review-moves" => self.review_moves = Some(text),
+            "--review-fen" => self.review_fen = Some(text),
             "--play" => {
                 self.play = Some(match text.as_str() {
                     "white" => chess3d::Side::Ivory,
@@ -134,7 +147,15 @@ impl Options {
         Ok(())
     }
 
+    fn validate_review(&self) -> Result<()> {
+        if self.review_fen.is_some() && self.review_moves.is_none() {
+            return Err("--review-fen requires --review-moves".into());
+        }
+        Ok(())
+    }
+
     fn validate(&self) -> Result<()> {
+        self.validate_review()?;
         self.validate_computer()?;
         if self.window && self.capture.is_some() {
             return Err("--capture and --window cannot be combined; run them separately".into());
@@ -185,6 +206,9 @@ fn print_help() {
         --play chooses the human side against a computer; --seed also seeds its replies.\n\
         --pgn-check file.pgn validates games and prints final FEN/result without a GPU.\n\
         --moves applies legal UCI moves from the initial game; --load is editor-only.\n\
+        --review-moves \"e2e4 e7e5\" [--review-fen \"FEN\"] prints CPU-only neutral review.\n\
+        Review moments use the initial side to move; PGN --review is not available yet.\n\
+        PGN check and review are separate modes; neither accepts game/editor/rendering or --data-dir options.\n\
         --save writes the current position before capture/window; camera orbit is not saved."
     );
 }

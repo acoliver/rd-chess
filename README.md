@@ -381,8 +381,9 @@ the Result tag must agree with the movetext marker. Input is limited to 4 MiB
 and variation nesting to 32. Errors name the one-based game, ply and token.
 
 `cargo run --locked -j4 -- --pgn-check games.pgn` validates the entire file before
-printing `Game N: <final FEN> <result>` for each game. This CPU-only mode cannot
-be combined with scene, save or play options, and never opens a window.
+printing `Game N: <final FEN> <result>` for each game. This CPU-only mode accepts
+only `--pgn-check`; it rejects review, scene, save, play and `--data-dir` options,
+including explicit rendering defaults, and never opens a window.
 
 ## Computer analysis and opponent policy
 
@@ -524,6 +525,91 @@ retained identity and transform, captures the reply, and compares exact pixels w
 independent rules-driven reference. `tests/window_smoke.py` adds the same move and
 two-ply undo using its existing Xvfb click injection. Do not run a visible window
 on the macOS desktop.
+
+## Own-game review core (P10)
+
+`chess3d::review::Review` analyzes an initial `ChessState` and its committed legal
+move record. Supply the player's side explicitly. The record may end at mate,
+automatic draw, resignation, agreement or a claim; the caller owns the recorded
+result. Prefixes are also accepted for inspection. Construction replays the whole
+record and rejects illegal moves or moves after an automatic outcome before
+analysis starts. Review never changes the supplied state or original result.
+
+The CPU-only manual interface does not require the viewer or a graphics device:
+
+```sh
+cargo run --locked -j4 -- --review-moves "g1f3 g8f6 b1c3 b8c6"
+cargo run --locked -j4 -- --review-moves "d1d4 a4d4" \
+  --review-fen "4k3/8/8/8/r7/8/8/3QK3 w - - 0 1"
+```
+
+The table covers both sides; CLI teachable moments belong to the initial side to
+move (white by default, black for a black-to-move FEN). The library accepts either
+player independently. `--review-fen` requires `--review-moves`. Review accepts
+only those two options; it rejects `--pgn-check`, game/editor/rendering options
+and `--data-dir`, including explicit rendering defaults. PGN import/export and
+`--pgn-check` are available separately; PGN `--review <file.pgn>` is not
+implemented. There is no review UI, work-queue integration or lesson linking yet.
+
+Analysis version 1 uses balanced evaluation, no personality, noise, policy queen
+filter or wall-clock deadline. Each fresh search has **240,000 nodes**, twice the
+largest ladder allowance (Soren: 120,000), a 16,384-slot transposition table, one
+best candidate, and no normal depth cap beyond search's built-in 64. A larger
+allowance is not a measured playing-strength guarantee. The best-root search
+runs first. A separate search restricted to the played root receives the same
+node ceiling and is capped at the best search's completed depth. Thus scores
+compare the same position and horizon, not two consecutive positions at different
+depths. If the played move is already best, its completed analysis is reused.
+There are at most 480,000 visited nodes per ply; rules generation/evaluation costs
+are outside node accounting. Tests override the allowance and depth.
+
+Every row retains the position/history before play, played move/SAN, best move,
+best PV in legal moves and SAN, both completed depths and actual node counts,
+before/after evaluation, typed loss and any uncertainty reason. Centipawns are
+relative to the mover for **both** evaluations. Mate winners remain absolute;
+the after distance starts after the played move. Mate scores are never converted
+to centipawns. Depth-zero fallbacks are not published as best moves or PVs.
+Available draw claims follow search's take-the-claim policy; their absent search
+continuation produces an unclear row, not a move recommendation.
+
+Labels require both searches to complete at least **2 normal plies** and the same
+depth. The searched best move is `best`, including a forced move. Other moves use
+nonnegative best-minus-played centipawn loss with nominal thresholds: `good`
+below 50, `inaccuracy` from 50, `mistake` from 150, `blunder` from 300. A different
+move within **20 cp** of best is `unclear`; so is a loss within **10 cp inclusive**
+of 50, 150 or 300. The resulting confident intervals are good 21-39, inaccuracy
+61-139, mistake 161-289 and blunder at least 311 cp. Depth mismatch, insufficient
+depth, no searched continuation, or a played-root score exceeding best also
+produce `unclear`. These are search estimates, not proofs of move quality.
+
+Losing a searched forced win is `missed mate`. Newly allowing the opponent a
+searched forced mate is `allowed mate` (takes priority if both apply). Changing
+only mate distance, or improving from a losing mate, is unclear unless the move
+is the searched best. Every published line is replayed through the rules core;
+mating score lines must end in checkmate with the stated winner and distance.
+The refutation starts after the played move, showing the opponent's best reply
+and continuation even if the actual opponent missed it. No tactical cause is
+inferred from an evaluation difference alone.
+
+`advance(&AtomicBool)` commits at most one ply and returns Advanced, Cancelled or
+Complete. Cancellation is checked before each ply and can be cleared to resume;
+a ply already running completes atomically. `progress()` reports completed/total
+plies, and `report()` exposes the partial report. Search tables are fresh per
+query, so pause/resume does not change the result. The report records analysis
+version, node allowance and optional depth limit for later annotation replacement.
+
+At most **3** teachable moments are retained by default (`max_moments` can change
+or disable this). Only the player's confident mistakes, blunders and mate errors
+qualify. Allowed mate ranks before missed mate, then centipawn losses descending;
+ties use the earliest ply. Each contains the exact pre-move state/history, played
+and better moves, and a rules-verified refutation for later What changed?, Show
+the reply and Try again controls. An unclear result never becomes a teachable
+moment. Original game moves and results remain separate from these alternatives.
+
+Review unit tests use at most 5,000 nodes and depth 2. Debug CLI tests cover empty
+records and rejection before side effects. The production-budget CLI regression
+is compiled only in release mode and ignored by default; run it explicitly with
+`cargo test --release --locked -j4 -p chess3d --test cli review_moves_is_cpu_only -- --ignored`.
 
 ## Validation
 
