@@ -367,6 +367,7 @@ class SmokeControlsTests(unittest.TestCase):
         case.wait = Mock()
         case.xdo = Mock()
         case.records = []
+        case.title_layout = title_layout()
         return case
 
     def test_clean_exit_can_finish_after_fifteen_seconds(self):
