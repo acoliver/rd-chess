@@ -44,7 +44,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`c4bd5e7c3e73f217da380f94086e7b6755ff41f4` from
+`0671eedd43021075f7069ea9a43b148fbd634d18` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
