@@ -111,3 +111,37 @@ fn required_gpu_title_and_pause_have_visible_native_focus_and_stable_pixels() {
     );
     run.shutdown().unwrap();
 }
+
+#[test]
+fn required_gpu_smoke_title_retains_board_at_960_by_720() {
+    let viewport = [960, 720];
+    let layout = chess3d::retained::title_layout(viewport).unwrap();
+    let board = RetainedBoard::new(ChessState::initial(), 342).unwrap();
+    let options = viewer_options(board.scene(), CameraPreset::Overhead, viewport);
+    let host = RetainedHost::new(board.scene().clone(), options).unwrap();
+    let mut driver = BoardDriver::with_board(board);
+    driver.show_title().unwrap();
+    let inputs = driver.inputs();
+    let queue = driver.queue();
+    let inbox = driver.captures();
+    let mut run = host
+        .windowless(&mut driver)
+        .expect("Metal/lavapipe GPU required, no skips");
+    let title = capture_frame(&mut run, &queue, &inbox).unwrap();
+    save(&title, "smoke-title-960x720.png");
+    key(&inputs, "enter");
+    let board = capture_frame(&mut run, &queue, &inbox).unwrap();
+    save(&board, "smoke-board-960x720.png");
+    let left = layout["panel"][0].as_f64().unwrap().floor();
+    let bottom = layout["status"][3].as_f64().unwrap().ceil();
+    let outside = |x, y| f64::from(x) < left && f64::from(y) >= bottom;
+    for y in 0..viewport[1] {
+        for x in 0..viewport[0] {
+            if outside(x, y) {
+                assert_eq!(changed(&title, &board, [x, y, x + 1, y + 1]), 0);
+            }
+        }
+    }
+    assert!(changed(&title, &board, [0, 0, viewport[0], viewport[1]]) > 10_000);
+    run.shutdown().unwrap();
+}

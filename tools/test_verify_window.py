@@ -32,8 +32,11 @@ def case_result(name):
 
 
 def title_layout():
+    labels = ("Continue", "Play a friend", "Play the computer", "Lessons", "Puzzles",
+              "Saved games", "Review games", "Settings", "Quit")
     return {"panel": [170, 96, 790, 624], "status": [16, 12, 944, 102],
-            "entries": {"Continue": [200, 188, 760, 232], "Puzzles": [200, 396, 760, 440]}}
+            "entries": {label: [200, 189 + 46 * row, 760, 227 + 46 * row]
+                        for row, label in enumerate(labels)}}
 
 
 def relaunch_image(outside, label):
@@ -574,6 +577,20 @@ class SmokeControlsTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "no unobscured board strip"):
                 case.title_board_region()
 
+    def test_nine_entry_title_clicks_keep_continue_puzzles_and_review_targets_distinct(self):
+        case = self.title_case()
+        case.window = "2"
+        case.xdo = Mock()
+        self.assertEqual(len(case.title_layout["entries"]), 9)
+        for label in ("Continue", "Puzzles", "Saved games", "Review games", "Quit"):
+            case.click_title_entry(label)
+        self.assertEqual(case.xdo.call_args_list, [
+            call("mousemove", "--window", "2", 480, 208), call("click", 1),
+            call("mousemove", "--window", "2", 480, 392), call("click", 1),
+            call("mousemove", "--window", "2", 480, 438), call("click", 1),
+            call("mousemove", "--window", "2", 480, 484), call("click", 1),
+            call("mousemove", "--window", "2", 480, 576), call("click", 1)])
+
     def test_title_clicks_follow_resolved_rows_instead_of_row_count_or_offsets(self):
         case = self.title_case()
         case.window = "2"
@@ -619,7 +636,7 @@ class SmokeControlsTests(unittest.TestCase):
         images.first.terminate.assert_not_called()
         images.second.terminate.assert_not_called()
         commands = [invocation.args[0] for invocation in calls.call_args_list]
-        self.assertIn([str(self.args.xdotool), "mousemove", "--window", "2", "480", "210"], commands)
+        self.assertIn([str(self.args.xdotool), "mousemove", "--window", "2", "480", "208"], commands)
         self.assertIn(call(images.moved, images.inexact_resume), images.comparisons.call_args_list)
         self.assertIn(call(images.moved, images.resumed), images.comparisons.call_args_list)
         self.assertIn(call(images.initial, images.inexact_undo), images.comparisons.call_args_list)

@@ -1,13 +1,14 @@
 use super::{assert_failure, cli};
 
 #[test]
-fn review_explain_lesson_and_puzzle_reject_every_cross_mode_pair() {
+fn cpu_inspections_reject_every_cross_mode_pair() {
     let modes = [
         vec!["--review-moves", ""],
         vec!["--explain", "bad-fen", "e2e4"],
         vec!["--lesson", "tactics.fork"],
         vec!["--puzzle", "00008"],
         vec!["--pgn-check", "unused.pgn"],
+        vec!["--inspect-title"],
     ];
     for (i, first) in modes.iter().enumerate() {
         for (j, second) in modes.iter().enumerate() {

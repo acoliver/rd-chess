@@ -192,19 +192,15 @@ impl Options {
     }
 
     fn validate_modes(&self, flags: &[String]) -> Result<()> {
-        if self.ui_inspection.is_some() {
-            if !cfg!(feature = "viewer") {
-                return Err("--inspect-title requires the optional viewer feature".into());
-            }
-            if flags
+        if self.ui_inspection.is_some()
+            && flags
                 .iter()
                 .any(|flag| !["--inspect-title", "--width", "--height"].contains(&flag.as_str()))
-            {
-                return Err(
-                    "--inspect-title cannot be combined with options except --width and --height"
-                        .into(),
-                );
-            }
+        {
+            return Err(
+                "--inspect-title cannot be combined with options except --width and --height"
+                    .into(),
+            );
         }
         if self.pgn_check.is_some() && flags.iter().any(|flag| flag != "--pgn-check") {
             return Err("--pgn-check cannot be combined with other modes/options".into());
@@ -245,6 +241,9 @@ impl Options {
     }
 
     fn validate(&self) -> Result<()> {
+        if self.ui_inspection.is_some() && !cfg!(feature = "viewer") {
+            return Err("--inspect-title requires the optional viewer feature".into());
+        }
         self.validate_computer()?;
         if self.window && self.capture.is_some() {
             return Err("--capture and --window cannot be combined; run them separately".into());
@@ -302,6 +301,7 @@ fn print_help() {
         --review-moves \"e2e4 e7e5\" [--review-fen \"FEN\"] prints CPU-only neutral review.\n\
         Review moments use the initial side to move; PGN --review is not available yet.\n\
         CPU inspection modes are exclusive; no game/editor/rendering or --data-dir options.\n\
+        Only --inspect-title accepts --width/--height to resolve layout; it rejects --view.\n\
         --save writes the current position before capture/window; camera orbit is not saved."
     );
 }

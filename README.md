@@ -596,8 +596,14 @@ The table covers both sides; CLI teachable moments belong to the initial side to
 move (white by default, black for a black-to-move FEN). The library accepts either
 player independently. `--review-fen` requires `--review-moves`. Review cannot be
 combined with game/editor/rendering actions or `--explain`, `--lesson`, or `--puzzle`, `--pgn-check` or `--data-dir`.
-The five CPU inspection modes, including `--pgn-check`, are mutually exclusive; explicitly supplied
-rendering defaults such as `--view hero` are still rendering options.
+The six CPU inspection modes, including `--pgn-check` and `--inspect-title`, are mutually exclusive;
+explicitly supplied rendering defaults such as `--view hero` are still rendering options.
+`--inspect-title` requires the viewer feature but no GPU or window. Its only accepted options are
+`--width` and `--height`, which resolve the NativeUi title rectangles at the requested viewport.
+The window smoke passes `--inspect-title --width 960 --height 720` separately from its overhead
+capture command. Layout inspection rejects `--view` because camera orientation does not affect UI geometry.
+The output includes all nine authored rows. Continue is hidden when no resumable game exists, so the
+smoke uses entry coordinates only after creating a current save, when Continue is visible.
 PGN `--review <file.pgn>` is not implemented. In the window, Review on the result panel opens the native review
 screen. Review games on the title lists finished current/manual saves. A saved
 result or a terminal replayed position distinguishes finished games; there is no
