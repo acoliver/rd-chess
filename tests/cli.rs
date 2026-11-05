@@ -1,4 +1,116 @@
 #[test]
+fn saved_game_directory_flag_is_preserved_and_excludes_pgn_mode() {
+    let directory = tempfile::tempdir().unwrap();
+    let data = directory.path().join("player-data");
+    let pgn = directory.path().join("game.pgn");
+    std::fs::write(&pgn, "1.e4 *").unwrap();
+    let output = cli().arg("--data-dir").arg(&data).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        !data.exists(),
+        "CPU inspection must not open the player store"
+    );
+    assert_failure(
+        &cli().arg("--data-dir").output().unwrap(),
+        "--data-dir requires a value",
+    );
+    for pgn_first in [true, false] {
+        let mut command = cli();
+        if pgn_first {
+            command
+                .arg("--pgn-check")
+                .arg(&pgn)
+                .arg("--data-dir")
+                .arg(&data);
+        } else {
+            command
+                .arg("--data-dir")
+                .arg(&data)
+                .arg("--pgn-check")
+                .arg(&pgn);
+        }
+        let output = command.output().unwrap();
+        assert_failure(&output, "--pgn-check cannot be combined");
+        assert!(output.stdout.is_empty());
+        assert!(!data.exists());
+    }
+    let output = cli().arg("--help").output().unwrap();
+    let help = String::from_utf8_lossy(&output.stdout);
+    assert!(help.contains("--data-dir PATH"));
+    assert!(help.contains("--pgn-check"));
+}
+
+#[test]
+fn pgn_check_bounds_files_and_never_prints_partial_success() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("input.pgn");
+    std::fs::write(&path, "1.e4 * 1.e4 e4 *").unwrap();
+    let output = cli().arg("--pgn-check").arg(&path).output().unwrap();
+    assert_failure(&output, "game 2, ply 2");
+    assert!(output.stdout.is_empty());
+    let file = std::fs::File::create(&path).unwrap();
+    file.set_len(u64::try_from(chess3d::rules::pgn::MAX_INPUT_BYTES).unwrap() + 1)
+        .unwrap();
+    let output = cli().arg("--pgn-check").arg(&path).output().unwrap();
+    assert_failure(&output, "PGN byte limit");
+    std::fs::write(&path, [0xff]).unwrap();
+    assert!(
+        !cli()
+            .arg("--pgn-check")
+            .arg(&path)
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+}
+
+#[test]
+fn pgn_check_reports_each_final_position_without_a_gpu() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("games.pgn");
+    std::fs::write(&path, "1.e4 e5 *\n1.f3 e5 2.g4 Qh4# 0-1").unwrap();
+    let output = cli().arg("--pgn-check").arg(&path).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut state = chess3d::rules::ChessState::initial();
+    state.play(state.parse_uci("e2e4").unwrap()).unwrap();
+    state.play(state.parse_uci("e7e5").unwrap()).unwrap();
+    assert!(stdout.contains(&format!("Game 1: {} *", state.to_fen())));
+    assert!(stdout.lines().nth(1).unwrap().ends_with(" 0-1"));
+    assert_eq!(stdout.lines().count(), 2);
+    assert!(
+        String::from_utf8_lossy(&cli().arg("--help").output().unwrap().stdout)
+            .contains("--pgn-check")
+    );
+}
+
+#[test]
+fn pgn_check_rejects_bad_input_and_other_modes_before_writing() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("bad.pgn");
+    let save = directory.path().join("never.json");
+    std::fs::write(&input, "1.e4 e4 *").unwrap();
+    let output = cli().arg("--pgn-check").arg(&input).output().unwrap();
+    assert_failure(&output, "game 1, ply 2");
+    assert!(output.stdout.is_empty());
+    let output = cli()
+        .arg("--pgn-check")
+        .arg(&input)
+        .arg("--save")
+        .arg(&save)
+        .output()
+        .unwrap();
+    assert_failure(&output, "--pgn-check cannot be combined");
+    assert!(!save.exists());
+    let missing = cli()
+        .args(["--pgn-check", "no-such-pgn-file"])
+        .output()
+        .unwrap();
+    assert!(!missing.status.success());
+}
+
+#[test]
 fn computer_arguments_are_validated_without_launching_a_window() {
     for (args, message) in [
         (vec!["--play", "green"], "--play must be white or black"),

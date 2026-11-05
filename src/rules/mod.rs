@@ -29,6 +29,7 @@ mod notation;
 #[cfg(test)]
 mod optimization_tests;
 mod outcome;
+pub mod pgn;
 mod safety;
 mod transition;
 mod validation;
@@ -283,3 +284,5 @@ mod tests;
 
 #[cfg(test)]
 mod performance;
+#[cfg(test)]
+mod pgn_tests;

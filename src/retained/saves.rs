@@ -143,9 +143,7 @@ impl BoardDriver {
         let mut board = RetainedBoard::new(initial, payload.seed).map_err(|e| e.to_string())?;
         board.game = game;
         board.synchronize();
-        if let Some(computer) = &mut self.computer {
-            computer.changed();
-        }
+        self.computer_changed();
         self.computer = None;
         self.clear_selection()?;
         let mut edits = self.markers.clear();

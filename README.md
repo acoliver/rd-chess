@@ -44,7 +44,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`3eef068d2bad804ed0cc09e1df126cb0d87103cc` from
+`c4bd5e7c3e73f217da380f94086e7b6755ff41f4` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -327,7 +327,7 @@ against a bare king, and bishop-only positions with all bishops on one square
 colour. Other dead positions, including blocked pawn fortresses, are not detected.
 FEN validation checks local legality and promotion budgets, not full retrograde
 reachability. Move counters use `u32`; an overflowing move fails without mutation.
-Timed play, flag-fall, Chess960 and PGN are outside this rules-core proposal.
+Timed play, flag-fall and Chess960 are outside this rules core.
 
 Run the CPU-only rules suite without a graphics adapter:
 
@@ -342,6 +342,47 @@ undo and deterministic random legal sequences. Ignored release benchmarks add
 initial-position perft through depth six and Kiwipete through depth five.
 [Move-generation performance](docs/movegen-performance.md) records the baseline,
 techniques, reproduction commands and exact-behaviour regression coverage.
+
+## PGN records
+
+`rules::pgn` imports and exports game records without a GPU or viewer feature.
+`PgnGame` owns the initial FEN, validated main-line moves, current rules state,
+tags, result and optional comments. Start a record from a rules position, apply
+legal moves, and export it:
+
+```rust
+use chess3d::rules::{ChessState, pgn::{PgnGame, parse}};
+
+let mut record = PgnGame::new(&ChessState::initial());
+let chess_move = record.state().parse_uci("e2e4")?;
+record.play(chess_move)?;
+record.tags.insert("Black".into(), "Computer (Level 2)".into());
+record.set_comment(1, "White occupies the center.")?;
+let pgn = record.export()?;
+let imported = parse(&pgn)?;
+assert_eq!(imported[0].state(), record.state());
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+Export supplies the Seven Tag Roster with defaults, derives SetUp/FEN tags for
+noninitial starts, writes standard SAN and move numbers (including a black-side
+start), and wraps movetext at 80 columns. Player names are metadata supplied by
+the caller. Comments attach to ply zero or follow a committed ply; whitespace
+is normalized. Comments containing braces use semicolon lines. An unbroken
+comment word over 78 columns produces a typed export error instead of being
+altered or exceeding the line limit. Tags escape quotes and backslashes.
+
+Import accepts multiple games, optional SAN check/mate suffixes, zero-spelled
+castles, promotions with or without `=`, comments, annotations and recursive
+variations. Variation moves are validated from their branch position but are
+not retained. The main line rebuilds repetition history. Results are recorded
+declarations, so resignations and agreed draws need no terminal board position;
+the Result tag must agree with the movetext marker. Input is limited to 4 MiB
+and variation nesting to 32. Errors name the one-based game, ply and token.
+
+`cargo run --locked -j4 -- --pgn-check games.pgn` validates the entire file before
+printing `Game N: <final FEN> <result>` for each game. This CPU-only mode cannot
+be combined with scene, save or play options, and never opens a window.
 
 ## Computer analysis and opponent policy
 
@@ -435,8 +476,11 @@ results are drained on `WorkReady`, checked against both ticket and game generat
 then revalidated and committed through the same single object transaction as human
 moves. A computer promotion uses its selected piece without opening a dialog.
 Board clicks cannot select or move pieces on the computer's turn; orbit and zoom
-remain available. Status names the level/profile while thinking and displays
-worker panic, closed-queue, illegal-result and timeout errors until undo/restart.
+remain available. Status names the computer's level/profile on its turn. A
+one-shot host timer adds the thinking label after 300 ms of session time, so
+faster replies do not flash it. Worker panic,
+closed-queue, timer-admission, illegal-result and timeout errors remain visible
+until undo/restart.
 
 Undo/restart invalidate the request generation and cancel the engine ticket,
 including a result already queued for delivery. Undo removes the human move plus
@@ -445,20 +489,32 @@ For a black human, the computer's opening is retained as the first decision poin
 there is no human move to undo before that point. Available repetition/fifty-move
 claims are taken by the computer and shown as a draw without requesting search.
 
-A fixed ten-second elapsed safety budget is separate from each profile's node
-budget. Retained updates signal cooperative cancellation at the deadline. The
-policy also checks that deadline on its worker at every node and between policy
-candidates, so paused presentation does not leave search running indefinitely.
-It returns the seeded policy choice from the last fully completed iteration; if
-none completed, status reports the timeout instead of inventing a move. Normal
-node-budget exhaustion still uses the existing finite static fallback. Exact seed
-reproduction applies when the elapsed emergency cap does not interrupt search.
-Cancellation cannot interrupt an individual rules/evaluation call.
+A fixed ten-second emergency cap is separate from each profile's node budget;
+the current profiles define no soft move times. Starting a search schedules a
+one-shot engine host timer. Its `RetainedEvent::Timer` callback signals the
+worker's cooperative stop flag, checked at every node and between policy
+candidates. The ticket stays live so `WorkReady` can deliver the seeded policy
+choice from the last fully completed iteration. If none completed, status reports
+the timeout instead of inventing a move. Normal node-budget exhaustion still uses
+the existing finite static fallback. Exact seed reproduction applies when the
+emergency cap does not interrupt search. Cancellation cannot interrupt an
+individual rules/evaluation call.
 
-Engine limitation: this pin has work wakeups and retained ticks, but no scheduled
-host timer service. The cap uses monotonic deadlines in those existing callbacks;
-there is no game-created timer thread or executor. A literal scheduled host timer
-requires an engine API before the game can adopt it (engine issue `c997bf5e36af`).
+Replies, undo/restart, return to title and game end retire both search timers.
+The driver cancels retired handles before returning from the current event or
+at the next update boundary for direct game actions. The engine delivers
+`WorkReady` before due timers, so an already queued reply cancels its timers
+without a late stop or status flash. Timer callbacks still run during presentation
+pauses. Windowless sessions advance timer time only through `advance_time`;
+ordinary polling cannot expire a search. The capture pump's wall-clock stall
+watchdog remains outside driver callbacks and independent of the session clock,
+so it can detect a stalled test even when session time is frozen.
+
+Windowless timer regressions advance session time across the 300 ms status delay
+and ten-second cap, use a controlled slow reply to check completed-move delivery,
+and check fast replies, simultaneous work/timer readiness and cancellation on
+undo/restart/title/game end. Production submission and timer-admission failures
+are also covered.
 
 CPU regressions use real engine queues on GPU-free retained hosts, injecting
 completion payloads only for failure/staleness cases. The required windowless GPU
