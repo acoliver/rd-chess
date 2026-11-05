@@ -20,18 +20,7 @@ impl BoardDriver {
             MenuAction::StudyBack => self.study_back()?,
             MenuAction::StudyHint => self.study_hint(),
             MenuAction::StudyRetry => self.study_retry()?,
-            MenuAction::StudyExit => {
-                let training = self.training.as_mut().expect("training");
-                training.save_progress();
-                training.session = None;
-                training.panel.clear();
-                training.highlights.clear();
-                self.transition(if self.screen() == Screen::Lesson {
-                    Screen::Lessons
-                } else {
-                    Screen::Puzzles
-                })?;
-            }
+            MenuAction::StudyExit => self.exit_study()?,
             MenuAction::Why => {
                 self.explain_computer_reply()?;
                 self.transition(Screen::Play)?;
@@ -40,6 +29,21 @@ impl BoardDriver {
         }
         self.persist_training_progress();
         self.sync_menu_ui()
+    }
+    fn exit_study(&mut self) -> Result<(), String> {
+        if self.review_lesson_active() {
+            return self.return_from_review_lesson();
+        }
+        let training = self.training.as_mut().expect("training");
+        training.save_progress();
+        training.session = None;
+        training.panel.clear();
+        training.highlights.clear();
+        self.transition(if self.screen() == Screen::Lesson {
+            Screen::Lessons
+        } else {
+            Screen::Puzzles
+        })
     }
     fn begin_lesson(&mut self, index: usize) -> Result<(), String> {
         let training = self.training.as_mut().expect("training");
@@ -137,10 +141,7 @@ impl BoardDriver {
         training.save_progress();
         training.clear_feedback();
         if complete {
-            training.session = None;
-            training.panel.clear();
-            training.highlights.clear();
-            self.transition(Screen::Lessons)
+            self.exit_study()
         } else {
             self.lesson_checkpoint()
         }

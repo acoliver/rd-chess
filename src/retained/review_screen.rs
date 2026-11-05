@@ -19,6 +19,7 @@ use worldrunner::scene::viewer::{RetainedHost, WorkQueue, WorkSubmitError, WorkT
 
 mod actions;
 mod feedback;
+mod lessons;
 #[cfg(test)]
 mod tests;
 
@@ -38,6 +39,7 @@ pub(super) struct ReviewSession {
     selected: Option<feedback::SelectedMoment>,
     pub mode: ReviewMode,
     pub message: String,
+    lesson_return: Option<lessons::LessonReturn>,
     error: Option<String>,
     pub moves: Vec<String>,
 }
@@ -93,6 +95,7 @@ impl ReviewSession {
             selected: None,
             mode: ReviewMode::Replay,
             message: String::new(),
+            lesson_return: None,
             error: None,
             moves,
         })
@@ -174,6 +177,7 @@ impl BoardDriver {
             })
             .collect();
         state.message.clone_from(&session.message);
+        state.related_lesson = self.related_review_lesson().is_some();
         if state.moments.is_empty() {
             state.message.push_str(
                 "

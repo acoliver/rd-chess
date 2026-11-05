@@ -633,8 +633,15 @@ of at most 100,000 nodes, separate from the review searches. Unclear or uncaused
 "searched continuation, not a proof of a tactical cause."
 
 Typed motif tags in the course select the related lesson. The review shows its
-title and ID with "open from Lessons". This branch has the CPU `LessonRunner`,
-but no on-screen lesson player; the link therefore does not launch a new player.
+title and ID. Open related lesson starts it in the existing Lessons player.
+A locked lesson stays in review and names each unfinished prerequisite by title
+and ID. Exit, Escape and lesson completion return to the same review cursor,
+selected moment, analysis report and camera, with the recorded result and
+computer configuration preserved. Analysis pauses during the lesson and resumes
+on return; an in-flight ply can finish. Lesson progress persists independently,
+without rewriting the reviewed game or its saved slots. Leaving practice to open
+a lesson returns to the recorded line. The control is disabled when the selected
+moment has no tagged lesson.
 All classified motifs have authored course tags. Promotion links to first moves;
 discovered attacks and checks link to the mixed-practice explanation. A course
 without a matching tag produces no guessed lesson link.

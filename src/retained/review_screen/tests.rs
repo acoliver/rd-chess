@@ -1,3 +1,5 @@
+mod lessons;
+
 #[test]
 fn selected_feedback_survives_shortlist_eviction_during_analysis() {
     let (mut driver, mut host) = setup();

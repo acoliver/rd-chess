@@ -10,6 +10,7 @@ pub(in crate::retained) struct ReviewUiState {
     pub moves: Vec<String>,
     pub moments: Vec<String>,
     pub message: String,
+    pub related_lesson: bool,
     pub finished: [Option<String>; 4],
 }
 #[derive(Default)]
@@ -22,8 +23,8 @@ pub(super) struct ReviewWidgets {
 impl GameUi {
     pub(super) fn review_pages(&mut self) -> Result<(), WorldError> {
         self.review_browser()?;
-        let panel = self.native.rect(self.native.root, [310., 490.], [0., 0.])?;
-        self.native.background(panel, [310., 490.])?;
+        let panel = self.native.rect(self.native.root, [310., 528.], [0., 0.])?;
+        self.native.background(panel, [310., 528.])?;
         let handle = self.native.rect_handle(panel);
         self.native.world.set_component(
             handle,
@@ -31,7 +32,7 @@ impl GameUi {
                 anchor_min: glam::Vec2::new(1., 0.5),
                 anchor_max: glam::Vec2::new(1., 0.5),
                 anchored_position: glam::Vec2::new(-163., -30.),
-                size_delta: glam::Vec2::new(310., 490.),
+                size_delta: glam::Vec2::new(310., 528.),
                 ..RectTransform::default()
             }),
         )?;
@@ -59,6 +60,9 @@ impl GameUi {
         }
         self.bindings
             .insert(moments, (0..3).map(MenuAction::Moment).collect());
+        self.review_feedback_controls(panel)
+    }
+    fn review_feedback_controls(&mut self, panel: ObjectHandle) -> Result<(), WorldError> {
         self.review_row(
             panel,
             -100.,
@@ -75,9 +79,14 @@ impl GameUi {
                 ("Return to line", MenuAction::ReviewReturn),
             ],
         )?;
-        let text = self.review_scroll(panel, [290., 46.], [0., -179.])?;
+        let text = self.review_scroll(panel, [290., 30.], [0., -178.])?;
         self.review_widgets.message = Some(self.native.text(text, "", [290., 0.], [0., 0.])?);
-        self.review_row(panel, -222., &[("Leave review", MenuAction::ReviewExit)])
+        self.review_row(
+            panel,
+            -211.,
+            &[("Open related lesson", MenuAction::RelatedLesson)],
+        )?;
+        self.review_row(panel, -248., &[("Leave review", MenuAction::ReviewExit)])
     }
     fn review_browser(&mut self) -> Result<(), WorldError> {
         let panel = self.native.panel([620., 450.])?;
@@ -152,6 +161,14 @@ impl GameUi {
             })
             .collect();
         for (object, action) in rows {
+            if action == MenuAction::RelatedLesson {
+                self.native
+                    .router
+                    .controls
+                    .get_mut(&object)
+                    .expect("related lesson control")
+                    .enabled = state.review.related_lesson;
+            }
             if let MenuAction::ReviewSaved(index) = action {
                 let label = &state.review.finished[usize::from(index)];
                 self.native

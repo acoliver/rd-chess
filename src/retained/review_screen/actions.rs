@@ -42,6 +42,7 @@ impl BoardDriver {
                 self.seek_review(ply)?;
             }
             MenuAction::WhatChanged => self.explain_review(),
+            MenuAction::RelatedLesson => self.open_review_lesson()?,
             MenuAction::ShowReply => self.show_review_reply()?,
             MenuAction::TryAgain => self.retry_review()?,
             MenuAction::ReviewReturn => {

@@ -335,7 +335,9 @@ Storage error: {error}"
     }
 
     pub(super) fn enqueue_move(&mut self, mut edits: Vec<SceneObjectEdit>) -> Result<(), String> {
-        self.review = None;
+        if !self.training_screen() {
+            self.review = None;
+        }
         self.clear_explanation();
         self.pgn.message = None;
         self.computer_changed();

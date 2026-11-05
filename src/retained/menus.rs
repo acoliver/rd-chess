@@ -68,6 +68,7 @@ pub(super) enum MenuAction {
     TryAgain,
     ReviewReturn,
     ReviewExit,
+    RelatedLesson,
     ImportPgn,
     ExportPgn,
     PgnEntry(usize),
@@ -191,7 +192,10 @@ impl BoardDriver {
         Ok(())
     }
     pub(super) fn transition(&mut self, screen: Screen) -> Result<(), String> {
-        if self.screen() == Screen::Review && screen != Screen::Review {
+        if self.screen() == Screen::Review
+            && screen != Screen::Review
+            && !(screen == Screen::Lesson && self.review_lesson_active())
+        {
             self.leave_review()?;
         }
         self.clear_selection()?;
@@ -289,7 +293,8 @@ impl BoardDriver {
             | MenuAction::ShowReply
             | MenuAction::TryAgain
             | MenuAction::ReviewReturn
-            | MenuAction::ReviewExit => self.review_action(action)?,
+            | MenuAction::ReviewExit
+            | MenuAction::RelatedLesson => self.review_action(action)?,
             action => self.storage_menu_action(action)?,
         }
         Ok(())
