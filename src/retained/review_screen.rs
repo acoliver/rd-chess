@@ -235,11 +235,10 @@ No confident teachable moments yet.",
             eye_millimeters: [4_000, -2_000, 17_000],
             target_millimeters: [4_000, 0, 0],
         };
-        self.camera = Some(super::driver::CameraControls {
-            orbit: worldrunner::scene::viewer::OrbitCamera::new(options.pose, options.orbit)
-                .map_err(|e| e.to_string())?,
-            dirty: true,
-        });
+        self.camera = Some(super::driver::CameraControls::new(
+            &options,
+            crate::Side::Ivory,
+        )?);
         self.seek_review(cursor)?;
         self.transition(Screen::Review)
     }

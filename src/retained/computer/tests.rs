@@ -1,4 +1,26 @@
 #[test]
+fn computer_reply_announces_the_committed_move_after_the_human_move() {
+    let (mut driver, mut host) = setup(INITIAL_FEN, Side::Ivory);
+    driver.semantic_update().unwrap();
+    driver.play_uci("e2e4").unwrap();
+    let human = driver.semantic_update().unwrap().unwrap();
+    assert_eq!(human.announcements[0].text, "White pawn from e2 to e4");
+    let reply = game(&driver).parse_uci("g8f6").unwrap();
+    inject(&mut driver, &mut host, Some(reply));
+    wait(&mut driver);
+    let computer = driver.semantic_update().unwrap().unwrap();
+    assert_eq!(computer.announcements[0].text, "Black knight from g8 to f6");
+    assert!(
+        driver
+            .semantic_update()
+            .unwrap()
+            .unwrap()
+            .announcements
+            .is_empty()
+    );
+}
+
+#[test]
 fn why_control_shows_verified_sentences_after_a_computer_reply() {
     let (mut driver, mut host) = setup(INITIAL_FEN, Side::Ivory);
     driver.play_uci("e2e4").unwrap();

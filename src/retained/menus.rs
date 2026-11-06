@@ -19,6 +19,8 @@ pub enum Screen {
     #[default]
     Play,
     InGameMenu,
+    ConfirmResign,
+    DrawOffer,
     GameOver,
 }
 
@@ -35,6 +37,11 @@ pub(super) enum MenuAction {
     Undo,
     Restart,
     Resign,
+    ConfirmResign,
+    CancelDecision,
+    OfferDraw,
+    AcceptDraw,
+    DeclineDraw,
     Title,
     NewGame,
     ClaimDraw,
@@ -106,6 +113,7 @@ pub(super) const OVER: &[(&str, MenuAction)] = &[
 pub(super) struct Menus {
     pub screen: Screen,
     pub result: Option<String>,
+    pub offer: Option<Side>,
     pub side: usize,
     pub level: u8,
     pub parent: Screen,
@@ -116,6 +124,7 @@ impl Default for Menus {
         Self {
             screen: Screen::Play,
             result: None,
+            offer: None,
             side: 0,
             level: 1,
             parent: Screen::Title,
@@ -133,6 +142,12 @@ impl BoardDriver {
         activate: bool,
     ) -> Result<(), String> {
         for &action in actions {
+            if let Some(square) = self.ui.as_ref().and_then(|ui| ui.board_action(action)) {
+                if self.board_input_allowed() {
+                    self.click_square(Some(square))?;
+                }
+                continue;
+            }
             if self.label_action(action)? {
                 continue;
             }
@@ -160,6 +175,7 @@ impl BoardDriver {
         self.storage = storage;
         reset?;
         self.computer = None;
+        self.orient_board(Side::Ivory)?;
         self.transition(Screen::Title)
     }
     pub fn claim_available(&self) -> bool {
@@ -189,6 +205,8 @@ impl BoardDriver {
     }
     pub(super) fn finish(&mut self, result: String) -> Result<(), String> {
         self.computer_changed();
+        self.menus.offer = None;
+        self.interaction.announcement = Some(result.clone());
         self.menus.result = Some(result);
         self.clear_selection()?;
         self.autosave();
@@ -236,13 +254,14 @@ impl BoardDriver {
             ui.synchronize(state, self.viewport)
                 .map_err(|e| e.to_string())?;
         }
-        Ok(())
+        self.sync_accessibility()
     }
     pub(super) fn menu_action(&mut self, action: MenuAction) -> Result<(), String> {
         match action {
             MenuAction::Friend => {
                 self.computer_changed();
                 self.computer = None;
+                self.orient_board(Side::Ivory)?;
                 self.restart()?;
                 self.transition(Screen::Play)?;
             }
@@ -270,7 +289,7 @@ impl BoardDriver {
                 self.reset_camera();
                 self.transition(Screen::Play)?;
             }
-            MenuAction::Resign => self.resign()?,
+            MenuAction::Resign => self.transition(Screen::ConfirmResign)?,
             MenuAction::ClaimDraw => self.claim_draw()?,
             action => self.activity_menu_action(action)?,
         }
@@ -278,6 +297,11 @@ impl BoardDriver {
     }
     fn activity_menu_action(&mut self, action: MenuAction) -> Result<(), String> {
         match action {
+            MenuAction::ConfirmResign => self.resign()?,
+            MenuAction::CancelDecision => self.transition(Screen::InGameMenu)?,
+            MenuAction::OfferDraw => self.offer_draw()?,
+            MenuAction::AcceptDraw => self.finish("Draw by agreement".into())?,
+            MenuAction::DeclineDraw => self.decline_draw()?,
             MenuAction::LinkedLesson(index) => self.open_text_lesson(index)?,
             MenuAction::Lessons
             | MenuAction::Puzzles

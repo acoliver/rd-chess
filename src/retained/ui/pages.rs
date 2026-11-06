@@ -16,6 +16,22 @@ impl GameUi {
         self.list_rows(paste, &[("Paste PGN", MenuAction::PastePgn)], [560., 28.])?;
         self.setup_page()?;
         self.command_page(Screen::InGameMenu, "Game menu", menus::PAUSE)?;
+        self.command_page(
+            Screen::ConfirmResign,
+            "Resign game?",
+            &[
+                ("Cancel", MenuAction::CancelDecision),
+                ("Confirm resign", MenuAction::ConfirmResign),
+            ],
+        )?;
+        self.command_page(
+            Screen::DrawOffer,
+            "Draw offer",
+            &[
+                ("Decline draw", MenuAction::DeclineDraw),
+                ("Accept draw", MenuAction::AcceptDraw),
+            ],
+        )?;
         self.command_page(Screen::GameOver, "Game over", menus::OVER)?;
         self.storage_pages()?;
         self.review_pages()?;
@@ -54,6 +70,10 @@ impl GameUi {
         entries: &[(&str, MenuAction)],
         size: [f32; 2],
     ) -> Result<(), WorldError> {
+        self.native.router.semantics.insert(
+            list,
+            worldrunner::ui::UiSemantics::label(super::accessibility::list_label(entries)),
+        );
         let mut actions = Vec::new();
         let mut rows = Vec::new();
         for (index, &(label, action)) in entries.iter().enumerate() {

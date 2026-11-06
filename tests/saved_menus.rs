@@ -140,6 +140,9 @@ fn resignation_result_persists_and_finished_current_has_no_continue() {
     key(&mut driver, "end");
     key(&mut driver, "arrowup");
     key(&mut driver, "enter");
+    assert_eq!(driver.screen(), Screen::ConfirmResign);
+    key(&mut driver, "arrowdown");
+    key(&mut driver, "enter");
     assert_eq!(driver.screen(), Screen::GameOver);
     assert_eq!(driver.status_text(), "White wins: Black resigned");
     driver.save_game(3).unwrap();

@@ -119,6 +119,25 @@ seeded marble remain procedural source assets, not copied image textures.
   Resize and unmap/remap affect presentation only; camera changes never rewrite
   the saved position. `--capture` and `--window` cannot be combined.
 
+## Keyboard and screen-reader play
+
+The native board exposes 64 named square buttons through the engine's accessibility
+semantics. Arrow keys move focus; Enter or Space selects a piece or commits its
+move through the same handler used by clicks. Tab enters or leaves the board as
+one navigation region. Every square remains individually focusable by assistive
+technology. A gold border marks keyboard or assistive focus without changing
+pointer picking or the retained board objects.
+
+White reads from a8 across and down; Black reads from h1 across and up. Computer
+side selection also rotates the preset camera. Selected squares and legal targets
+are included in their names. A live status announces moves, captures, check,
+castling, promotion, en passant and outcomes, including the computer's reply.
+Resignation asks for confirmation. Local draw offers have named accept/decline
+controls; the computer currently declines offers and still claims rule-based draws.
+
+See [accessibility controls and limitations](docs/accessibility.md), including the
+engine's current editable-text semantic limitation.
+
 ## Retained board and game test controls
 
 `--moves "e2e4 e7e5 g1f3"` applies UCI moves in order through `ChessState`.

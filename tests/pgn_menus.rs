@@ -118,6 +118,9 @@ fn finished_export_retains_declared_result_and_nonstandard_initial_fen() {
     key(&mut driver, "end");
     key(&mut driver, "arrowup");
     key(&mut driver, "enter");
+    assert_eq!(driver.screen(), Screen::ConfirmResign);
+    key(&mut driver, "arrowdown");
+    key(&mut driver, "enter");
     assert_eq!(driver.screen(), Screen::GameOver);
     click(&mut driver, [550., 455.]);
     let path = files(root.path()).pop().unwrap();
