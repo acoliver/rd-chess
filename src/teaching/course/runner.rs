@@ -46,6 +46,14 @@ impl TaskRunner {
         self.hint_level
     }
 
+    pub fn hint_move(&self) -> Option<crate::rules::LegalMove> {
+        self.choices.first().map(|node| {
+            self.board
+                .parse_uci(&node.uci)
+                .expect("validated solution checkpoint")
+        })
+    }
+
     pub fn hint(&mut self) -> Option<&str> {
         if self.status == TaskStatus::Completed || self.hint_level == self.task.hints.len() {
             return None;
@@ -68,6 +76,7 @@ impl TaskRunner {
         }
         if self.task.goal == Goal::AnyMate && self.task.is_mate(&next) {
             self.board = next;
+            self.choices.clear();
             self.status = TaskStatus::Completed;
             return Ok(());
         }

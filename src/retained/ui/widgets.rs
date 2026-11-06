@@ -21,7 +21,7 @@ pub(super) struct NativeUi {
     pub fonts: Arc<FontBook>,
     pub router: UiRouter,
     pub root: ObjectHandle,
-    font: FontId,
+    pub font: FontId,
 }
 impl NativeUi {
     pub fn text_handle(&self, object: ObjectHandle) -> worldrunner::simulation::ComponentHandle {

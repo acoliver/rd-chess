@@ -18,6 +18,7 @@ use std::{
 use worldrunner::scene::viewer::{RetainedHost, WorkQueue, WorkSubmitError, WorkTicket};
 
 mod actions;
+mod annotations;
 mod feedback;
 mod lessons;
 mod links;

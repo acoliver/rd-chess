@@ -35,8 +35,8 @@ fn training_checkpoints_preserve_saved_games_and_return_to_continue() {
     assert_eq!(driver.board().unwrap().game(), &game);
     assert_eq!(driver.saved_payload(1).unwrap().replay().unwrap(), game);
     assert!(driver.markers.base >= 68);
-    assert_eq!(driver.squares.base, driver.markers.base + 64);
-    assert!(driver.squares.visible.is_empty());
+    assert!(driver.board_annotations().is_empty());
+    assert!(driver.training_highlights().is_empty());
     driver.show_title().unwrap();
     lessons(&mut driver);
     key(&mut driver, "enter");
@@ -355,6 +355,11 @@ fn puzzle_setup_wrong_retry_hint_and_solver_line() {
     for sentence in explanation.sentences {
         assert!(driver.panel_text().contains(&sentence));
     }
+    click(&mut driver, [400., 565.]);
+    assert!(
+        driver.training_highlights().is_empty(),
+        "first hint gives only the idea"
+    );
     click(&mut driver, [400., 565.]);
     assert!(
         driver

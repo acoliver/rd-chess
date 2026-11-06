@@ -12,6 +12,7 @@
           "kind": "explain",
           "text": "Files run from a to h; ranks run from 1 to 8. White starts on ranks 1 and 2. A pawn moves forward into an empty square and captures one square diagonally. On its first move it may advance two empty squares. On reaching the last rank, a pawn must promote to a queen, rook, bishop or knight.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -37,6 +38,7 @@
             "d2d4": "That is the d-pawn. Move the pawn on e2."
           },
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": ["e2", "e3", "e4"]
           }
         },
@@ -44,11 +46,13 @@
           "kind": "explain",
           "text": "A knight jumps: two squares in one direction, then one across. It may jump over other pieces. From g1 it can reach f3 before any pawn moves.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": [
               {
                 "from": "g1",
-                "to": "f3"
+                "to": "f3",
+                "colour": [0.0, 0.7, 0.8, 1.0]
               }
             ]
           }
@@ -70,6 +74,7 @@
             "b1c3": "That develops the other knight. This task asks for the g1 knight."
           },
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": []
           }
         },
@@ -77,6 +82,7 @@
           "kind": "explain",
           "text": "The king moves one square, but never into an attack. Kings may not stand next to each other.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -100,6 +106,7 @@
           "hints": ["Stay on rank 1.", "Move e1-d1 or e1-f1."],
           "feedback": {},
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": []
           }
         }
@@ -116,6 +123,7 @@
           "kind": "explain",
           "text": "A rook travels along a file or rank. A bishop travels diagonally and stays on the same square colour. Neither can jump over a piece. A queen combines both kinds of movement.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -135,6 +143,7 @@
           "hints": ["Keep the rook on the d-file.", "Move d4-d7."],
           "feedback": {},
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": ["d4", "d7"]
           }
         },
@@ -153,6 +162,7 @@
           "hints": ["Trace c1-d2-e3-f4-g5.", "Move c1-g5."],
           "feedback": {},
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": []
           }
         },
@@ -171,6 +181,7 @@
           "hints": ["The queen can use a bishop diagonal.", "Move d1-h5."],
           "feedback": {},
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": []
           }
         }
@@ -187,6 +198,7 @@
           "kind": "explain",
           "text": "Check means the king is attacked. You must remove that attack now: move the king, take the attacker or block its line. You cannot leave the king in check to attack something else.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -212,6 +224,7 @@
             "a1a8": "Moving your rook there leaves your king in check."
           },
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": []
           }
         },
@@ -219,6 +232,7 @@
           "kind": "explain",
           "text": "Checkmate means check with no legal escape. Stalemate means no legal move when the king is not in check; it is a draw. A checking move is not always mate. Look for every escape square.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -236,6 +250,7 @@
           "kind": "explain",
           "text": "A queen can cut off several escape squares. Your king can protect her when she comes close. Keep the kings apart and check that the enemy king cannot capture the queen.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -257,6 +272,7 @@
             "g5f4": "That move does not check the king. Look for a check that covers the escape squares."
           },
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": ["g7", "g8"]
           }
         }
@@ -273,6 +289,7 @@
           "kind": "explain",
           "text": "Two rooks can take turns cutting off ranks. One blocks the king from coming back; the other gives check on the next rank. Keep the checking rook out of reach.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -304,6 +321,7 @@
             "b6b7": "Use the a-rook first, keeping the rooks on separate ranks."
           },
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": ["a7", "b8"]
           }
         }
@@ -320,6 +338,7 @@
           "kind": "explain",
           "text": "Pawns in front of a castled king can block its escape. A rook on the back rank may then give mate. Check whether the defender can capture the rook or put a piece in its path.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -339,6 +358,7 @@
           "hints": ["The black pawns fill f7, g7 and h7.", "The e-file is open.", "Move e1-e8."],
           "feedback": {},
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": ["f7", "g7", "h7"]
           }
         }
@@ -355,6 +375,7 @@
           "kind": "explain",
           "text": "Before moving, look for pieces that can be taken without losing as much in return. A queen is usually worth more than a rook. Count legal recaptures, not just pieces that appear to point at a square.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -376,6 +397,7 @@
             "e1f1": "Your king is safe already. Look for the undefended queen."
           },
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": []
           }
         },
@@ -383,6 +405,7 @@
           "kind": "explain",
           "text": "A defended piece can still be worth taking. Here c4 and g2 both attack d5; the e6 pawn is its only defender. Giving up a pawn to win a rook is a good exchange.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": ["c4", "g2", "e6", "d5"],
             "arrows": []
           }
@@ -412,6 +435,7 @@
           "hints": ["Start with the less valuable attacker.", "Play c4xd5; after ...exd5, Bg2xd5."],
           "feedback": {},
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": []
           }
         }
@@ -428,6 +452,7 @@
           "kind": "explain",
           "text": "A fork attacks two targets at once. A check is a forcing first target: the king must respond before another piece can be saved. Trace the knight jumps before committing.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -459,6 +484,7 @@
             "e4f6": "That checks the king but does not attack the queen on c8."
           },
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": ["c8", "e8", "d6"]
           }
         }
@@ -475,11 +501,13 @@
           "kind": "explain",
           "text": "A piece is absolutely pinned when moving it would expose its king to check. Here the rook on e1 pins the knight on e7. The king cannot capture an attacker on e7 because that square is protected by the rook.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": [
               {
                 "from": "e1",
-                "to": "e7"
+                "to": "e7",
+                "colour": [0.0, 0.7, 0.8, 1.0]
               }
             ]
           }
@@ -501,6 +529,7 @@
             "e1e7": "That also takes the knight safely. This exercise asks for the bishop capture, keeping the rook behind it."
           },
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": []
           }
         }
@@ -517,6 +546,7 @@
           "kind": "explain",
           "text": "A skewer attacks a valuable piece with another target behind it. When the front piece moves, the rear piece becomes available. A check can force that first move.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -546,6 +576,7 @@
           "hints": ["The b2-h8 diagonal passes through f6.", "Check from b2 first.", "After ...Kg6, Bb2xh8 wins the queen."],
           "feedback": {},
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": ["b2", "f6", "h8"]
           }
         }
@@ -562,6 +593,7 @@
           "kind": "explain",
           "text": "Central pawns help control squares for your pieces. Develop knights and bishops so they can join the game. These tasks practise useful plans, not a claim that only one opening move is good.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -615,6 +647,7 @@
             "d1h5": "Develop a knight first in this exercise. An early queen may lose time when attacked."
           },
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": []
           }
         },
@@ -622,6 +655,7 @@
           "kind": "explain",
           "text": "Castling moves the king two squares towards its rook and puts that rook next to it. The path must be clear. Neither piece may have moved, and the king cannot castle out of, through or into check.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -641,6 +675,7 @@
           "hints": ["The king and h1 rook still have castling rights.", "Move e1-g1; the rook moves to f1 automatically."],
           "feedback": {},
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": []
           }
         }
@@ -657,6 +692,7 @@
           "kind": "explain",
           "text": "Use a short scan: is your king safe, what does the opponent threaten, and do you have a check or capture? Test the reply before choosing a move. A discovered attack moves one piece out of the way so a rook, bishop or queen behind it attacks a target. If that target is the king, it is a discovered check. Check what both pieces attack after the move. These positions change the squares from earlier lessons.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }
@@ -686,6 +722,7 @@
           "hints": ["Look at f6.", "Nf6+ attacks g8 and e8.", "After ...Kf7, Nf6xe8 wins the queen."],
           "feedback": {},
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": []
           }
         },
@@ -704,6 +741,7 @@
           "hints": ["Your king covers g7 and h7.", "Check along rank 8.", "Qf8 is one mate. Other mating moves also count."],
           "feedback": {},
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": []
           }
         },
@@ -711,6 +749,7 @@
           "kind": "explain",
           "text": "You can now practise the mixed puzzle pack. Puzzle difficulty describes those exercises, not your playing strength. Return to a lesson whenever a pattern is hard to explain.",
           "annotations": {
+            "square_colour": [0.0, 0.7, 0.8, 1.0],
             "squares": [],
             "arrows": []
           }

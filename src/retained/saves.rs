@@ -161,7 +161,6 @@ impl BoardDriver {
         self.clear_explanation();
         self.clear_selection()?;
         let mut edits = self.markers.clear();
-        edits.extend(self.squares.clear());
         if let Some(old) = &self.board {
             edits.extend(
                 old.objects()
@@ -190,7 +189,6 @@ impl BoardDriver {
             .expect("saved kings")
             + 1;
         self.markers.base = self.markers.base.max(68);
-        self.squares.base = self.markers.base + 64;
         self.board = Some(board);
         self.pending.borrow_mut().push_back(edits);
         self.menus.result = payload.result;

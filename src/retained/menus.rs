@@ -208,6 +208,15 @@ impl BoardDriver {
             self.leave_review()?;
         }
         self.clear_selection()?;
+        if self.screen() != screen
+            && matches!(
+                self.screen(),
+                Screen::Play | Screen::Lesson | Screen::Puzzle
+            )
+            && let Some(training) = &mut self.training
+        {
+            training.annotations.clear();
+        }
         if !matches!(screen, Screen::PgnImport | Screen::PgnGames) {
             self.pgn.message = None;
         }

@@ -179,6 +179,7 @@ impl RetainedBoard {
 }
 mod computer;
 
+mod annotations;
 mod clipboard;
 #[cfg(test)]
 mod clipboard_tests;

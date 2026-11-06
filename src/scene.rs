@@ -42,7 +42,6 @@ fn build_render_scene(
     meshes.push(scene_mesh(&stretch_detail(knight_eye_mesh())));
     meshes.push(scene_mesh(&board_inlay_mesh()));
     meshes.push(scene_mesh(&crate::marker_mesh::marker_mesh()));
-    meshes.push(scene_mesh(&crate::marker_mesh::square_mesh()));
     let textures = [
         texture(512, 512, board_albedo(position.seed, 512)),
         texture(
@@ -67,9 +66,8 @@ fn build_render_scene(
             marble_albedo(position.seed ^ 0xf4a0, 256, [31, 63, 59]),
         ),
         texture(1, 1, vec![174, 139, 78, 255]),
-        texture(1, 1, vec![25, 185, 205, 255]),
     ];
-    let materials = [0u32, 1, 2, 3, 4, 5, 6, 7]
+    let materials = [0u32, 1, 2, 3, 4, 5, 6]
         .into_iter()
         .map(|i| {
             SceneMaterial::new(SceneMaterialParts {

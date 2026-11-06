@@ -1,6 +1,6 @@
 #![deny(clippy::too_many_lines, clippy::too_many_arguments)]
 use super::super::{Screen, ui::StudyState};
-use super::{BoardDriver, Session, Setup, Square, Step, TaskStatus};
+use super::{BoardDriver, Session, Setup, Step, TaskStatus};
 
 impl BoardDriver {
     pub(in crate::retained) fn study_ui_state(&self) -> Option<StudyState> {
@@ -79,41 +79,22 @@ impl BoardDriver {
     }
     pub(in crate::retained) fn refresh_training_panel(&mut self) {
         let training = self.training.as_mut().expect("training");
-        training.highlights.clear();
+        training.refresh_annotations();
         let heading = match training.session.as_ref().expect("session") {
             Session::Lesson { runner, index } => {
                 let lesson = &training.course.lessons()[*index];
-                let (text, annotations) = match runner.step().expect("active step") {
-                    Step::Explain { text, annotations } => (text, annotations),
-                    Step::Task(task) => (&task.text, &task.annotations),
+                let text = match runner.step().expect("active step") {
+                    Step::Explain { text, .. } => text,
+                    Step::Task(task) => &task.text,
                 };
-                training
-                    .highlights
-                    .extend(annotations.squares.iter().map(|name| square(name)));
-                let arrows = annotations
-                    .arrows
-                    .iter()
-                    .map(|arrow| format!("{} to {}", arrow.from, arrow.to))
-                    .collect::<Vec<_>>()
-                    .join(", ");
                 format!(
-                    "{} ({}/{})\n{text}{}",
+                    "{} ({}/{})\n{text}",
                     lesson.title,
                     runner.step_index() + 1,
-                    lesson.steps.len(),
-                    if arrows.is_empty() {
-                        String::new()
-                    } else {
-                        format!("\nArrows: {arrows}")
-                    }
+                    lesson.steps.len()
                 )
             }
             Session::Puzzle { puzzle, setup, .. } => {
-                if matches!(setup, Setup::Ready) && !training.hint.is_empty() {
-                    training.highlights.insert(square(
-                        &puzzle.moves.split_whitespace().nth(1).expect("solver move")[..2],
-                    ));
-                }
                 format!(
                     "Puzzle {} | {} | {}\n{}",
                     puzzle.id,
@@ -141,6 +122,7 @@ impl BoardDriver {
     }
     pub(in crate::retained) fn clear_explanation(&mut self) {
         if let Some(training) = &mut self.training {
+            training.annotations.clear();
             training.reply = None;
             if training.session.is_none() {
                 training.panel.clear();
@@ -151,6 +133,7 @@ impl BoardDriver {
         let training = self.training.as_mut().expect("training");
         if !training.panel.is_empty() && training.session.is_none() {
             training.panel.clear();
+            training.annotations.clear();
             return Ok(());
         }
         let (state, mv) = training
@@ -167,13 +150,27 @@ impl BoardDriver {
             .into_iter()
             .map(|mv| state.to_san(mv).expect("legal reply alternative"))
             .collect();
+        let annotations = self.explanation_annotations(
+            explanation
+                .alternative_line
+                .as_ref()
+                .and_then(|line| line.first().copied()),
+            explanation.facts.iter().find_map(|fact| {
+                matches!(
+                    fact.kind,
+                    crate::teaching::FactKind::HangingPiece { .. }
+                        | crate::teaching::FactKind::Exchange {
+                            gain: i32::MIN..=-1
+                        }
+                )
+                .then(|| fact.line.get(1).copied())
+                .flatten()
+            }),
+        );
+        self.training.as_mut().expect("training").annotations = annotations;
         Ok(())
     }
 }
-fn square(name: &str) -> Square {
-    Square::new(name.as_bytes()[0] - b'a', name.as_bytes()[1] - b'1').expect("validated annotation")
-}
-
 fn controls(training: &super::Training) -> [bool; 5] {
     match &training.session {
         Some(Session::Lesson { runner, .. }) => [

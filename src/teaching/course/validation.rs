@@ -34,7 +34,8 @@ fn square(value: &str) -> Result<()> {
 }
 
 impl Annotations {
-    fn validate(&self) -> Result<()> {
+    pub(super) fn validate(&self) -> Result<()> {
+        super::super::annotations::validate_colour(self.square_colour)?;
         require(
             self.squares.len() <= 64 && self.arrows.len() <= 32,
             "too many annotations",
@@ -43,6 +44,7 @@ impl Annotations {
             square(name)?;
         }
         for arrow in &self.arrows {
+            super::super::annotations::validate_colour(arrow.colour)?;
             square(&arrow.from)?;
             square(&arrow.to)?;
             require(arrow.from != arrow.to, "annotation arrow has no length")?;

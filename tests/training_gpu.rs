@@ -53,7 +53,7 @@ fn tint(image: &RgbaImage, center: [f64; 2]) -> usize {
     (0..image.viewport.height)
         .flat_map(|y| (0..image.viewport.width).map(move |x| (x, y)))
         .filter(|&(x, y)| {
-            (f64::from(x) - center[0]).abs() < 12. && (f64::from(y) - center[1]).abs() < 12.
+            (16.0..=23.0).contains(&(f64::from(x) - center[0]).hypot(f64::from(y) - center[1]))
         })
         .filter(|&(x, y)| {
             let at = ((y * image.viewport.width + x) * 4) as usize;
@@ -137,7 +137,7 @@ fn required_gpu_lessons_list_and_task_show_authored_highlight_pixels() {
     let [e3, d3] = training_move_pixels("e3d3", [800, 600]).unwrap();
     assert!(
         tint(&task, e3) > 200,
-        "cyan pixels must cover authored e3, independently of driver state"
+        "cyan ring pixels must surround authored e3, independently of driver state"
     );
     assert!(
         tint(&explanation, e3) < 20,
@@ -152,4 +152,90 @@ fn required_gpu_lessons_list_and_task_show_authored_highlight_pixels() {
         capture_frame(&mut run, &queue, &inbox).unwrap().pixels
     );
     run.shutdown().unwrap();
+}
+
+#[test]
+fn required_gpu_authored_arrow_pixels_follow_only_the_projected_board_line() {
+    let board = RetainedBoard::new(ChessState::initial(), 42).unwrap();
+    let options = viewer_options(board.scene(), CameraPreset::Overhead, [800, 600]);
+    let host = RetainedHost::new(board.scene().clone(), options).unwrap();
+    let mut driver = BoardDriver::with_board(board);
+    driver.show_title().unwrap();
+    let (inputs, queue, inbox) = (driver.inputs(), driver.queue(), driver.captures());
+    let mut run = host.windowless(&mut driver).unwrap();
+    capture_frame(&mut run, &queue, &inbox).unwrap();
+    for name in ["home", "arrowdown", "arrowdown", "enter", "enter"] {
+        key(&inputs, name);
+    }
+    capture_frame(&mut run, &queue, &inbox).unwrap();
+    click(&inputs, [240., 565.]);
+    capture_frame(&mut run, &queue, &inbox).unwrap();
+    for point in training_move_pixels("e2e4", [800, 600]).unwrap() {
+        click(&inputs, point);
+        capture_frame(&mut run, &queue, &inbox).unwrap();
+    }
+    click(&inputs, [240., 565.]);
+    let arrow = capture_frame(&mut run, &queue, &inbox).unwrap();
+    save(&arrow, "lesson-authored-arrow.png");
+    let line = training_move_pixels("g1f3", [800, 600]).unwrap();
+    let (along, elsewhere) = arrow_pixels(&arrow, line);
+    assert!(along > 120, "authored cyan arrow on board line: {along}");
+    assert_eq!(
+        elsewhere, 0,
+        "no cyan arrow pixels outside its board corridor"
+    );
+    assert_eq!(
+        cyan_near(&arrow, line[0]),
+        0,
+        "the knight occludes the board arrow at its source"
+    );
+    click(&inputs, [240., 565.]);
+    let cleared = capture_frame(&mut run, &queue, &inbox).unwrap();
+    assert_eq!(
+        arrow_pixels(&cleared, line),
+        (0, 0),
+        "Next clears the previous step's arrow"
+    );
+    run.shutdown().unwrap();
+}
+fn arrow_pixels(image: &RgbaImage, [from, to]: [[f64; 2]; 2]) -> (usize, usize) {
+    let delta = [to[0] - from[0], to[1] - from[1]];
+    let length = delta[0].powi(2) + delta[1].powi(2);
+    image
+        .pixels
+        .chunks_exact(4)
+        .enumerate()
+        .filter(|(_, p)| authored_cyan(p))
+        .fold((0, 0), |(along, elsewhere), (index, _)| {
+            let index = u32::try_from(index).unwrap();
+            let p = [
+                f64::from(index % image.viewport.width),
+                f64::from(index / image.viewport.width),
+            ];
+            let t = (((p[0] - from[0]) * delta[0] + (p[1] - from[1]) * delta[1]) / length)
+                .clamp(0., 1.);
+            let distance = (p[0] - from[0] - t * delta[0]).hypot(p[1] - from[1] - t * delta[1]);
+            if distance <= 14. {
+                (along + 1, elsewhere)
+            } else {
+                (along, elsewhere + 1)
+            }
+        })
+}
+fn authored_cyan(pixel: &[u8]) -> bool {
+    // Linear authored RGBA [0, .7, .8, 1] in the sRGB capture attachment.
+    pixel[0] <= 1 && pixel[1].abs_diff(218) <= 1 && pixel[2].abs_diff(231) <= 1 && pixel[3] == 255
+}
+fn cyan_near(image: &RgbaImage, centre: [f64; 2]) -> usize {
+    image
+        .pixels
+        .chunks_exact(4)
+        .enumerate()
+        .filter(|(index, pixel)| {
+            let index = u32::try_from(*index).unwrap();
+            let x = f64::from(index % image.viewport.width);
+            let y = f64::from(index / image.viewport.width);
+            (x - centre[0]).hypot(y - centre[1]) < 5. && authored_cyan(pixel)
+        })
+        .count()
 }

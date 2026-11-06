@@ -22,7 +22,6 @@ pub type InputInbox = Rc<RefCell<VecDeque<RetainedInput>>>;
 pub struct BoardDriver {
     pub(super) board: Option<super::RetainedBoard>,
     pub(super) training: Option<super::training::Training>,
-    pub(super) squares: Markers,
     pub(super) menus: super::menus::Menus,
     pub(super) pgn: super::pgn_menus::PgnMenu,
     pub(super) label_edit: Option<super::save_labels::LabelEdit>,
@@ -86,7 +85,6 @@ impl BoardDriver {
                 .expect("game has kings")
                 + 1;
             self.markers.base = self.markers.base.max(68);
-            self.squares.base = self.markers.base + 64;
         }
         self.refresh_game_over()?;
         self.sync_menu_ui()
@@ -164,15 +162,6 @@ impl BoardDriver {
         Ok(true)
     }
     fn publish_markers(&mut self, host: &mut RetainedHost) -> Result<bool, String> {
-        let squares = self.training_highlights();
-        let edits = self.squares.square_edits(&squares);
-        if !edits.is_empty() {
-            if admit(host, RetainedUpdate::Objects(edits))? {
-                self.squares.visible = squares;
-                self.presenting = true;
-            }
-            return Ok(false);
-        }
         let mut next = if self.preferences.markers {
             self.destinations()
         } else {
@@ -194,7 +183,18 @@ impl BoardDriver {
     fn publish_ui(&mut self, host: &mut RetainedHost) -> Result<bool, String> {
         self.sync_menu_ui()?;
         let text = self.status_text();
+        let annotations = self.board_annotations();
+        let view = SceneView::new(
+            self.camera_pose().expect("configured camera"),
+            host.options().camera,
+            worldrunner::scene::gpu::Viewport {
+                width: self.viewport[0],
+                height: self.viewport[1],
+            },
+        )
+        .map_err(|e| e.to_string())?;
         if let Some(ui) = &mut self.ui {
+            ui.set_annotations(&annotations, &view)?;
             if let Some(overlay) = ui.overlay(&text, self.viewport)? {
                 self.overlay = Some(overlay);
             }

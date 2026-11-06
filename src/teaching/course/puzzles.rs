@@ -68,6 +68,8 @@ pub struct Puzzle {
     pub rating: u32,
     #[serde(rename = "Themes")]
     pub themes: String,
+    #[serde(default)]
+    pub annotations: Annotations,
 }
 
 impl Puzzle {
@@ -108,7 +110,7 @@ impl Puzzle {
             solutions: nodes,
             hints: vec!["Look for checks, captures and threats.".into()],
             feedback: BTreeMap::new(),
-            annotations: Annotations::default(),
+            annotations: self.annotations.clone(),
         };
         task.validate()?;
         Ok(task)
@@ -161,6 +163,10 @@ impl PuzzleRunner {
 
     pub fn status(&self) -> &TaskStatus {
         self.task.status()
+    }
+
+    pub fn hint_move(&self) -> Option<crate::rules::LegalMove> {
+        self.task.hint_move()
     }
 
     pub fn progress(&self) -> &Progress {

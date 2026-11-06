@@ -25,9 +25,9 @@ pub enum TeachingError {
     Invalid(String),
 }
 
-type Result<T> = std::result::Result<T, TeachingError>;
+pub(super) type Result<T> = std::result::Result<T, TeachingError>;
 
-fn require(condition: bool, message: impl Into<String>) -> Result<()> {
+pub(super) fn require(condition: bool, message: impl Into<String>) -> Result<()> {
     if condition {
         Ok(())
     } else {
@@ -106,11 +106,21 @@ pub enum Step {
     Task(Task),
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Annotations {
     pub squares: Vec<String>,
+    pub square_colour: [f32; 4],
     pub arrows: Vec<Arrow>,
+}
+impl Default for Annotations {
+    fn default() -> Self {
+        Self {
+            squares: Vec::new(),
+            square_colour: super::annotations::authored_colour(),
+            arrows: Vec::new(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -118,6 +128,8 @@ pub struct Annotations {
 pub struct Arrow {
     pub from: String,
     pub to: String,
+    #[serde(default = "super::annotations::authored_colour")]
+    pub colour: [f32; 4],
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

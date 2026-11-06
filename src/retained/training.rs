@@ -1,5 +1,6 @@
 //! Window teaching controller. Runners remain the authority for accepted moves.
 mod actions;
+mod annotations;
 mod display;
 mod moves;
 use super::{BoardDriver, menus::MenuAction};
@@ -22,6 +23,9 @@ pub(super) struct Training {
     feedback: String,
     feedback_moves: Vec<String>,
     hint: String,
+    hint_level: u8,
+    pub palette: crate::teaching::AnnotationPalette,
+    pub annotations: Vec<worldrunner::ui::plan::ui::annotations::Annotation>,
     highlights: BTreeSet<Square>,
     puzzle_cursor: usize,
     band: Option<&'static str>,
@@ -57,6 +61,9 @@ impl Training {
             feedback: String::new(),
             feedback_moves: Vec::new(),
             hint: String::new(),
+            hint_level: 0,
+            palette: crate::teaching::AnnotationPalette::bundled().map_err(|e| e.to_string())?,
+            annotations: Vec::new(),
             highlights: BTreeSet::new(),
             puzzle_cursor: 0,
             band: None,
@@ -69,6 +76,7 @@ impl Training {
         self.session = None;
         self.panel.clear();
         self.highlights.clear();
+        self.annotations.clear();
         self.reply = None;
         self.previous_camera.take()
     }
@@ -83,6 +91,8 @@ impl Training {
         self.feedback.clear();
         self.feedback_moves.clear();
         self.hint.clear();
+        self.hint_level = 0;
+        self.annotations.clear();
     }
     fn accepts_input(&self) -> bool {
         match &self.session {
@@ -127,6 +137,9 @@ impl BoardDriver {
             .map_or("", |training| training.panel.as_str())
     }
     pub fn training_highlights(&self) -> BTreeSet<Square> {
+        if !self.training_screen() {
+            return BTreeSet::new();
+        }
         self.training
             .as_ref()
             .map_or_else(BTreeSet::new, |training| training.highlights.clone())

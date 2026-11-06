@@ -43,6 +43,9 @@ impl BoardDriver {
         if matches!(status, TaskStatus::Wrong(_)) {
             self.clear_selection()?;
         } else {
+            training.hint.clear();
+            training.hint_level = 0;
+            training.annotations.clear();
             let edits = self.board.as_mut().expect("board").synchronize_game(game);
             self.enqueue_move(edits)?;
         }

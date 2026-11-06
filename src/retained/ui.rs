@@ -1,5 +1,6 @@
 #![deny(clippy::too_many_lines, clippy::too_many_arguments)]
 mod accessibility;
+mod annotations;
 mod inspection;
 #[cfg(test)]
 mod link_tests;
@@ -67,6 +68,8 @@ pub(super) struct GameUi {
     state: Option<UiState>,
     cached: Option<(String, [u32; 2])>,
     plan: Option<UiRenderPlan>,
+    presentation: Option<worldrunner::ui::plan::ui::UiPresentation>,
+    annotation_draws: worldrunner::ui::plan::ui::UiPresentation,
     dirty: bool,
 }
 impl GameUi {
@@ -96,6 +99,8 @@ impl GameUi {
             state: None,
             cached: None,
             plan: None,
+            presentation: None,
+            annotation_draws: worldrunner::ui::plan::ui::UiPresentation::default(),
             dirty: true,
         };
         ui.build_pages()?;
@@ -249,12 +254,7 @@ impl GameUi {
             .map_err(|e| e.to_string())?;
         self.cached = Some(cached);
         self.dirty = false;
-        if self.plan.as_ref() == Some(&plan) {
-            return Ok(None);
-        }
-        let overlay = UiOverlay::new(plan.clone()).map_err(|e| e.to_string())?;
-        self.plan = Some(plan);
-        Ok(Some(Arc::new(overlay)))
+        self.publish_plan(plan)
     }
 }
 fn promotion_dialog(native: &mut NativeUi) -> Result<ObjectHandle, WorldError> {

@@ -38,8 +38,13 @@ A step has `kind: "explain"`, `text` and optional `annotations`, or
 - `solutions`: UCI move nodes `{ "uci": "e2e4", "next": [...] }`;
 - `hints`, ordered from a question or observation to the explicit move/line;
 - `feedback`, mapping common wrong UCI moves to authored explanations;
-- optional `annotations` with `squares` (algebraic names) and `arrows`
-  (`{ "from": "e1", "to": "e7" }`). The window draws square highlights and lists arrow endpoints as text.
+- optional `annotations` with `squares` (algebraic names), `square_colour`
+  (linear RGBA), and `arrows` (`{ "from": "e1", "to": "e7", "colour":
+  [0.0, 0.7, 0.8, 1.0] }`). Colours default to cyan when omitted and must
+  contain four finite components in 0..1. The window publishes native rings
+  and arrows at square centres, 65 mm above the board origin. World anchors
+  use the engine's depth-tested annotations, so foreground pieces occlude them.
+  Annotation widths and ring radii are physical pixels, as defined by the engine.
 
 The solution tree starts on the solver's turn. Sibling solver nodes are accepted
 alternatives. Their children contain exactly one scripted opponent reply, whose
@@ -101,14 +106,20 @@ prerequisites are unfinished. Enter or click opens an unlocked lesson. Next and
 Back navigate its explanations and board tasks; Hint reveals the authored hints
 in order, and Retry restores the task checkpoint. Accepted mouse moves play the
 scripted reply in the same retained object transaction. Wrong answers leave the
-checkpoint unchanged and show the authored feedback. Cyan scene squares show
-authored highlights; arrow endpoints appear as text until engine annotations exist.
+checkpoint unchanged and show the authored feedback. Native rings show authored
+square highlights in `square_colour`; native arrows use each arrow's `colour`.
+Changing steps replaces the annotation set rather than retaining old marks.
 
 Puzzles offers all bands or a chosen rating band, with solved and submitted-move
 totals. Its setup position is presented before a 350 ms retained-tick delay applies
-the opponent's setup move. The solver then plays by mouse. Hint marks the first
-solver move's source square; Retry restores the post-setup position, and Next
-chooses the next matching puzzle. Any legal mate is accepted in mating puzzles.
+the opponent's setup move. The solver then plays by mouse. Puzzles may supply
+an optional `annotations` object with the same fields as lesson steps; it is
+shown after setup. In both lessons and puzzles, the second Hint request rings
+the current solver piece and the third adds its move arrow. The move comes from
+the current solution checkpoint, including after a scripted reply. Authored hint
+text still stops at its own cap. Successful moves and Retry clear hint marks;
+Retry restores the post-setup position, and Next chooses the next matching puzzle.
+Any legal mate is accepted in mating puzzles.
 Wrong legal moves also show verified explanation sentences when facts are found.
 The study camera leaves space for one wrapped text panel below the board. Escape
 returns to the browser, then the title; leaving study restores the play camera.
@@ -123,13 +134,22 @@ when the progress record is corrupt. Training checkpoints never replace a game
 autosave. There is no separate progress-file writer.
 
 After a computer reply, the game and game-over menus' Why? resumes play with
-learner sentences for that reply, clearing them on a move or undo.
+learner sentences for that reply. When analysis supplies an alternative or a
+verified adverse exchange, it also draws labelled Better and Threat arrows.
+Selected review moments show the searched better move and the first refutation
+move. `assets/annotations.json` defines blue (#0072B2) suggestions and vermilion
+(#D55E00) threats, stored as linear RGBA and separate from lesson authors' colours.
+Marks clear on a move, undo or leaving their screen; review marks appear only at
+the selected moment's cursor.
 
 Synthetic driver tests exercise navigation, locks, authored and wrong moves,
 scripted replies, hint caps, checkpoints, completion/unlocking, setup timing,
 alternative mates and explanations. The required Metal/lavapipe teaching capture
-checks stable native list pixels and independently counts cyan pixels on authored
-e3, with negative controls on the same square before highlighting and adjacent d3.
+checks stable native list pixels and independently counts cyan pixels around
+the authored e3 ring, with negative controls before highlighting and around adjacent
+d3. Another windowless capture counts authored cyan arrow pixels along the
+projected g1-f3 line, rejects matching pixels elsewhere, and checks that Next
+clears the arrow.
 The Xvfb smoke opens Puzzles and plays 00008's first solver move. Its click centers
 come from the same study pose and engine projection, printed by viewer-enabled
 `--puzzle` inspection; it is not run as a visible macOS window.

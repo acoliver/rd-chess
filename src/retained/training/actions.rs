@@ -39,6 +39,7 @@ impl BoardDriver {
         training.session = None;
         training.panel.clear();
         training.highlights.clear();
+        training.annotations.clear();
         self.transition(if self.screen() == Screen::Lesson {
             Screen::Lessons
         } else {
@@ -177,6 +178,7 @@ impl BoardDriver {
     }
     fn study_hint(&mut self) {
         let training = self.training.as_mut().expect("training");
+        training.hint_level = (training.hint_level + 1).min(3);
         match training.session.as_mut().expect("session") {
             Session::Lesson { runner, .. } => {
                 if let Some(hint) = runner.hint() {
@@ -184,16 +186,17 @@ impl BoardDriver {
                 }
             }
             Session::Puzzle {
-                puzzle,
+                runner,
                 setup: Setup::Ready,
                 ..
             } => {
-                let uci = puzzle
-                    .moves
-                    .split_whitespace()
-                    .nth(1)
-                    .expect("validated line");
-                training.hint = format!("Look at the piece on {}.", &uci[..2]);
+                if let Some(mv) = runner.hint_move() {
+                    training.hint = match training.hint_level {
+                        1 => "Look for checks, captures and threats.".into(),
+                        2 => format!("Look at the piece on {}.", &mv.to_uci()[..2]),
+                        _ => format!("Try {}.", mv.to_uci()),
+                    };
+                }
             }
             Session::Puzzle { .. } => {}
         }
