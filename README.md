@@ -44,7 +44,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`9174135e715b08ed6c227290bf69c1522e4d3253` from
+`621f541491b9f3fed0ffa15ad17b505553631271` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -148,6 +148,12 @@ on that initial choice or Escape cancels. Local draw offers name the offering si
 and present Decline draw before Accept draw; Escape declines. Agreement ends play
 with `Draw by agreement`. The computer declines offers and still claims rule-based
 draws.
+
+Lesson and puzzle rings and arrows append coordinates to the live status.
+Hints name the piece and square at the second level, then the suggested move at
+the third level. Earlier hints do not reveal those coordinates. Review and Why?
+arrows do not yet append separate coordinate descriptions to the live status;
+their explanation text remains available in the study and review panels.
 
 The engine currently exposes editable text as role Text with only a Focus action.
 It cannot represent editable values, caret or selection, or accept semantic

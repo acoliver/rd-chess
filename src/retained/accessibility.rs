@@ -39,13 +39,24 @@ impl BoardDriver {
                 Screen::Play | Screen::Lesson | Screen::Puzzle
             ) || self.retry_active(),
         };
-        let announcement = self
+        let mut announcement = self
             .interaction
             .announcement
             .clone()
             .or_else(|| self.menus.result.clone())
             .or_else(|| board.announcement.clone())
             .unwrap_or_else(|| self.status_text());
+        if self.training_screen() {
+            let description = self
+                .training
+                .as_ref()
+                .expect("active training")
+                .annotation_description(board.game());
+            if !description.is_empty() {
+                announcement.push_str(". ");
+                announcement.push_str(&description);
+            }
+        }
         let view = self.accessibility_view()?;
         if let Some(ui) = &mut self.ui {
             ui.synchronize_announcement(announcement)

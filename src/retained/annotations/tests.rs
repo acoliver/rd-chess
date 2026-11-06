@@ -43,6 +43,72 @@ fn arrow(annotation: &Annotation, from: AnnotationPoint, to: AnnotationPoint, ex
     assert_eq!(annotation.depth, AnnotationDepth::DepthTested);
 }
 #[test]
+fn puzzle_hint_descriptions_follow_reveal_level_and_clear_after_moves() {
+    let mut driver = fixture();
+    let puzzle = driver.training.as_ref().unwrap().puzzles.puzzles()[0].clone();
+    driver.begin_puzzle(puzzle).unwrap();
+    driver.pending.borrow_mut().clear();
+    driver.advance_training(std::time::Duration::ZERO).unwrap();
+    driver.pending.borrow_mut().clear();
+    driver
+        .advance_training(std::time::Duration::from_secs(1))
+        .unwrap();
+    action(&mut driver, MenuAction::StudyHint);
+    let words = &driver.semantic_update().unwrap().unwrap().announcements[0].text;
+    assert!(!words.contains("Hint:"));
+    assert!(!words.contains("Suggested:"));
+    action(&mut driver, MenuAction::StudyHint);
+    let words = &driver.semantic_update().unwrap().unwrap().announcements[0].text;
+    assert!(words.contains("Hint: rook on e6"));
+    assert!(!words.contains("Suggested:"));
+    action(&mut driver, MenuAction::StudyHint);
+    let words = &driver.semantic_update().unwrap().unwrap().announcements[0].text;
+    assert!(words.contains("Suggested: e6 to e7"));
+    let mv = driver.board().unwrap().game().parse_uci("e6e7").unwrap();
+    driver.submit_training_move(mv).unwrap();
+    let words = &driver.semantic_update().unwrap().unwrap().announcements[0].text;
+    assert!(!words.contains("Hint:"));
+    assert!(!words.contains("Suggested:"));
+}
+#[test]
+fn lesson_rings_arrows_and_hints_have_live_descriptions() {
+    let mut driver = fixture();
+    action(&mut driver, MenuAction::Lesson(0));
+    action(&mut driver, MenuAction::StudyNext);
+    let announcement = |driver: &mut BoardDriver| {
+        let update = driver.semantic_update().unwrap().unwrap();
+        update
+            .announcements
+            .iter()
+            .map(|a| a.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    assert!(announcement(&mut driver).contains("Highlighted: e2, e3, e4"));
+    action(&mut driver, MenuAction::StudyHint);
+    action(&mut driver, MenuAction::StudyHint);
+    assert!(announcement(&mut driver).contains("Hint: pawn on e2"));
+    action(&mut driver, MenuAction::StudyHint);
+    assert!(announcement(&mut driver).contains("Suggested: e2 to e3"));
+    assert!(
+        driver
+            .semantic_update()
+            .unwrap()
+            .unwrap()
+            .announcements
+            .is_empty()
+    );
+    let mv = driver.board().unwrap().game().parse_uci("e2e4").unwrap();
+    driver.submit_training_move(mv).unwrap();
+    action(&mut driver, MenuAction::StudyNext);
+    let words = announcement(&mut driver);
+    assert!(words.contains("Arrow: g1 to f3"));
+    assert!(!words.contains("Hint:"));
+    assert!(!words.contains("Suggested:"));
+    action(&mut driver, MenuAction::StudyExit);
+    assert!(!announcement(&mut driver).contains("Arrow:"));
+}
+#[test]
 fn lesson_annotations_map_board_colours_and_clear_on_step_and_exit() {
     let mut driver = fixture();
     action(&mut driver, MenuAction::Lesson(0));
