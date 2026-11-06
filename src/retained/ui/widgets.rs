@@ -18,7 +18,7 @@ const PANEL_COLOR: [f32; 4] = [0.025, 0.035, 0.055, PANEL_ALPHA];
 
 pub(super) struct NativeUi {
     pub world: World,
-    pub fonts: FontBook,
+    pub fonts: Arc<FontBook>,
     pub router: UiRouter,
     pub root: ObjectHandle,
     font: FontId,
@@ -46,12 +46,13 @@ impl NativeUi {
         let root = world.create_object(ObjectDesc::default())?;
         world.add_component(root, ComponentDesc::RectTransform(RectTransform::default()))?;
         world.add_component(root, ComponentDesc::Canvas(Canvas::default()))?;
+        let fonts = Arc::new(fonts);
         Ok(Self {
             world,
+            router: UiRouter::with_fonts(fonts.clone()),
             fonts,
             font,
             root,
-            router: UiRouter::default(),
         })
     }
     pub fn rect(

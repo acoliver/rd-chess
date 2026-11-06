@@ -73,8 +73,10 @@ impl BoardDriver {
             if let Some(storage) = &self.storage {
                 training.progress = storage.progress.clone();
             }
+            let mut ui = GameUi::new().map_err(|e| e.to_string())?;
+            ui.set_course_links(&training.course);
             self.training = Some(training);
-            self.ui = Some(GameUi::new().map_err(|e| e.to_string())?);
+            self.ui = Some(ui);
             self.markers.base = board
                 .identities()
                 .values()

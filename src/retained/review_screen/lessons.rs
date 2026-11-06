@@ -26,31 +26,18 @@ impl BoardDriver {
             return Ok(());
         };
         let training = self.training.as_ref().expect("training");
-        let missing: Vec<_> = lesson
-            .requires
-            .iter()
-            .filter(|id| !training.progress.completed_lessons.contains(*id))
-            .map(|id| {
-                let prerequisite = training.course.lesson(id).expect("validated prerequisite");
-                format!("{} ({})", prerequisite.title, prerequisite.id)
-            })
-            .collect();
-        if !missing.is_empty() {
-            let message = format!(
-                "{} ({}) is locked. Complete {} to unlock it.",
-                lesson.title,
-                lesson.id,
-                missing.join(", ")
-            );
-            self.review.as_mut().expect("session").message = message;
-            return Ok(());
-        }
         let index = training
             .course
             .lessons()
             .iter()
             .position(|candidate| candidate.id == lesson.id)
             .expect("related lesson");
+        self.open_text_lesson(index)
+    }
+    pub(in crate::retained) fn open_review_lesson_at(
+        &mut self,
+        index: usize,
+    ) -> Result<(), String> {
         let session = self.review.as_mut().expect("session");
         session.stop.store(true, Ordering::Relaxed);
         session.mode = ReviewMode::Replay;

@@ -40,6 +40,7 @@ pub(super) enum MenuAction {
     Lessons,
     Puzzles,
     Lesson(usize),
+    LinkedLesson(usize),
     PuzzleBand(Option<&'static str>),
     StudyNext,
     StudyBack,
@@ -58,6 +59,7 @@ pub(super) enum MenuAction {
     ReviewGames,
     ReviewSaved(u8),
     ReviewSeek(usize),
+    ReviewText(usize),
     ReviewStart,
     ReviewBack,
     ReviewForward,
@@ -219,7 +221,9 @@ impl BoardDriver {
             review: self.review_ui_state(),
         };
         let study = self.study_ui_state();
+        let references = self.review_text_links(&state.review);
         if let Some(ui) = &mut self.ui {
+            ui.set_review_links(references);
             ui.synchronize_study(study, state.screen)
                 .map_err(|e| e.to_string())?;
             ui.synchronize(state, self.viewport)
@@ -267,6 +271,7 @@ impl BoardDriver {
     }
     fn activity_menu_action(&mut self, action: MenuAction) -> Result<(), String> {
         match action {
+            MenuAction::LinkedLesson(index) => self.open_text_lesson(index)?,
             MenuAction::Lessons
             | MenuAction::Puzzles
             | MenuAction::Lesson(_)
@@ -284,6 +289,7 @@ impl BoardDriver {
             | MenuAction::ReviewGames
             | MenuAction::ReviewSaved(_)
             | MenuAction::ReviewSeek(_)
+            | MenuAction::ReviewText(_)
             | MenuAction::ReviewStart
             | MenuAction::ReviewBack
             | MenuAction::ReviewForward

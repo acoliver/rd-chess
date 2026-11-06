@@ -566,6 +566,15 @@ state or review evidence are cyan; plain prose keeps its normal colour. Authored
 newlines and blank paragraphs survive wrapping. The engine measures text at the
 resolved panel width, rather than inserting character-count line breaks.
 
+Course-authored `terms`, lesson IDs and lesson titles become underlined links in
+lesson and review paragraphs. A link opens the teaching lesson; locked targets
+show their unfinished prerequisites without changing the board. Tab and Shift-Tab
+visit individual links, and Enter or Space activates the focused link. Pointer
+activation uses the engine's glyph hit regions. Review SAN links show the position
+after the named move, including searched replies and alternatives; the original
+record stays unchanged. At engine revision `42d1ac5c`, native accessibility exposes
+paragraph text but has no per-span link role or link action identity.
+
 Review moments and details retain their existing wheel scrolling and size the
 scroll content from the engine's full text height. The study/Why? panel has no
 text scrolling or paging control. When its measured content exceeds the fixed

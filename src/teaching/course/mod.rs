@@ -90,6 +90,8 @@ pub struct Lesson {
     pub requires: Vec<String>,
     #[serde(default)]
     pub motifs: Vec<Motif>,
+    #[serde(default)]
+    pub terms: Vec<String>,
     pub steps: Vec<Step>,
 }
 

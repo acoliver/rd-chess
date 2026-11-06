@@ -17,7 +17,12 @@ the requested exercise rather than declaring every other legal move bad.
 ## Format and validation
 
 The top-level object has `version` and `lessons`. Each lesson has `id`, `title`,
-`requires` (prerequisite IDs), optional typed `motifs`, and ordered `steps`.
+`requires` (prerequisite IDs), optional typed `motifs`, optional `terms`, and ordered `steps`.
+`terms` lists exact glossary aliases taught by the lesson. Aliases are printable
+ASCII, at most 64 bytes, unpadded and unique across the course without regard to
+case. The native UI links whole-word matches, preferring longer phrases; it also
+recognises lesson IDs and titles in cross-references. All displayed text remains
+unchanged. Lesson headings are excluded from linking.
 Motif tags use the `teaching::explain::Motif` names in snake_case. Unknown or
 duplicate tags fail validation. `Course::related_lesson` selects the first lesson
 with the requested tag in authored order; absent tags return no lesson. Review

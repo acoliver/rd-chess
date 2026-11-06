@@ -20,6 +20,7 @@ use worldrunner::scene::viewer::{RetainedHost, WorkQueue, WorkSubmitError, WorkT
 mod actions;
 mod feedback;
 mod lessons;
+mod links;
 #[cfg(test)]
 mod tests;
 
@@ -42,6 +43,7 @@ pub(super) struct ReviewSession {
     lesson_return: Option<lessons::LessonReturn>,
     error: Option<String>,
     pub moves: Vec<String>,
+    text_links: links::ReviewLinks,
 }
 pub(super) enum ReviewMode {
     Replay,
@@ -98,6 +100,7 @@ impl ReviewSession {
             lesson_return: None,
             error: None,
             moves,
+            text_links: links::ReviewLinks::default(),
         })
     }
     fn move_labels(&self) -> Vec<String> {

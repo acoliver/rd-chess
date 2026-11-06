@@ -12,6 +12,7 @@ impl BoardDriver {
             MenuAction::ReviewGames => self.transition(Screen::ReviewGames)?,
             MenuAction::ReviewSaved(index) => self.open_saved_review(index)?,
             MenuAction::ReviewSeek(ply) => self.seek_review(ply)?,
+            MenuAction::ReviewText(index) => self.follow_review_text(index)?,
             MenuAction::ReviewStart => self.seek_review(0)?,
             MenuAction::ReviewBack => {
                 let ply = self

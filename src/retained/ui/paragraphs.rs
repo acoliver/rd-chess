@@ -40,6 +40,7 @@ impl GameUi {
         run.vertical = VerticalAlign::Top;
         run.line_height = Some(run.font_size * 1.4);
         run.paragraph_spacing = 4.;
+        let handle = self.link_paragraph(handle, &mut run, heading_end)?;
         self.native
             .world
             .set_component(handle, ComponentDesc::Text(run.clone()))?;
@@ -69,16 +70,8 @@ impl GameUi {
             let measured = self.native.fonts.layout(source, rect.size)?;
             let run = match paragraph.flow {
                 Flow::Scroll => {
-                    let handle = self.native.rect_handle(object);
-                    let ComponentDesc::RectTransform(mut transform) =
-                        self.native.world.component(handle)?.desc.clone()
-                    else {
-                        unreachable!("paragraph rectangle");
-                    };
-                    transform.size_delta.y = measured.content_height.ceil();
                     self.native
-                        .world
-                        .set_component(handle, ComponentDesc::RectTransform(transform))?;
+                        .fit_scroll_paragraph(object, measured.content_height.ceil())?;
                     source.clone()
                 }
                 Flow::Fixed => {

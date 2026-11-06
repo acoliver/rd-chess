@@ -3,6 +3,7 @@
   "lessons": [
     {
       "id": "rules.first-moves",
+      "terms": ["pawn", "pawns", "knight", "knights", "king", "kings", "promote", "promotion"],
       "motifs": ["promotion"],
       "title": "Pawns, knights and kings",
       "requires": [],
@@ -106,6 +107,7 @@
     },
     {
       "id": "rules.sliding",
+      "terms": ["rook", "rooks", "bishop", "bishops", "queen", "queens"],
       "motifs": [],
       "title": "Rooks, bishops and queens",
       "requires": ["rules.first-moves"],
@@ -176,6 +178,7 @@
     },
     {
       "id": "rules.check",
+      "terms": ["check", "checkmate", "stalemate"],
       "motifs": ["check"],
       "title": "Get out of check",
       "requires": ["rules.sliding"],
@@ -224,6 +227,7 @@
     },
     {
       "id": "mates.queen",
+      "terms": [],
       "motifs": ["mate"],
       "title": "Support the queen",
       "requires": ["rules.check"],
@@ -260,6 +264,7 @@
     },
     {
       "id": "mates.ladder",
+      "terms": [],
       "motifs": [],
       "title": "Walk the rooks up the board",
       "requires": ["mates.queen"],
@@ -306,6 +311,7 @@
     },
     {
       "id": "mates.back-rank",
+      "terms": ["back rank"],
       "motifs": ["back_rank", "mate_threat"],
       "title": "Notice a trapped king",
       "requires": ["mates.ladder"],
@@ -340,6 +346,7 @@
     },
     {
       "id": "tactics.hanging",
+      "terms": ["hanging", "exchange"],
       "motifs": ["hanging_piece", "exchange"],
       "title": "Count attackers and defenders",
       "requires": ["rules.check"],
@@ -412,6 +419,7 @@
     },
     {
       "id": "tactics.fork",
+      "terms": ["fork"],
       "motifs": ["fork"],
       "title": "Attack two targets",
       "requires": ["tactics.hanging"],
@@ -458,6 +466,7 @@
     },
     {
       "id": "tactics.pin",
+      "terms": ["pin", "pinned", "pins"],
       "motifs": ["pin"],
       "title": "Use a piece that cannot move",
       "requires": ["tactics.fork"],
@@ -499,6 +508,7 @@
     },
     {
       "id": "tactics.skewer",
+      "terms": ["skewer"],
       "motifs": ["skewer"],
       "title": "Force the front piece away",
       "requires": ["tactics.pin"],
@@ -543,6 +553,7 @@
     },
     {
       "id": "openings.reasons",
+      "terms": ["castling", "castle"],
       "motifs": ["castling"],
       "title": "Centre, development and king safety",
       "requires": ["rules.check", "tactics.hanging"],
@@ -637,6 +648,7 @@
     },
     {
       "id": "practice.together",
+      "terms": ["discovered attack", "discovered check"],
       "motifs": ["material_threat", "discovered_attack", "discovered_check"],
       "title": "Look before you move",
       "requires": ["mates.back-rank", "tactics.skewer", "openings.reasons"],

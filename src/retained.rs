@@ -182,6 +182,7 @@ mod computer;
 mod driver;
 mod host;
 mod interaction;
+mod lesson_links;
 mod markers;
 mod menus;
 pub mod persistence;

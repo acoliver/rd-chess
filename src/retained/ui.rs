@@ -2,10 +2,14 @@
 mod accessibility;
 mod inspection;
 #[cfg(test)]
+mod link_tests;
+#[cfg(test)]
 mod paragraph_tests;
 pub use inspection::title_layout;
+mod links;
 mod pages;
 mod paragraphs;
+pub(super) use links::{References, ReviewReferences};
 mod review_page;
 pub(super) use review_page::ReviewUiState;
 #[cfg(test)]
@@ -44,6 +48,7 @@ pub(super) struct UiState {
 pub(super) struct GameUi {
     native: NativeUi,
     paragraphs: paragraphs::Paragraphs,
+    links: links::Links,
     review_widgets: review_page::ReviewWidgets,
     study: Option<study::StudyWidgets>,
     study_state: Option<(Option<StudyState>, Screen)>,
@@ -71,6 +76,7 @@ impl GameUi {
         let mut ui = Self {
             native,
             paragraphs: BTreeMap::new(),
+            links: links::Links::default(),
             review_widgets: review_page::ReviewWidgets::default(),
             study: None,
             study_state: None,
@@ -185,7 +191,9 @@ impl GameUi {
         match action {
             UiAction::Activated { object } if object == self.claim => Some(MenuAction::ClaimDraw),
             UiAction::Selected { list, index } => Some(self.bindings[&list][index]),
-            action => self.study_action(action),
+            action => self
+                .link_action(action)
+                .or_else(|| self.study_action(action)),
         }
     }
     pub fn overlay(

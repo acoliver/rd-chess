@@ -59,7 +59,15 @@ impl Course {
             "course lesson count",
         )?;
         let mut ids = BTreeSet::new();
+        let mut terms = BTreeSet::new();
         for lesson in &self.lessons {
+            for term in &lesson.terms {
+                text(term, 64)?;
+                require(
+                    term.trim() == term && terms.insert(term.to_ascii_lowercase()),
+                    "duplicate or padded term",
+                )?;
+            }
             require(
                 ids.insert(&lesson.id),
                 format!("duplicate lesson id {}", lesson.id),
