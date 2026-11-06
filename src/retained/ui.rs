@@ -1,6 +1,11 @@
 #![deny(clippy::too_many_lines, clippy::too_many_arguments)]
 mod accessibility;
 mod annotations;
+mod board;
+mod board_focus;
+#[cfg(test)]
+mod board_tests;
+pub(super) use board::BoardState;
 mod inspection;
 #[cfg(test)]
 mod link_tests;
@@ -49,6 +54,8 @@ pub(super) struct UiState {
 }
 pub(super) struct GameUi {
     native: NativeUi,
+    board: Option<board::BoardControls>,
+    announcement: ObjectHandle,
     paragraphs: paragraphs::Paragraphs,
     links: links::Links,
     review_widgets: review_page::ReviewWidgets,
@@ -78,8 +85,11 @@ impl GameUi {
         let status = status_widget(&mut native)?;
         let claim = claim_widget(&mut native)?;
         let dialog = promotion_dialog(&mut native)?;
+        let announcement = native.rect(native.root, [1., 1.], [0., 0.])?;
         let mut ui = Self {
             native,
+            board: None,
+            announcement,
             paragraphs: BTreeMap::new(),
             links: links::Links::default(),
             review_widgets: review_page::ReviewWidgets::default(),
@@ -105,6 +115,7 @@ impl GameUi {
         };
         ui.build_pages()?;
         ui.build_study()?;
+        ui.board = Some(board::BoardControls::new(&mut ui.native)?);
         Ok(ui)
     }
     pub fn synchronize(&mut self, state: UiState, viewport: [u32; 2]) -> Result<(), WorldError> {
@@ -178,11 +189,22 @@ impl GameUi {
         repeat: bool,
         viewport: [u32; 2],
     ) -> Result<UiResponse, WorldError> {
+        if pressed
+            && self.state.as_ref().is_some_and(|s| {
+                matches!(s.screen, Screen::Play | Screen::Lesson | Screen::Puzzle) && !s.promotion
+            })
+            && self.board_navigation(key, viewport)?
+        {
+            return Ok(UiResponse {
+                consumed: true,
+                actions: Vec::new(),
+            });
+        }
         if self.native.router.focused().is_none()
             && self
                 .state
                 .as_ref()
-                .is_some_and(|state| state.screen != Screen::Play)
+                .is_some_and(|state| state.screen != Screen::Play || state.promotion)
         {
             self.focus_first(viewport)?;
         }
@@ -191,6 +213,9 @@ impl GameUi {
             .world
             .ui_layout_with(viewport.into(), &self.native.router.layout)?;
         self.dirty = true;
+        if key == UiKey::Tab && pressed && !repeat && self.focused_square().is_some() {
+            return self.board_tab(&layout);
+        }
         self.native
             .router
             .key(&self.native.world, &layout, key, pressed, repeat)
@@ -209,6 +234,7 @@ impl GameUi {
         text: &str,
         size: [u32; 2],
     ) -> Result<Option<Arc<UiOverlay>>, String> {
+        self.synchronize_board_focus().map_err(|e| e.to_string())?;
         let cached = (text.to_owned(), size);
         if self.cached.as_ref() == Some(&cached) && !self.dirty {
             return Ok(None);

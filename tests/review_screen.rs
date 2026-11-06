@@ -117,7 +117,7 @@ fn resignation_and_terminal_draws_offer_review() {
     }
     let mut driver = fixture();
     key(&mut driver, "escape");
-    for name in ["end", "arrowup", "enter"] {
+    for name in ["end", "arrowup", "enter", "arrowdown", "enter"] {
         key(&mut driver, name);
     }
     let result = driver.status_text();

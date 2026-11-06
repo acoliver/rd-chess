@@ -156,6 +156,7 @@ impl BoardDriver {
             pending: None,
             message: None,
         });
+        self.orient_board(config.human)?;
         self.autosave();
         Ok(())
     }

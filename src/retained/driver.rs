@@ -50,6 +50,8 @@ pub struct BoardDriver {
 pub(super) struct CameraControls {
     pub orbit: OrbitCamera,
     pub dirty: bool,
+    pub(super) base: CameraPose,
+    pub(super) limits: worldrunner::scene::viewer::OrbitLimits,
 }
 
 impl BoardDriver {
@@ -63,10 +65,10 @@ impl BoardDriver {
         self.board.as_ref()
     }
     pub fn configure(&mut self, options: &ViewerOptions) -> Result<(), String> {
-        self.camera = Some(CameraControls {
-            orbit: OrbitCamera::new(options.pose, options.orbit).map_err(|e| e.to_string())?,
-            dirty: false,
-        });
+        let side = self.board_orientation();
+        let mut camera = CameraControls::new(options, side)?;
+        camera.dirty = side != crate::Side::Ivory;
+        self.camera = Some(camera);
         self.viewport = options.size;
         if let Some(board) = &self.board {
             let mut training = super::training::Training::bundled()?;
@@ -198,10 +200,6 @@ impl BoardDriver {
             if let Some(overlay) = ui.overlay(&text, self.viewport)? {
                 self.overlay = Some(overlay);
             }
-            host.set_accessibility(
-                ui.semantic_update(self.viewport)
-                    .map_err(|e| e.to_string())?,
-            );
             if let Some(overlay) = &self.overlay {
                 if admit(host, RetainedUpdate::Ui(overlay.clone()))? {
                     self.overlay = None;
@@ -262,6 +260,9 @@ impl RetainedDriver for BoardDriver {
             let hit = self.input_hit(&input, |point, include| host.pick(point, include));
             let command = host.clipboard_command(&input);
             self.input_with_clipboard(&input, hit, command, host.clipboard())?;
+            if let Some(update) = self.semantic_update()? {
+                host.set_accessibility(update);
+            }
         }
         self.flush_clipboard(host.clipboard())?;
         host.set_text_input_area(self.text_input_area()?)
@@ -276,6 +277,9 @@ impl RetainedDriver for BoardDriver {
         self.flush_computer_timers(|handle| {
             host.cancel_timer(handle);
         });
+        if let Some(update) = self.semantic_update()? {
+            host.set_accessibility(update);
+        }
         let result = self.publish(host);
         self.generation = host.accepted_generation();
         result
@@ -329,6 +333,9 @@ impl RetainedDriver for BoardDriver {
         self.flush_computer_timers(|handle| {
             host.cancel_timer(handle);
         });
+        if let Some(update) = self.semantic_update()? {
+            host.set_accessibility(update);
+        }
         Ok(())
     }
 }

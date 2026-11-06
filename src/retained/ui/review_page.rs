@@ -51,8 +51,16 @@ impl GameUi {
         )?;
         let list = self.review_scroll(panel, [290., 94.], [0., 122.])?;
         self.review_widgets.moves = Some(list);
+        self.native
+            .router
+            .semantics
+            .insert(list, worldrunner::ui::UiSemantics::label("Moves"));
         self.bindings.insert(list, Vec::new());
         let moments = self.review_scroll(panel, [290., 150.], [0., -6.])?;
+        self.native.router.semantics.insert(
+            moments,
+            worldrunner::ui::UiSemantics::label("Teachable moments"),
+        );
         for index in 0..3 {
             let object = self.native.text(moments, "", [290., 100.], [0., 0.])?;
             self.native

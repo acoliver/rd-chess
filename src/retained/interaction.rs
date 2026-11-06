@@ -19,6 +19,7 @@ pub(super) struct Interaction {
     pub promotion: Vec<LegalMove>,
     pub cursor: Option<[f64; 2]>,
     pub primary: bool,
+    pub announcement: Option<String>,
     press: Option<Press>,
 }
 struct Press {
@@ -243,13 +244,7 @@ Storage error: {error}"
                 button: PointerButton::Left,
                 pressed,
             } => {
-                let click_allowed = (self.retry_active() || !self.computer_turn())
-                    && (self.screen() == super::Screen::Play
-                        || self.training_screen()
-                        || self.retry_active())
-                    && !self.training_blocked()
-                    && !self.presenting
-                    && self.pending.borrow().is_empty()
+                let click_allowed = self.board_input_allowed()
                     && hit.is_none_or(|picked| picked.generation == self.generation);
                 if let Some(point) = self.interaction.button(pressed, click_allowed)
                     && let Some(view) = view
@@ -271,7 +266,7 @@ Storage error: {error}"
         Ok(())
     }
 
-    fn click_square(&mut self, square: Option<Square>) -> Result<(), String> {
+    pub(super) fn click_square(&mut self, square: Option<Square>) -> Result<(), String> {
         let Some(board) = &self.board else {
             return Ok(());
         };
@@ -348,6 +343,8 @@ Storage error: {error}"
     }
 
     pub(super) fn enqueue_move(&mut self, mut edits: Vec<SceneObjectEdit>) -> Result<(), String> {
+        self.interaction.announcement = None;
+        self.menus.offer = None;
         if !self.training_screen() {
             self.review = None;
         }
@@ -372,6 +369,9 @@ Storage error: {error}"
     }
 
     fn route_key(&mut self, key: &str, pressed: bool, repeat: bool) -> Result<bool, String> {
+        if key == "home" && self.screen() == super::Screen::Play && !self.promotion_pending() {
+            return Ok(false);
+        }
         if self.screen() != super::Screen::SaveLabel
             && matches!(key, "escape" | "backspace" | "delete")
         {
@@ -405,6 +405,12 @@ Storage error: {error}"
             return Ok(true);
         }
         match key {
+            "escape" if self.screen() == super::Screen::ConfirmResign => {
+                self.transition(super::Screen::InGameMenu)?;
+            }
+            "escape" if self.screen() == super::Screen::DrawOffer => {
+                self.decline_draw()?;
+            }
             "escape" if self.promotion_pending() || self.selected().is_some() => {
                 self.clear_selection()?;
             }
@@ -416,28 +422,7 @@ Storage error: {error}"
             {
                 self.pgn_back()?;
             }
-            "escape" if self.board.is_some() => {
-                let screen = match self.screen() {
-                    super::Screen::Play => super::Screen::InGameMenu,
-                    super::Screen::InGameMenu => super::Screen::Play,
-                    super::Screen::ComputerSetup
-                    | super::Screen::Settings
-                    | super::Screen::ReviewGames
-                    | super::Screen::Lessons
-                    | super::Screen::Puzzles => {
-                        self.show_title()?;
-                        return Ok(true);
-                    }
-                    super::Screen::Lesson | super::Screen::Puzzle => {
-                        self.training_action(super::menus::MenuAction::StudyExit)?;
-                        return Ok(true);
-                    }
-                    super::Screen::Slots => self.menus.parent,
-                    super::Screen::Review => self.review.as_ref().expect("session").parent,
-                    screen => screen,
-                };
-                self.transition(screen)?;
-            }
+            "escape" if self.board.is_some() => return self.escape_menu(),
             "escape" => self.exit = true,
             "u" | "backspace" if self.board.is_some() => {
                 self.clear_selection()?;

@@ -44,7 +44,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`410cb5b9c8ef20c1c845301e90407f7865a36c86` from
+`9174135e715b08ed6c227290bf69c1522e4d3253` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -118,6 +118,47 @@ seeded marble remain procedural source assets, not copied image textures.
   opens the in-game menu. Escape again resumes. Loaded editor and lineup views retain R/Home reset and Escape exit.
   Resize and unmap/remap affect presentation only; camera changes never rewrite
   the saved position. `--capture` and `--window` cannot be combined.
+
+## Accessibility
+
+The game supplies names and move descriptions through the engine's native UI
+router. The engine owns semantic-tree publication and the AccessKit/VoiceOver
+connection; the game makes no platform accessibility calls or separate tree.
+
+The `Chess board` group exposes 64 square buttons named by coordinate and occupant,
+such as `e4, white knight` or `d5, empty`, with selection and legal destinations
+included. White reads from a8 across and down; Black reads from h1 across and up.
+Local play uses White's orientation; computer play uses the human's side and
+rotates the preset camera to match. Orbiting does not change reading order.
+
+Arrow keys move focus one square without wrapping; without focus, they start at
+the first square and apply the direction. Enter or Space selects or moves through
+the click handler. Key repeat moves focus without repeating activation. Tab enters
+or leaves the board as one navigation region; assistive technology can focus and
+press any square directly. A gold border marks native focus without changing
+pointer picking or retained board objects. Computer turns, modal dialogs and
+unpublished board edits prevent activation; computer turns still permit inspection.
+
+A live Status node describes moves, captures, check, castling paths, promotion,
+en passant and outcomes, including computer replies. Undo, restart and loading
+clear stale announcements. The live node moves inside the active dialog's modal
+focus scope. Promotion choices, menus, saved-game actions and the save-label field
+have accessible names. Resignation asks `Resign game?` with Cancel first; Enter
+on that initial choice or Escape cancels. Local draw offers name the offering side
+and present Decline draw before Accept draw; Escape declines. Agreement ends play
+with `Draw by agreement`. The computer declines offers and still claims rule-based
+draws.
+
+The engine currently exposes editable text as role Text with only a Focus action.
+It cannot represent editable values, caret or selection, or accept semantic
+text-editing requests. The named save-label field remains keyboard-editable, but
+the game cannot supply those missing semantics through this API.
+
+CPU regressions cover names, focus, activation, modal exclusion, render-plan focus
+borders and announcement wording. They do not establish speech or editing behavior
+on a particular hardware screen-reader configuration; that requires native
+application testing. GPU test compilation is separate from execution, and CPU
+checks do not establish the focus border's rendered pixel output.
 
 ## Retained board and game test controls
 

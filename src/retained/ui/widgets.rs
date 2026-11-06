@@ -82,6 +82,12 @@ impl NativeUi {
         at: [f32; 2],
     ) -> Result<ObjectHandle, WorldError> {
         let object = self.rect(parent, size, at)?;
+        if self.router.modals.contains(&parent) && !text.is_empty() {
+            self.router
+                .semantics
+                .entry(parent)
+                .or_insert_with(|| worldrunner::ui::UiSemantics::label(text));
+        }
         self.world.add_component(
             object,
             ComponentDesc::Text(TextRun {

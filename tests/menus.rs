@@ -156,6 +156,9 @@ fn menu_undo_restart_resign_and_game_over_actions() {
     assert_eq!(driver.board().unwrap().game(), &ChessState::initial());
     key(&mut driver, "escape");
     command(&mut driver, 3);
+    assert_eq!(driver.screen(), Screen::ConfirmResign);
+    key(&mut driver, "arrowdown");
+    key(&mut driver, "enter");
     assert_eq!(driver.screen(), Screen::GameOver);
     assert_eq!(driver.status_text(), "Black wins: White resigned");
     assert!(driver.play_uci("e2e4").is_err());
@@ -164,6 +167,9 @@ fn menu_undo_restart_resign_and_game_over_actions() {
     assert_eq!(driver.status_text(), "White to move");
     key(&mut driver, "escape");
     command(&mut driver, 3);
+    assert_eq!(driver.screen(), Screen::ConfirmResign);
+    key(&mut driver, "arrowdown");
+    key(&mut driver, "enter");
     command(&mut driver, 1);
     assert_eq!(driver.screen(), Screen::Title);
 }
@@ -245,6 +251,9 @@ fn a_black_human_can_resign_while_the_computer_has_the_turn() {
         .unwrap();
     key(&mut driver, "escape");
     command(&mut driver, 3);
+    assert_eq!(driver.screen(), Screen::ConfirmResign);
+    key(&mut driver, "arrowdown");
+    key(&mut driver, "enter");
     assert_eq!(driver.screen(), Screen::GameOver);
     assert_eq!(driver.status_text(), "White wins: Black resigned");
     assert!(driver.play_uci("e2e4").is_err());

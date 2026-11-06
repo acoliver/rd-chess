@@ -12,6 +12,10 @@ impl GameUi {
             .text(panel, "Save label", [580., 36.], [0., 75.])?;
         let object = self.native.text(panel, "", [560., 42.], [0., 10.])?;
         self.native.control(object, UiControl::text_field());
+        self.native
+            .router
+            .semantics
+            .insert(object, worldrunner::ui::UiSemantics::label("Save label"));
         self.label_field = Some(object);
         self.native.text(
             panel,

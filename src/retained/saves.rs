@@ -3,7 +3,7 @@ use super::{
     persistence::{GamePayload, GameSettings, SavedMode, Storage},
 };
 use std::path::PathBuf;
-use worldrunner::scene::viewer::{OrbitCamera, RetainedUpdate, SceneObjectEdit};
+use worldrunner::scene::viewer::{RetainedUpdate, SceneObjectEdit};
 
 impl BoardDriver {
     pub fn open_store(&mut self, root: PathBuf) {
@@ -56,10 +56,11 @@ impl BoardDriver {
                 crate::CameraPreset::Hero
             };
             let options = super::viewer_options(board.scene(), preset, self.viewport);
-            self.camera = Some(super::driver::CameraControls {
-                orbit: OrbitCamera::new(options.pose, options.orbit).map_err(|e| e.to_string())?,
-                dirty: true,
-            });
+            self.camera = Some(super::driver::CameraControls::new(
+                &options,
+                self.board_orientation(),
+            )?);
+            self.view = None;
         }
         Ok(())
     }
@@ -151,6 +152,8 @@ impl BoardDriver {
     pub(super) fn restore_game(&mut self, payload: GamePayload) -> Result<(), String> {
         let game = payload.replay()?;
         self.pgn.message = None;
+        self.interaction.announcement = None;
+        self.menus.offer = None;
         let initial =
             crate::rules::ChessState::from_fen(&payload.initial_fen).map_err(|e| e.to_string())?;
         let mut board = RetainedBoard::new(initial, payload.seed).map_err(|e| e.to_string())?;
@@ -195,6 +198,8 @@ impl BoardDriver {
         self.menus.screen = Screen::Play;
         if let SavedMode::Computer { human, level } = payload.mode {
             self.set_computer(ComputerGame::new(human, level, payload.seed)?)?;
+        } else {
+            self.orient_board(crate::Side::Ivory)?;
         }
         self.refresh_game_over()?;
         self.autosave();

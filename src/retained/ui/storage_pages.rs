@@ -35,6 +35,7 @@ impl GameUi {
             ],
         )?;
         self.choice_row(pause, -196., &[("Copy PGN", MenuAction::CopyPgn)])?;
+        self.choice_row(pause, 200., &[("Offer draw", MenuAction::OfferDraw)])?;
         self.slots_page()?;
         self.label_page()?;
         self.settings_page()

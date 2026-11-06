@@ -1,5 +1,11 @@
 //! Game-owned identities and object-only transactions over resident chess assets.
 #![deny(clippy::too_many_lines, clippy::too_many_arguments)]
+mod accessibility;
+#[cfg(test)]
+mod accessibility_tests;
+mod announcements;
+mod decisions;
+mod orientation;
 use crate::{
     Position, SceneBuildError, render_scene,
     rules::{ChessState, MoveError},
@@ -20,6 +26,7 @@ pub struct PieceObjects {
 pub struct RetainedBoard {
     game: ChessState,
     initial: ChessState,
+    announcement: Option<String>,
     seed: u64,
     scene: RenderScene,
     identities: BTreeMap<String, PieceObjects>,
@@ -61,6 +68,7 @@ impl RetainedBoard {
             .collect();
         Ok(Self {
             initial: game.clone(),
+            announcement: None,
             game,
             seed,
             scene,
@@ -86,8 +94,7 @@ impl RetainedBoard {
 
     pub fn play_uci(&mut self, uci: &str) -> Result<Vec<SceneObjectEdit>, MoveError> {
         let chess_move = self.game.parse_uci(uci)?;
-        self.game.play(chess_move)?;
-        Ok(self.synchronize())
+        self.play(chess_move)
     }
 
     pub fn game(&self) -> &ChessState {
@@ -98,12 +105,17 @@ impl RetainedBoard {
         &mut self,
         chess_move: crate::rules::LegalMove,
     ) -> Result<Vec<SceneObjectEdit>, MoveError> {
+        let before = self.game.clone();
         self.game.play(chess_move)?;
+        let mut announcement = announcements::move_words(&before, chess_move);
+        announcements::outcome(&mut announcement, &self.game);
+        self.announcement = Some(announcement);
         Ok(self.synchronize())
     }
 
     pub fn restart(&mut self) -> Vec<SceneObjectEdit> {
         self.game = self.initial.clone();
+        self.announcement = None;
         self.identities = self.initial_identities.clone();
         self.synchronize()
     }
@@ -116,6 +128,7 @@ impl RetainedBoard {
         for _ in 0..count {
             self.game.undo()?;
         }
+        self.announcement = None;
         Ok(self.synchronize())
     }
 
@@ -141,6 +154,7 @@ impl RetainedBoard {
 
     pub(super) fn synchronize_game(&mut self, game: ChessState) -> Vec<SceneObjectEdit> {
         self.game = game;
+        self.announcement = None;
         self.synchronize()
     }
 
