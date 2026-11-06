@@ -284,6 +284,7 @@ impl RetainedDriver for BoardDriver {
     ) -> Result<(), String> {
         match event {
             RetainedEvent::Accessibility(request) => self.accessibility_input(*request)?,
+            RetainedEvent::AudioFinished { .. } | RetainedEvent::AudioStatusChanged { .. } => {}
             RetainedEvent::WorkReady => {
                 self.drain_computer()?;
                 self.drain_review();
