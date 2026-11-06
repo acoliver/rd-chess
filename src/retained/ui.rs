@@ -18,6 +18,7 @@ mod study;
 pub(super) use study::StudyState;
 mod pgn_pages;
 mod storage_pages;
+mod text_entry;
 mod widgets;
 use super::menus::{self, MenuAction, Screen};
 use glam::Vec2;
@@ -60,6 +61,7 @@ pub(super) struct GameUi {
     undo: Option<ObjectHandle>,
     settings_summary: Option<ObjectHandle>,
     setup_summary: Option<ObjectHandle>,
+    label_field: Option<ObjectHandle>,
     pages: Vec<(Screen, ObjectHandle)>,
     bindings: BTreeMap<ObjectHandle, Vec<MenuAction>>,
     state: Option<UiState>,
@@ -88,6 +90,7 @@ impl GameUi {
             undo: None,
             settings_summary: None,
             setup_summary: None,
+            label_field: None,
             pages: Vec::new(),
             bindings: BTreeMap::new(),
             state: None,
@@ -231,6 +234,18 @@ impl GameUi {
         self.native
             .router
             .style_plan(&self.native.world, &mut plan)
+            .map_err(|e| e.to_string())?;
+        self.native
+            .router
+            .text_fields_plan(
+                &self.native.world,
+                &self.native.fonts,
+                &mut plan,
+                worldrunner::ui::TextFieldStyle {
+                    caret: [1., 0.72, 0.20, 1.],
+                    selection: [0.18, 0.32, 0.48, 1.],
+                },
+            )
             .map_err(|e| e.to_string())?;
         self.cached = Some(cached);
         self.dirty = false;

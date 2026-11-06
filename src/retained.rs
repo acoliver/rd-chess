@@ -179,7 +179,12 @@ impl RetainedBoard {
 }
 mod computer;
 
+mod clipboard;
+#[cfg(test)]
+mod clipboard_tests;
 mod driver;
+#[cfg(test)]
+mod editing_tests;
 mod host;
 mod interaction;
 mod lesson_links;
@@ -191,6 +196,7 @@ mod pgn_menus;
 mod picking;
 mod pump;
 mod review_screen;
+mod save_labels;
 mod save_menus;
 mod saves;
 mod status;

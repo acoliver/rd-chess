@@ -112,6 +112,7 @@ fn title_and_pause_offer_manual_save_load_with_generated_labels() {
     assert_eq!(driver.screen(), Screen::Slots);
     for y in [160., 272., 384.] {
         click(&mut driver, [250., y]);
+        key(&mut driver, "enter");
     }
     assert!(
         driver
@@ -124,6 +125,7 @@ fn title_and_pause_offer_manual_save_load_with_generated_labels() {
     driver.show_title().unwrap();
     click(&mut driver, [400., 378.]);
     click(&mut driver, [250., 272.]);
+    key(&mut driver, "enter");
     click(&mut driver, [550., 272.]);
     assert_eq!(driver.screen(), Screen::Play);
     assert_eq!(driver.board().unwrap().game().side_to_move(), Side::Onyx);

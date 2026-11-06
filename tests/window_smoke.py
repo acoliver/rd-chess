@@ -267,10 +267,30 @@ class SmokeCase:
                           f"click and reply {sequence} matching rules-driven capture")
         moved.save(self.output / f"{self.name}-clicked-e2e4.png")
         if self.interaction == "title":
+            self.rename_slot_by_keys(moved)
             self.relaunch(log, moved)
         self.xdo("key", "--window", self.window, "u")
         self.wait(lambda: self.matching(self.initial, 0), "U exact board undo")
         self.records += [f"click and reply {sequence} matches capture", "U exact board undo"]
+
+    def rename_slot_by_keys(self, moved):
+        current = Path(self.data_dir) / "slot-current.rds"
+        before = current.read_bytes()
+        slot = Path(self.data_dir) / "slot-slot-1.rds"
+        self.progress("input: keyboard save and rename slot 1")
+        self.xdo("key", "--window", self.window, "Escape", "Home",
+                 "Tab", "Tab", "Tab", "Tab", "Tab", "Return", "Return", "Return")
+        self.wait(lambda: slot.exists() and b"Two players, move 1" in slot.read_bytes(),
+                  "default label saved in slot 1")
+        # Returning from the field advances restored Save focus to Load; Tab visits Rename.
+        self.xdo("key", "--window", self.window, "Tab", "Return", "Home", "shift+End")
+        self.xdo("type", "--window", self.window, "--clearmodifiers", "Smoke opening")
+        self.xdo("key", "--window", self.window, "Return")
+        self.wait(lambda: b"Smoke opening" in slot.read_bytes(), "renamed slot persisted")
+        assert current.read_bytes() == before, "rename changed the current game"
+        self.xdo("key", "--window", self.window, "Escape", "Escape")
+        self.wait(lambda: self.matching(moved, 0), "rename returns to exact played board")
+        self.records.append("keyboard save and rename preserves the current game")
 
     def relaunch(self, log, moved):
         self.progress("close: first chess window")

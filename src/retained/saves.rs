@@ -104,12 +104,20 @@ impl BoardDriver {
         }
     }
     fn write_game(&mut self, name: &str) -> Result<(), String> {
+        let payload = self.save_payload()?;
+        let storage = self.storage.as_mut().ok_or("no application store")?;
+        storage.write(name, &payload)?;
+        storage.refresh();
+        Ok(())
+    }
+    pub(super) fn save_payload(&self) -> Result<GamePayload, String> {
         if self.screen() == Screen::Slots && self.menus.parent == Screen::Title {
-            let storage = self.storage.as_mut().ok_or("no application store")?;
-            let payload = storage.read("current")?.ok_or("no current game to save")?;
-            storage.write(name, &payload)?;
-            storage.refresh();
-            return Ok(());
+            return self
+                .storage
+                .as_ref()
+                .ok_or("no application store")?
+                .read("current")?
+                .ok_or_else(|| "no current game to save".into());
         }
         let board = self
             .board
@@ -125,11 +133,12 @@ impl BoardDriver {
             self.game_ended()
                 .then(|| super::status::status_text(board.game()))
         });
-        let payload = GamePayload::from_game(board.game(), board.position().seed, mode, result);
-        let storage = self.storage.as_mut().ok_or("no application store")?;
-        storage.write(name, &payload)?;
-        storage.refresh();
-        Ok(())
+        Ok(GamePayload::from_game(
+            board.game(),
+            board.position().seed,
+            mode,
+            result,
+        ))
     }
     fn storage_result(&mut self, result: Result<(), String>) -> Result<(), String> {
         if let Err(error) = &result

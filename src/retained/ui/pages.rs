@@ -11,6 +11,9 @@ use worldrunner::{
 impl GameUi {
     pub(super) fn build_pages(&mut self) -> Result<(), WorldError> {
         self.command_page(Screen::Title, "Chess3D", menus::TITLE)?;
+        let title = self.pages.last().expect("title page").1;
+        let paste = self.native.rect(title, [560., 28.], [0., 245.])?;
+        self.list_rows(paste, &[("Paste PGN", MenuAction::PastePgn)], [560., 28.])?;
         self.setup_page()?;
         self.command_page(Screen::InGameMenu, "Game menu", menus::PAUSE)?;
         self.command_page(Screen::GameOver, "Game over", menus::OVER)?;
@@ -97,8 +100,12 @@ impl GameUi {
         self.native.stack(buttons, UiAxis::Horizontal, 30);
         self.list_rows(
             buttons,
-            &[("Start", MenuAction::Start), ("Back", MenuAction::Back)],
-            [270., 44.],
+            &[
+                ("Start", MenuAction::Start),
+                ("Paste PGN", MenuAction::PastePgn),
+                ("Back", MenuAction::Back),
+            ],
+            [170., 44.],
         )?;
         Ok(())
     }

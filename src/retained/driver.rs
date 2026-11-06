@@ -25,6 +25,7 @@ pub struct BoardDriver {
     pub(super) squares: Markers,
     pub(super) menus: super::menus::Menus,
     pub(super) pgn: super::pgn_menus::PgnMenu,
+    pub(super) label_edit: Option<super::save_labels::LabelEdit>,
     pub(super) computer: Option<super::computer::Computer>,
     pub(super) cancelled_timers: Vec<TimerHandle>,
     pub(super) storage: Option<super::persistence::Storage>,
@@ -257,11 +258,14 @@ impl RetainedDriver for BoardDriver {
         self.generation = host.accepted_generation();
         self.presenting = self.presented != Some(self.generation);
         let inputs = std::mem::take(&mut *self.inputs.borrow_mut());
-        let view = self.view;
         for input in inputs {
             let hit = self.input_hit(&input, |point, include| host.pick(point, include));
-            self.handle_input(&input, view.as_ref(), hit)?;
+            let command = host.clipboard_command(&input);
+            self.input_with_clipboard(&input, hit, command, host.clipboard())?;
         }
+        self.flush_clipboard(host.clipboard())?;
+        host.set_text_input_area(self.text_input_area()?)
+            .map_err(|e| e.to_string())?;
         self.advance_training(tick.elapsed)?;
         if self.exit {
             host.request_exit();
@@ -310,9 +314,11 @@ impl RetainedDriver for BoardDriver {
                 self.captures.borrow_mut().insert(*id, outcome.clone());
             }
             RetainedEvent::Input(input) => {
-                let view = self.view;
                 let hit = self.input_hit(input, |point, include| host.pick(point, include));
-                self.handle_input(input, view.as_ref(), hit)?;
+                let command = host.clipboard_command(input);
+                self.input_with_clipboard(input, hit, command, host.clipboard())?;
+                host.set_text_input_area(self.text_input_area()?)
+                    .map_err(|e| e.to_string())?;
                 if self.exit {
                     host.request_exit();
                 }

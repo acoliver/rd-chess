@@ -16,8 +16,10 @@ use std::path::Path;
 #[derive(Default)]
 pub(super) struct PgnMenu {
     files: Vec<String>,
-    games: Vec<PgnGame>,
+    pub games: Vec<PgnGame>,
     pub message: Option<String>,
+    pub clipboard: Option<worldrunner::ui::ClipboardCommand>,
+    pub paste_parent: Option<Screen>,
 }
 
 impl BoardDriver {
@@ -55,6 +57,9 @@ impl BoardDriver {
         }
     }
     pub(super) fn pgn_location_text(&self) -> String {
+        if self.pgn.paste_parent.is_some() {
+            return "Choose a game from clipboard PGN".into();
+        }
         match self
             .pgn_root()
             .and_then(|root| std::path::absolute(root.join("exports")).map_err(|e| e.to_string()))
@@ -70,6 +75,7 @@ impl BoardDriver {
         result
     }
     fn open_pgn_import(&mut self) -> Result<(), String> {
+        self.pgn.paste_parent = None;
         self.pgn.games.clear();
         self.pgn.files.clear();
         let result = self.pgn_root().and_then(pgn_files::list);
@@ -89,7 +95,7 @@ impl BoardDriver {
         }
         self.transition(Screen::PgnGames)
     }
-    fn choose_pgn_game(&mut self, index: usize) -> Result<(), String> {
+    pub(super) fn choose_pgn_game(&mut self, index: usize) -> Result<(), String> {
         let game = self
             .pgn
             .games
@@ -112,10 +118,15 @@ impl BoardDriver {
             index + 1
         ));
         self.pgn.games.clear();
+        self.pgn.paste_parent = None;
         Ok(())
     }
     pub(super) fn pgn_back(&mut self) -> Result<(), String> {
         self.pgn.message = None;
+        if let Some(parent) = self.pgn.paste_parent.take() {
+            self.pgn.games.clear();
+            return self.transition(parent);
+        }
         if self.screen() == Screen::PgnGames {
             self.open_pgn_import()
         } else {
@@ -125,6 +136,12 @@ impl BoardDriver {
     pub(super) fn pgn_menu_action(&mut self, action: MenuAction) -> Result<(), String> {
         match action {
             MenuAction::ImportPgn => self.open_pgn_import()?,
+            MenuAction::CopyPgn => {
+                self.pgn.clipboard = Some(worldrunner::ui::ClipboardCommand::Copy);
+            }
+            MenuAction::PastePgn => {
+                self.pgn.clipboard = Some(worldrunner::ui::ClipboardCommand::Paste);
+            }
             MenuAction::ExportPgn => {
                 let _ = self.export_pgn();
             }
@@ -151,30 +168,34 @@ impl BoardDriver {
         Ok(path)
     }
     fn write_pgn(&self) -> Result<std::path::PathBuf, String> {
-        let board = self
-            .board
-            .as_ref()
-            .ok_or("editor scenes have no legal game")?;
-        let (fen, moves) = board.game().record();
+        let (text, stamp) = self.pgn_document()?;
+        pgn_files::write(self.pgn_root()?, &stamp, &text)
+    }
+    pub(super) fn pgn_document(&self) -> Result<(String, String), String> {
+        let payload = if self.screen() == Screen::Review {
+            self.review
+                .as_ref()
+                .expect("review session")
+                .payload
+                .clone()
+        } else {
+            self.save_payload()?
+        };
+        let state = payload.replay()?;
+        let (fen, moves) = state.record();
         let initial = ChessState::from_fen(&fen).map_err(|e| e.to_string())?;
         let mut game = PgnGame::new(&initial);
         for uci in moves {
             let chess_move = game.state().parse_uci(&uci).map_err(|e| e.to_string())?;
             game.play(chess_move).map_err(|e| e.to_string())?;
         }
-        game.result = export_result(board.game(), self.menus.result.as_deref())?;
+        game.result = export_result(&state, payload.result.as_deref())?;
         let (date, stamp) = pgn_files::clock()?;
-        let player = |side| {
-            self.computer_game()
-                .filter(|c| c.human() != side)
-                .map_or_else(
-                    || "Player".to_owned(),
-                    |c| {
-                        crate::search::LADDER[usize::from(c.level() - 1)]
-                            .name
-                            .into()
-                    },
-                )
+        let player = |side| match payload.mode {
+            SavedMode::Computer { human, level } if human != side => {
+                crate::search::LADDER[usize::from(level - 1)].name.into()
+            }
+            _ => "Player".to_owned(),
         };
         for (tag, value) in [
             ("Event", "Casual game".into()),
@@ -187,7 +208,7 @@ impl BoardDriver {
             game.tags.insert(tag.into(), value);
         }
         let text = game.export().map_err(|e| e.to_string())?;
-        pgn_files::write(self.pgn_root()?, &stamp, &text)
+        Ok((text, stamp))
     }
 }
 

@@ -10,6 +10,7 @@ pub enum Screen {
     Lesson,
     Puzzle,
     Slots,
+    SaveLabel,
     Settings,
     ReviewGames,
     Review,
@@ -52,6 +53,7 @@ pub(super) enum MenuAction {
     Slots,
     Settings,
     Save(u8),
+    Rename(u8),
     Load(u8),
     Markers(bool),
     Overhead(bool),
@@ -73,6 +75,8 @@ pub(super) enum MenuAction {
     RelatedLesson,
     ImportPgn,
     ExportPgn,
+    CopyPgn,
+    PastePgn,
     PgnEntry(usize),
 }
 
@@ -129,6 +133,9 @@ impl BoardDriver {
         activate: bool,
     ) -> Result<(), String> {
         for &action in actions {
+            if self.label_action(action)? {
+                continue;
+            }
             if let worldrunner::ui::UiAction::ChoiceSelected { index, .. } = action {
                 self.promote(index)?;
             } else if let Some(command) = self.ui.as_ref().and_then(|ui| ui.action(action))
@@ -282,7 +289,11 @@ impl BoardDriver {
             | MenuAction::StudyRetry
             | MenuAction::StudyExit
             | MenuAction::Why => self.training_action(action)?,
-            MenuAction::ImportPgn | MenuAction::ExportPgn | MenuAction::PgnEntry(_) => {
+            MenuAction::ImportPgn
+            | MenuAction::ExportPgn
+            | MenuAction::PgnEntry(_)
+            | MenuAction::CopyPgn
+            | MenuAction::PastePgn => {
                 self.pgn_menu_action(action)?;
             }
             MenuAction::Review

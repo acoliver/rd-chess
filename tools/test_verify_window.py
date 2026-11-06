@@ -474,6 +474,7 @@ class SmokeControlsTests(unittest.TestCase):
                 patch.object(self.smoke.subprocess, "run", side_effect=run) as calls, \
                 patch.object(self.smoke, "close_request") as close, \
                 patch.object(self.smoke.SmokeCase, "puzzle_click") as puzzle_click, \
+                patch.object(self.smoke.SmokeCase, "rename_slot_by_keys") as rename_slot, \
                 patch.object(self.smoke.Image, "open", side_effect=[expected, reference_moved]), \
                 patch.object(self.smoke.ImageGrab, "grab", side_effect=[
                     title, initial, highlights, moved, relaunched_title, inexact_resume, resumed, inexact_undo, undone]), \
@@ -487,6 +488,7 @@ class SmokeControlsTests(unittest.TestCase):
                                  comparisons=comparisons, progress=progress)
         self.assert_title_relaunch(result, launches, calls, close, images)
         puzzle_click.assert_called_once_with()
+        rename_slot.assert_called_once_with(moved)
 
     def test_puzzle_click_waits_for_setup_and_checks_both_solver_squares(self):
         progress = Mock(name="progress")

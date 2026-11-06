@@ -18,6 +18,7 @@ pub(super) struct Interaction {
     pub selected: Option<Square>,
     pub promotion: Vec<LegalMove>,
     pub cursor: Option<[f64; 2]>,
+    pub primary: bool,
     press: Option<Press>,
 }
 struct Press {
@@ -87,7 +88,9 @@ impl BoardDriver {
             .collect()
     }
     pub fn status_text(&self) -> String {
-        if let Some(status) = self.review_status() {
+        if let Some(status) = self.review_status()
+            && self.pgn.message.is_none()
+        {
             return status;
         }
         let error = self.storage.as_ref().and_then(|s| s.error.as_ref());
@@ -157,6 +160,9 @@ Storage error: {error}"
             }
             _ => {}
         }
+        if self.select_all(input)? {
+            return Ok(true);
+        }
         if matches!(
             input,
             RetainedInput::PointerCancelled
@@ -172,6 +178,13 @@ Storage error: {error}"
             return Ok(false);
         }
         self.sync_menu_ui()?;
+        if let RetainedInput::Text(text) = input
+            && let Some(ui) = &mut self.ui
+        {
+            let response = ui.text(text, self.viewport).map_err(|e| e.to_string())?;
+            self.ui_actions(&response.actions, true)?;
+            return Ok(response.consumed);
+        }
         if let RetainedInput::Key {
             key,
             pressed,
@@ -359,6 +372,11 @@ Storage error: {error}"
     }
 
     fn route_key(&mut self, key: &str, pressed: bool, repeat: bool) -> Result<bool, String> {
+        if self.screen() != super::Screen::SaveLabel
+            && matches!(key, "escape" | "backspace" | "delete")
+        {
+            return Ok(false);
+        }
         if let Some(ui_key) = ui_key(key)
             && let Some(ui) = &mut self.ui
             && !self.viewport.contains(&0)
@@ -447,6 +465,13 @@ Storage error: {error}"
 
 fn ui_key(key: &str) -> Option<UiKey> {
     match key {
+        "arrowleft" | "left" => Some(UiKey::Left),
+        "arrowright" | "right" => Some(UiKey::Right),
+        "backspace" => Some(UiKey::Backspace),
+        "delete" => Some(UiKey::Delete),
+        "escape" => Some(UiKey::Escape),
+        "control" => Some(UiKey::Control),
+        "alt" => Some(UiKey::Alt),
         "arrowup" | "up" => Some(UiKey::Up),
         "arrowdown" | "down" => Some(UiKey::Down),
         "home" => Some(UiKey::Home),

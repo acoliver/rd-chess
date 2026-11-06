@@ -44,7 +44,7 @@ cargo run --locked -j2 -- --load assets/positions/study.json
 ```
 
 The `worldrunner` facade is a Git dependency pinned to the full commit
-`0671eedd43021075f7069ea9a43b148fbd634d18` from
+`410cb5b9c8ef20c1c845301e90407f7865a36c86` from
 `https://github.com/acoliver/real-disunity.git`. Cargo builds that revision,
 not a sibling checkout. `engine-revision` records the same SHA, and the default
 and viewer dependency graph gates verify every SDK package's exact Git origin,
@@ -213,7 +213,9 @@ Linux real-window smoke is run by the gate, not on the macOS desktop.
 
 The title lists Continue (when available), Play a friend, Play the computer,
 Lessons, Puzzles, Saved games, Review games, Settings and Quit, in that order. Saved games
-includes Import PGN; pause and game-over screens offer Export PGN.
+includes Import PGN; pause and game-over screens offer Export PGN. The title's
+new-game choices and computer setup also offer Paste PGN. Copy PGN is available in the game menu
+and review screen.
 
 Title, computer setup, pause and game-over screens share the existing native UI
 world and retained overlay compositor. The game owns labels, profile descriptions,
@@ -263,8 +265,18 @@ Save / Load in the pause menu offer three numbered slots with generated labels,
 such as `vs Level 3, move 24`. Saving from the title copies the current game,
 including a finished result, rather than the title's background board.
 
+Save opens a native text field with the generated label before writing the slot.
+Rename opens the same field with that slot's current label and preserves its game.
+Enter trims and saves a non-empty label; Escape cancels without writing. Labels
+are limited to 24 printable ASCII characters: at 18px, 24 Space Mono characters
+occupy about 259px inside each 286px slot cell. Empty or longer labels leave the
+field open with an error. The engine currently rejects non-ASCII text in native
+fields, including IME commits requiring other scripts. Selection, pointer dragging,
+clipboard shortcuts and ASCII preedit use the engine's text-field implementation.
+
 Version-1 chess payloads contain an initial FEN, ordered UCI moves, seed,
-two-player or computer mode, human side, level and an optional result. Loading
+two-player or computer mode, human side, level, an optional result and an optional
+label. Older records without a label retain their generated label. Loading
 validates the whole payload and replays each move through `ChessState` before
 changing the live board. Castling rights, en passant, counters, piece identities
 and repetition history therefore survive relaunch. Computer games retain their
@@ -276,7 +288,7 @@ Settings on the title offers native list choices for default computer level and
 human side (White, Black or seeded Random), legal-move markers and Hero/Overhead
 camera. Choices apply immediately and persist through the engine's typed Settings
 format. An explicit `--view` overrides the saved camera at launch. Sliders and
-toggles are not used. Editable slot names still require native text input.
+toggles are not used. Slot labels use the engine's native text field.
 
 Storage reads and writes are bounded to 1 MiB per game, 256-byte labels and 4 KiB
 settings documents. Corruption, illegal saved moves, unknown versions, oversized
@@ -390,6 +402,17 @@ printing `Game N: <final FEN> <result>` for each game. This CPU-only mode accept
 only `--pgn-check`; it rejects review, explanation, lesson, puzzle, scene, save,
 play and `--data-dir` options,
 including explicit rendering defaults, and never opens a window.
+
+### PGN clipboard
+
+Copy PGN sends the same export as Export PGN to the engine's OS clipboard service
+and confirms `PGN copied` in status. Review copies the entire recorded game even
+when the board displays an earlier move or a practice line. Paste PGN on the title
+or computer setup parses the complete clipboard before changing the game. One game loads directly;
+multiple games use the existing chooser. Parser errors identify the game, ply
+and token; invalid input leaves the board and stored current game unchanged.
+Clipboard read/write failures appear in status. CPU tests use the engine's
+`MemoryClipboard`; no game-owned clipboard implementation is used in production.
 
 ### PGN menu files
 

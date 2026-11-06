@@ -87,7 +87,14 @@ impl GameUi {
             -211.,
             &[("Open related lesson", MenuAction::RelatedLesson)],
         )?;
-        self.review_row(panel, -248., &[("Leave review", MenuAction::ReviewExit)])
+        self.review_row(
+            panel,
+            -248.,
+            &[
+                ("Copy PGN", MenuAction::CopyPgn),
+                ("Leave review", MenuAction::ReviewExit),
+            ],
+        )
     }
     fn review_browser(&mut self) -> Result<(), WorldError> {
         let panel = self.native.panel([620., 450.])?;

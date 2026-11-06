@@ -63,7 +63,7 @@ fn open_import(driver: &mut BoardDriver) {
         [400., if driver.can_continue() { 378. } else { 332. }],
     );
     assert_eq!(driver.screen(), Screen::Slots);
-    click(driver, [400., 435.]);
+    click(driver, [400., 466.]);
 }
 fn files(root: &Path) -> Vec<std::path::PathBuf> {
     let mut paths: Vec<_> = fs::read_dir(root.join("exports"))
@@ -262,7 +262,7 @@ fn import_back_refreshes_files_and_scrolled_keyboard_selection_reaches_last_file
         )
         .unwrap();
     }
-    click(&mut driver, [400., 435.]);
+    click(&mut driver, [400., 466.]);
     assert_eq!(driver.pgn_files().len(), 12);
     key(&mut driver, "end");
     key(&mut driver, "arrowup");

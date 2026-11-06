@@ -11,9 +11,8 @@ impl BoardDriver {
                 self.transition(Screen::Slots)?;
             }
             MenuAction::Settings => self.transition(Screen::Settings)?,
-            MenuAction::Save(slot) => {
-                let _ = self.save_game(slot);
-            }
+            MenuAction::Save(slot) => self.open_save_label(slot, false)?,
+            MenuAction::Rename(slot) => self.open_save_label(slot, true)?,
             MenuAction::Load(slot) => {
                 let _ = self.load_game(slot);
             }

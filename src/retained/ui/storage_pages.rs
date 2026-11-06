@@ -34,7 +34,9 @@ impl GameUi {
                 ("Export PGN", MenuAction::ExportPgn),
             ],
         )?;
+        self.choice_row(pause, -196., &[("Copy PGN", MenuAction::CopyPgn)])?;
         self.slots_page()?;
+        self.label_page()?;
         self.settings_page()
     }
     fn choice_row(
@@ -66,9 +68,10 @@ impl GameUi {
                     (load.as_str(), MenuAction::Load(slot)),
                 ],
             )?;
+            self.choice_row(panel, y - 44., &[("Rename", MenuAction::Rename(slot))])?;
         }
-        self.choice_row(panel, -135., &[("Import PGN", MenuAction::ImportPgn)])?;
-        self.choice_row(panel, -190., &[("Back", MenuAction::Back)])
+        self.choice_row(panel, -166., &[("Import PGN", MenuAction::ImportPgn)])?;
+        self.choice_row(panel, -210., &[("Back", MenuAction::Back)])
     }
     fn settings_page(&mut self) -> Result<(), WorldError> {
         let panel = self.native.panel([620., 550.])?;

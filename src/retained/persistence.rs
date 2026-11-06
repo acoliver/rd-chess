@@ -29,6 +29,8 @@ pub struct GamePayload {
     pub seed: u64,
     pub mode: SavedMode,
     pub result: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 impl GamePayload {
     pub fn from_game(
@@ -45,6 +47,7 @@ impl GamePayload {
             seed,
             mode,
             result,
+            label: None,
         }
     }
     pub fn replay(&self) -> Result<ChessState, String> {
@@ -66,6 +69,9 @@ impl GamePayload {
         {
             return Err("invalid saved result".into());
         }
+        if let Some(label) = &self.label {
+            super::save_labels::validate_label(label)?;
+        }
         let mut game = ChessState::from_fen(&self.initial_fen).map_err(|e| e.to_string())?;
         for (ply, uci) in self.moves.iter().enumerate() {
             if !matches!(game.status(), GameStatus::Ongoing { .. }) {
@@ -85,6 +91,9 @@ impl GamePayload {
         Ok(self.result.is_none() && matches!(self.replay()?.status(), GameStatus::Ongoing { .. }))
     }
     pub(super) fn label(&self) -> String {
+        if let Some(label) = &self.label {
+            return label.clone();
+        }
         let opponent = match self.mode {
             SavedMode::TwoPlayer => "Two players".into(),
             SavedMode::Computer { level, .. } => format!("vs Level {level}"),
