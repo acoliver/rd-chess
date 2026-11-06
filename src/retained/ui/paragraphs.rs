@@ -107,6 +107,7 @@ fn spans(text: &str, moves: &[String], heading_end: usize) -> Vec<TextSpan> {
         spans.push(TextSpan {
             range: 0..heading_end,
             color: HEADING,
+            link: None,
         });
     }
     let mut start = heading_end;
@@ -123,6 +124,7 @@ fn spans(text: &str, moves: &[String], heading_end: usize) -> Vec<TextSpan> {
             spans.push(TextSpan {
                 range: start..start + san.len(),
                 color: MOVE,
+                link: None,
             });
         }
         start += token.len();

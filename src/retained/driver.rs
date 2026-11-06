@@ -195,6 +195,10 @@ impl BoardDriver {
             if let Some(overlay) = ui.overlay(&text, self.viewport)? {
                 self.overlay = Some(overlay);
             }
+            host.set_accessibility(
+                ui.semantic_update(self.viewport)
+                    .map_err(|e| e.to_string())?,
+            );
             if let Some(overlay) = &self.overlay {
                 if admit(host, RetainedUpdate::Ui(overlay.clone()))? {
                     self.overlay = None;
@@ -277,6 +281,7 @@ impl RetainedDriver for BoardDriver {
         event: &RetainedEvent,
     ) -> Result<(), String> {
         match event {
+            RetainedEvent::Accessibility(request) => self.accessibility_input(*request)?,
             RetainedEvent::WorkReady => {
                 self.drain_computer()?;
                 self.drain_review();

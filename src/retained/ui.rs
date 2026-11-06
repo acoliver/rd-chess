@@ -1,4 +1,5 @@
 #![deny(clippy::too_many_lines, clippy::too_many_arguments)]
+mod accessibility;
 mod inspection;
 #[cfg(test)]
 mod paragraph_tests;
