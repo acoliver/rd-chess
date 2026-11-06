@@ -119,24 +119,46 @@ seeded marble remain procedural source assets, not copied image textures.
   Resize and unmap/remap affect presentation only; camera changes never rewrite
   the saved position. `--capture` and `--window` cannot be combined.
 
-## Keyboard and screen-reader play
+## Accessibility
 
-The native board exposes 64 named square buttons through the engine's accessibility
-semantics. Arrow keys move focus; Enter or Space selects a piece or commits its
-move through the same handler used by clicks. Tab enters or leaves the board as
-one navigation region. Every square remains individually focusable by assistive
-technology. A gold border marks keyboard or assistive focus without changing
-pointer picking or the retained board objects.
+The game supplies names and move descriptions through the engine's native UI
+router. The engine owns semantic-tree publication and the AccessKit/VoiceOver
+connection; the game makes no platform accessibility calls or separate tree.
 
-White reads from a8 across and down; Black reads from h1 across and up. Computer
-side selection also rotates the preset camera. Selected squares and legal targets
-are included in their names. A live status announces moves, captures, check,
-castling, promotion, en passant and outcomes, including the computer's reply.
-Resignation asks for confirmation. Local draw offers have named accept/decline
-controls; the computer currently declines offers and still claims rule-based draws.
+The `Chess board` group exposes 64 square buttons named by coordinate and occupant,
+such as `e4, white knight` or `d5, empty`, with selection and legal destinations
+included. White reads from a8 across and down; Black reads from h1 across and up.
+Local play uses White's orientation; computer play uses the human's side and
+rotates the preset camera to match. Orbiting does not change reading order.
 
-See [accessibility controls and limitations](docs/accessibility.md), including the
-engine's current editable-text semantic limitation.
+Arrow keys move focus one square without wrapping; without focus, they start at
+the first square and apply the direction. Enter or Space selects or moves through
+the click handler. Key repeat moves focus without repeating activation. Tab enters
+or leaves the board as one navigation region; assistive technology can focus and
+press any square directly. A gold border marks native focus without changing
+pointer picking or retained board objects. Computer turns, modal dialogs and
+unpublished board edits prevent activation; computer turns still permit inspection.
+
+A live Status node describes moves, captures, check, castling paths, promotion,
+en passant and outcomes, including computer replies. Undo, restart and loading
+clear stale announcements. The live node moves inside the active dialog's modal
+focus scope. Promotion choices, menus, saved-game actions and the save-label field
+have accessible names. Resignation asks `Resign game?` with Cancel first; Enter
+on that initial choice or Escape cancels. Local draw offers name the offering side
+and present Decline draw before Accept draw; Escape declines. Agreement ends play
+with `Draw by agreement`. The computer declines offers and still claims rule-based
+draws.
+
+The engine currently exposes editable text as role Text with only a Focus action.
+It cannot represent editable values, caret or selection, or accept semantic
+text-editing requests. The named save-label field remains keyboard-editable, but
+the game cannot supply those missing semantics through this API.
+
+CPU regressions cover names, focus, activation, modal exclusion, render-plan focus
+borders and announcement wording. They do not establish speech or editing behavior
+on a particular hardware screen-reader configuration; that requires native
+application testing. GPU test compilation is separate from execution, and CPU
+checks do not establish the focus border's rendered pixel output.
 
 ## Retained board and game test controls
 
